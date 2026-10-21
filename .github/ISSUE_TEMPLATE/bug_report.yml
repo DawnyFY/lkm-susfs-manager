@@ -1,0 +1,77 @@
+name: 问题报告
+description: 报告模块使用中的问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请尽量填写完整，缺少日志的问题很难定位。
+  - type: input
+    id: device
+    attributes:
+      label: 设备型号
+      placeholder: 例如 Xiaomi 15 Ultra (25019PNF3C)
+    validations:
+      required: true
+  - type: input
+    id: kernel
+    attributes:
+      label: 内核版本
+      description: 在终端执行 uname -r
+      placeholder: 6.6.77-android15-8-...
+    validations:
+      required: true
+  - type: dropdown
+    id: manager
+    attributes:
+      label: 管理器
+      options:
+        - SukiSU Ultra
+        - KernelSU 官方
+        - ReSukiSU
+        - KernelSU Next
+        - 其他
+    validations:
+      required: true
+  - type: dropdown
+    id: roottype
+    attributes:
+      label: root 类型
+      options:
+        - 临时 root（未解锁 BL）
+        - 永久 root（已解锁 BL）
+        - 其他
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 模块版本
+      placeholder: 1.1.6
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 问题描述
+      description: 发生了什么、你期望什么
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志
+      description: 模块目录下的 load.log 与 apply.log（可截图或粘贴）
+      render: shell
+    validations:
+      required: false
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 确认
+      options:
+        - label: 我没有执行 rmmod susfs_guard_lkm
+          required: true
+        - label: 我确认这不是“临时 root 重启后需要重新注入”的预期行为
+          required: true
