@@ -137,6 +137,11 @@ replace_rules=1    # 应用前清空未列出的普通 sus_path 规则
 
 ## 安全须知
 
+- **不要重复加载 LKM（最容易砖的一条）**：
+  - 已经通过模块加载 SUSFS 后，**不要**再用 Termux / adb 手动 `insmod` 或 `susfs_insmod` 加载同一个 `.ko`；
+  - 也不要在同一台设备上同时启用两个会加载 SUSFS 的模块（例如本模块 + 上游 `susfs_guard_lkm` 官方模块）；
+  - 重复加载是**已知会导致内核 panic / 开不了机**的操作，[上游那边的真实案例](https://www.coolapk.com/feed/74182378)就是刷入模块后又用 Termux 加载，直接崩了。
+  - 本模块自身有保护（检测到 `/proc/susfs_path` 或 `/sys/module/susfs_guard_lkm` 就跳过加载，不会叠加），但**外部手动加载绕不过这个保护**。
 - **不要执行 `rmmod susfs_guard_lkm`**：上游明确标注存在 UAF / panic 风险，当场卸载可能导致崩溃。需要卸载请在管理器中禁用模块后重启。
 - **未解锁 BL 的临时 root 环境**：root 重启后不会自动恢复，需重新走 fastboot 注入 → SELinux 宽容 → 提权。这是环境限制，不是模块问题。
 - **不要**为了“修复模块”去解锁 BL、走 EDL / 9008、刷 boot / init_boot。
