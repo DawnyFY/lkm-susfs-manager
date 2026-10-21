@@ -1,0 +1,29 @@
+# Runtime state
+state/
+*.log
+*.tmp
+*.bak
+
+# Secrets / local
+.env
+*.key
+*.pem
+*.token
+
+# Handoff / private
+conversation/
+device_snapshot/
+legacy/
+preview/
+research/
+handoff/
+
+# Build artifacts (prefer Release asset)
+dist/
+*.zip
+
+# OS/editor
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc

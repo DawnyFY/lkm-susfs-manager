@@ -1,0 +1,62 @@
+{
+  "repository": "https://github.com/inforcqb/susfs4ksu-lkm",
+  "tag": "v2.3.0-r18.4",
+  "architecture": "arm64",
+  "supported_kmis": [
+    "android12-5.10",
+    "android13-5.10",
+    "android13-5.15",
+    "android14-5.15",
+    "android14-6.1",
+    "android15-6.6",
+    "android16-6.12",
+    "android17-6.18"
+  ],
+  "assets_sha256": {
+    "susfs_guard_lkm-android12-5.10.ko": "5c7954d2a21762705612df1800f120094b7292bb9dd6bac49463c9ab6d30bd92",
+    "susfs_guard_lkm-android13-5.10.ko": "e5563e8b66891da93a7d90aa8370a951ea767adc1fef62cbd0d9e5eabe785906",
+    "susfs_guard_lkm-android13-5.15.ko": "e4a6f83be42d9854c778225c44577a6210ce62b71a364919bacd1369bdbf272a",
+    "susfs_guard_lkm-android14-5.15.ko": "475108f31690c93552b4e8d56ed5f287095daaebc7efa4490b8d21374d1e3cec",
+    "susfs_guard_lkm-android14-6.1.ko": "510525f244bfc9ef9d661a33a06f36409719388000dfd4116070d6662cf2417c",
+    "susfs_guard_lkm-android15-6.6.ko": "84bfe5d4b9b8989a4413061c95d92aa157e4851df0492a70d2e458397dc55e90",
+    "susfs_guard_lkm-android16-6.12.ko": "49e06572a503d64d40ee562fd2929b21efeba65fd430a9cc2f9c30c09f9646c9",
+    "susfs_guard_lkm-android17-6.18.ko": "b2ba301ee7b385e21c24c1eb058987e3992191ec3c189afe398898802ace85c1",
+    "susfs_insmod": "16a722d2158ff629e9e3d6d056e8333f15971410965ce5894216ed80dbfa44a4"
+  },
+  "license": "GPL-2.0",
+  "components": [
+    {
+      "name": "SUSFS Guard LKM + loader",
+      "files": [
+        "lib/susfs_guard_lkm-*.ko",
+        "bin/susfs_insmod"
+      ],
+      "author": "inforcqb",
+      "repository": "https://github.com/inforcqb/susfs4ksu-lkm",
+      "tag": "v2.3.0-r18.4",
+      "license": "GPL-2.0",
+      "license_file": "LICENSE",
+      "modified": false,
+      "source_offer": "https://github.com/inforcqb/susfs4ksu-lkm/tree/v2.3.0-r18.4",
+      "original_author": "simonpunk (SUSFS / susfs4ksu, GPL-2.0); LKM port by inforcqb"
+    },
+    {
+      "name": "ksu_susfs userspace tool (fallback copy)",
+      "files": [
+        "bin/ksu_susfs_good"
+      ],
+      "author": "sidex15 & simonpunk",
+      "repository": "https://github.com/sidex15/ksu_module_susfs",
+      "tag": "v1.5.2-R28",
+      "upstream_path": "tools/ksu_susfs_arm64",
+      "license": "AGPL-3.0",
+      "license_file": "LICENSE-AGPL-3.0",
+      "modified": false,
+      "sha256": "8B9FA0174AB9BC95910258F935628DFB9B551AE9B5074BA0EB1FA85E06590641",
+      "size": 43588,
+      "source_offer": "https://github.com/sidex15/ksu_module_susfs/tree/v1.5.2%2B"
+    }
+  ],
+  "source_offer": "See NOTICE for the written offer; upstream source tarballs are published with each GitHub release referenced above, or available on request for three years.",
+  "name": "LKM SUSFS管理器"
+}

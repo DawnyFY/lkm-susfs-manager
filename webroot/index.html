@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<title>LKM SUSFS管理器</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-text">
+        <h1>LKM SUSFS管理器</h1>
+        <p id="subtitle">自动匹配内核 · 一键加载 · 规则管理</p>
+      </div>
+    </div>
+    <div id="statusPill" class="pill pill-off">检测中</div>
+  </header>
+
+  <nav class="tabs" aria-label="页面导航">
+    <button class="tab active" data-tab="status" type="button">状态</button>
+    <button class="tab" data-tab="config" type="button">配置</button>
+    <button class="tab" data-tab="log" type="button">日志</button>
+    <button class="tab" data-tab="about" type="button">关于</button>
+  </nav>
+
+  <main>
+    <div id="banner" class="banner hidden" role="status"></div>
+
+    <section id="tab-status" class="tab-panel active">
+      <div class="card hero">
+        <div class="hero-main">
+          <p class="eyebrow">当前内核</p>
+          <div id="kernel" class="mono kernel">读取中…</div>
+          <div class="chips">
+            <span class="chip" id="kmiChip">KMI —</span>
+            <span class="chip" id="versionChip">LKM —</span>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <button id="btnLoad" class="btn primary" type="button">加载并应用</button>
+          <button id="btnApply" class="btn" type="button">仅应用配置</button>
+          <button id="btnRefresh" class="btn ghost" type="button">刷新</button>
+        </div>
+      </div>
+
+      <div class="grid stats">
+        <div class="card stat">
+          <span class="stat-label">LKM 状态</span>
+          <strong id="statLkm" data-state="bad">—</strong>
+        </div>
+        <div class="card stat">
+          <span class="stat-label">sus_path 规则</span>
+          <strong id="statRules">—</strong>
+        </div>
+        <div class="card stat">
+          <span class="stat-label">kernelsu 隐藏</span>
+          <strong id="statHide" data-state="bad">—</strong>
+        </div>
+        <div class="card stat">
+          <span class="stat-label">自动加载</span>
+          <strong id="statAuto">—</strong>
+        </div>
+        <div class="card stat">
+          <span class="stat-label">ksu_susfs</span>
+          <strong id="statBin" data-state="bad">—</strong>
+        </div>
+        <div class="card stat">
+          <span class="stat-label">SELinux</span>
+          <strong id="statSelinux">—</strong>
+        </div>
+      </div>
+
+      <div class="card rows">
+        <div class="row"><span>管理器</span><span id="rootManager">—</span></div>
+        <div class="row"><span>LKM 变体</span><span id="variant" class="mono">—</span></div>
+        <div class="row"><span>ksu_susfs 路径</span><span id="binPath" class="mono">—</span></div>
+        <div class="row"><span>WebUI 标记</span><span id="marker">—</span></div>
+        <div class="row"><span>连续失败次数</span><span id="fails">—</span></div>
+        <div class="row"><span>模块版本</span><span id="moduleVersion">—</span></div>
+      </div>
+
+      <div class="card note">
+        <strong>工作方式</strong>
+        <p>开机时 <code>post-fs-data</code> 先读取 <code>uname -r</code>，从模块自带的 8 个 KMI 中选出匹配的 LKM 并加载；<code>boot-completed</code> 再设置 sdcard 根路径并应用规则。热重启不会卸载 LKM，冷重启后会自动重新加载。</p>
+      </div>
+    </section>
+
+    <section id="tab-config" class="tab-panel">
+      <div class="card">
+        <h2>开关</h2>
+        <label class="switch-row">
+          <span>开机自动加载并应用</span>
+          <input type="checkbox" id="autoLoad">
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <label class="switch-row">
+          <span>隐藏 SUS 挂载点（非 root 进程）</span>
+          <input type="checkbox" id="hideSusMnts">
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <label class="switch-row">
+          <span>AVC 日志伪装</span>
+          <input type="checkbox" id="avcSpoof">
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <label class="switch-row">
+          <span>应用时清空未列出的旧 sus_path 规则</span>
+          <input type="checkbox" id="replaceRules">
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <p class="hint">关闭自动加载后，仍可在“状态”页手动加载。AVC 伪装默认关闭。“清空旧规则”打开时，删除路径会立即生效；如果还有其他模块也在管理 sus_path，请关闭它。</p>
+      </div>
+
+      <div class="card">
+        <h2>sus_path <span class="badge">隐藏路径</span></h2>
+        <p class="hint">每行一个路径，支持 <code>#</code> 注释。建议保留 <code>/data/adb</code>；隐藏后 SukiSU 与本 WebUI 仍可正常使用。保存时是否先清空旧规则，由上方“清空旧规则”开关决定。</p>
+        <textarea id="susPath" spellcheck="false" rows="10" placeholder="/data/adb"></textarea>
+      </div>
+
+      <div class="card">
+        <h2>hide_modules <span class="badge">隐藏模块名</span></h2>
+        <p class="hint">每行一个模块名，写入 <code>/proc/susfs_hide_modules</code>。LKM 会自动隐藏自己，这里通常只需要 <code>kernelsu</code>。</p>
+        <textarea id="hideModules" spellcheck="false" rows="5" placeholder="kernelsu"></textarea>
+      </div>
+
+      <details class="card advanced">
+        <summary>高级：sus_mount / try_umount</summary>
+        <h3>sus_mount</h3>
+        <textarea id="susMount" spellcheck="false" rows="5" placeholder="# 每行一个挂载点"></textarea>
+        <h3>try_umount</h3>
+        <textarea id="tryUmount" spellcheck="false" rows="5" placeholder="# 每行一个路径"></textarea>
+        <p class="hint">当前设备通常无需填写。每行一个路径，支持 <code>#</code> 注释。</p>
+      </details>
+
+      <div class="card actions-card">
+        <button id="btnSave" class="btn primary" type="button">保存并应用</button>
+        <button id="btnImport" class="btn" type="button">导入旧 susfs4ksu 配置</button>
+        <button id="btnReset" class="btn danger" type="button">恢复默认</button>
+      </div>
+    </section>
+
+    <section id="tab-log" class="tab-panel">
+      <div class="card">
+        <div class="row log-head">
+          <h2>运行日志</h2>
+          <button id="btnLog" class="btn small" type="button">刷新</button>
+        </div>
+        <pre id="log" class="log">加载中…</pre>
+      </div>
+    </section>
+
+    <section id="tab-about" class="tab-panel">
+      <div class="card about">
+        <h2>LKM SUSFS管理器</h2>
+        <p>把 LKM 自动匹配、加载、规则配置和 WebUI 收进同一个模块。</p>
+        <ul>
+          <li>支持 8 种 GKI KMI：android12-5.10 到 android17-6.18</li>
+          <li>兼容 KernelSU / SukiSU / ReSukiSU / KernelSU Next</li>
+          <li>自动寻找当前管理器的 ksu_susfs，失败时回退模块备份</li>
+          <li>LKM：inforcqb/susfs4ksu-lkm v2.3.0-r18.4</li>
+          <li>Loader：susfs_insmod（自动解析符号与 vermagic）</li>
+        </ul>
+        <p class="warn">不要执行 <code>rmmod susfs_guard_lkm</code>。已知存在 UAF/panic 风险。热重启不会卸载 LKM；冷重启后由本模块重新加载。</p>
+        <p class="hint">自动加载带 KMI 校验和失败日志。内核更新后如果 KMI 不在支持列表，模块会拒绝加载并给出提示，不会强行注入。</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span id="footerVersion">模块 v1.1.0</span>
+    <span id="footerKernel" class="mono"></span>
+  </footer>
+</div>
+
+<div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-box">
+    <h3 id="modalTitle">确认操作</h3>
+    <p id="modalText"></p>
+    <div class="modal-actions">
+      <button id="modalCancel" class="btn" type="button">取消</button>
+      <button id="modalOk" class="btn primary" type="button">确定</button>
+    </div>
+  </div>
+</div>
+
+<script src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+# 每行一个挂载点，调用 ksu_susfs add_sus_mount
+# 当前设备没有需要隐藏的 KSU/模块挂载，留空即可

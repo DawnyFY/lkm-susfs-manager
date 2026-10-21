@@ -1,0 +1,29 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Build module ZIP
+        run: python tools/build_module_zip.py
+      - name: Validate module ZIP
+        run: python tools/check_zip.py
+      - name: License compliance gate
+        run: python tools/check_license_compliance.py dist/*.zip
+
+      - name: Show SHA256
+        run: sha256sum dist/*.zip
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: susfs_allinone
+          path: dist/*.zip

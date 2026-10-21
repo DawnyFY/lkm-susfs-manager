@@ -1,0 +1,46 @@
+LKM SUSFS管理器（susfs_allinone）— 第三方组件声明 / Third-Party Notices
+生成日期：2026-10-21
+
+本模块（susfs_allinone）的 shell 脚本、安装器与 WebUI 由本项目作者编写，
+按 GNU General Public License v2.0 发布（全文见本目录 LICENSE）。
+模块内随附以下第三方二进制，各自按其原许可证分发：
+
+--------------------------------------------------------------------------
+1) SUSFS Guard LKM（8 个 KMI）与加载器
+   文件   : lib/susfs_guard_lkm-<kmi>.ko（8 个）、bin/susfs_insmod
+   作者   : inforcqb（SUSFS 原始项目作者：simonpunk，本 LKM 为其 LKM 移植版）
+   仓库   : https://github.com/inforcqb/susfs4ksu-lkm
+   Tag    : v2.3.0-r18.4
+   许可证 : GNU General Public License v2.0（全文见 LICENSE）
+   修改   : 无。与上游 Release 资产 sha256 完全一致（见 provenance.json）
+   SUSFS  : 原始项目 susfs4ksu 由 simonpunk 开发（GPL-2.0）；LKM 移植与维护 inforcqb
+   源码   : https://github.com/inforcqb/susfs4ksu-lkm/tree/v2.3.0-r18.4
+            （上游 Release 同时提供 source tarball）
+
+--------------------------------------------------------------------------
+2) ksu_susfs 用户态工具（模块内置回退副本）
+   文件   : bin/ksu_susfs_good
+   SHA256 : 8B9FA0174AB9BC95910258F935628DFB9B551AE9B5074BA0EB1FA85E06590641
+   作者   : sidex15 & simonpunk
+   仓库   : https://github.com/sidex15/ksu_module_susfs
+   Release: v1.5.2-R28（versionCode 105002028），源文件 tools/ksu_susfs_arm64
+   许可证 : GNU Affero General Public License v3.0（全文见 LICENSE-AGPL-3.0）
+   修改   : 无。与上游 Release 内文件 sha256 一致
+   源码   : https://github.com/sidex15/ksu_module_susfs/tree/v1.5.2%2B
+            （上游 Release 同时提供 source tarball）
+
+--------------------------------------------------------------------------
+书面要约 / Written offer
+
+上述源码若无法从所列地址获取，可向本模块的发布者索取；有效期自本模块发布之日起三年。
+If the source cannot be obtained at the URLs above, the distributor offers to provide the
+corresponding source for three years from the date of distribution.
+
+--------------------------------------------------------------------------
+范围说明
+
+本包同时包含 GPL-2.0 与 AGPL-3.0 组件，属于"聚合分发"（mere aggregation）：
+各组件保持各自许可证，本包不应被理解为单一许可证作品。
+AGPL-3.0 组件未被本项目的运行方式修改或衍生；本项目未把 AGPL 代码并入 GPL-2.0 作品。
+
+本声明不是法律意见；如需分发到商业渠道，请自行完成法务核对。

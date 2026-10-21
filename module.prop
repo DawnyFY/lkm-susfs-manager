@@ -1,0 +1,6 @@
+id=susfs_allinone
+name=LKM SUSFS管理器
+version=1.1.6
+versionCode=8
+author=local; LKM by inforcqb (GPL-2.0); ksu_susfs by sidex15 & simonpunk (AGPL-3.0)
+description=自动匹配 8 种 KMI；兼容 KernelSU 系列；含 WebUI 与规则管理
