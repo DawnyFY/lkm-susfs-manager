@@ -1,0 +1,37 @@
+name: 功能建议
+description: 提出新功能或改进建议
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先确认这不是已有功能（见 README 的「功能」一节）。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你遇到什么问题
+      description: 描述具体场景，不要只写“希望支持 xxx”
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你希望怎么解决
+      description: 可以描述预期行为或交互
+    validations:
+      required: false
+  - type: input
+    id: device
+    attributes:
+      label: 你的设备与内核（可选）
+      placeholder: Xiaomi 15 Ultra / 6.6.77-android15
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认
+      options:
+        - label: 我已阅读 README 与免责声明
+          required: true

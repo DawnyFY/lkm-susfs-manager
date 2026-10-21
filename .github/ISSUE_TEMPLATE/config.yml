@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用前请先读 README 与免责声明
+    url: https://github.com/DawnyFY/lkm-susfs-manager#免责声明
+    about: 安装前请确认你的设备环境、风险与回滚手段
+  - name: 上游 LKM 项目（.ko 相关问题）
+    url: https://github.com/inforcqb/susfs4ksu-lkm/issues
+    about: 内核模块本身的崩溃、兼容性问题请提到上游仓库
+  - name: ksu_susfs 上游（AGPL 组件）
+    url: https://github.com/sidex15/ksu_module_susfs/issues
+    about: ksu_susfs 二进制的行为问题请提到上游仓库

@@ -36,9 +36,11 @@ SUSFS 在 LKM 形态下每个 KMI 对应一个 `.ko`。手动流程是：查内�
 - [测试记录](#测试记录)
 - [构建](#构建)
 - [常见问题](#常见问题)
+- [反馈与支持](#反馈与支持)
 - [与上游项目的关系](#与上游项目的关系)
 - [致谢](#致谢)
 - [许可证](#许可证)
+- [免责声明](#免责声明)
 
 ---
 
@@ -248,6 +250,44 @@ description=not loaded yet - loads the matching .ko on boot
 
 > 若你只需要“把 .ko 载进内核”，直接用上游官方模块即可。本项目的价值在于**加载之后的规则管理**与**临时 root 场景的适配**。
 
+## 反馈与支持
+
+### 提交前请先确认
+
+1. 读过 [README](#lkm-susfs管理器) 与 [免责声明](#免责声明)
+2. 你的问题**不是**以下已知情况：
+   - 临时 root 重启后需要重新注入（环境限制，非缺陷）
+   - 冷启动后 Zygisk 未注入导致检测器报异常（需要在 hot reboot 后再测）
+   - KMI 不在支持列表（见「支持的 KMI」）
+3. 手上已有 `load.log` 与 `apply.log`
+
+### 选择正确的反馈渠道
+
+| 情况 | 去哪 |
+|---|---|
+| 模块加载失败、规则没生效、WebUI 报错 | [提交问题](https://github.com/DawnyFY/lkm-susfs-manager/issues/new?template=bug_report.yml) |
+| 希望增加功能 / 改进交互 | [功能建议](https://github.com/DawnyFY/lkm-susfs-manager/issues/new?template=feature_request.yml) |
+| 使用经验、配置分享、闲聊 | [Discussions](https://github.com/DawnyFY/lkm-susfs-manager/discussions) |
+| **内核模块崩溃 / `.ko` 兼容性问题** | 上游 [inforcqb/susfs4ksu-lkm](https://github.com/inforcqb/susfs4ksu-lkm/issues) |
+| **`ksu_susfs` 二进制行为问题** | 上游 [sidex15/ksu_module_susfs](https://github.com/sidex15/ksu_module_susfs/issues) |
+| 安全漏洞 | 见 [`SECURITY.md`](SECURITY.md)，**请勿公开开 issue** |
+
+### 提交问题时的最小信息
+
+缺少这些信息的问题基本无法定位：
+
+```
+设备型号：
+Android 版本 / 内核版本（uname -r）：
+管理器与版本：
+root 类型：临时（未解锁 BL）/ 永久（已解锁 BL）
+模块版本：
+现象：
+load.log / apply.log 内容（可附件）
+```
+
+> 建议直接使用 [问题模板](https://github.com/DawnyFY/lkm-susfs-manager/issues/new?template=bug_report.yml)，会引导你填完上述内容。
+
 ## 致谢
 
 - **simonpunk** — SUSFS 原作者
@@ -266,4 +306,66 @@ description=not loaded yet - loads the matching .ko on boot
 
 ## 免责声明
 
-本项目按“现状”提供，不保证适用于所有设备、内核与管理器。使用导致的数据丢失、无法开机、检测失败等风险由使用者自行承担。
+**请在使用前完整阅读本节。安装或使用本项目，即表示你已理解并接受以下全部内容。**
+
+### 1. 风险自担
+
+本项目按 **“现状”（AS IS）** 提供，不作任何明示或默示担保，包括但不限于适销性、特定用途适用性与不侵权担保。
+作者不对因使用或无法使用本项目造成的任何直接、间接、附带、特殊或后果性损害负责，包括但不限于：
+
+- 设备无法开机（bootloop）、变砖、需要重刷系统
+- 数据丢失或损坏
+- 保修失效、系统稳定性下降、耗电异常
+- 检测应用仍能识别环境（本项目**不保证**能通过任何检测）
+- 触发厂商风控、账号受限
+
+### 2. 适用环境有限
+
+- **仅在以下环境实测**：Xiaomi 15 Ultra（25019PNF3C）/ Android 16 / 内核 6.6.77（`android15-6.6`）/ SukiSU Ultra 4.2.1 / bootloader 未解锁的临时 root。
+- 其余 7 个 KMI 的 `.ko` 为上游编译产物，**本作者未实机验证**。
+- 官方 KernelSU / ReSukiSU / KernelSU Next **未实机测试**，代码层面做了兼容但无法保证。
+- 其他机型、其他内核版本、其他管理器组合，均属**未验证**范围。
+
+### 3. 与 root / 解锁无关
+
+本项目**不包含、不提供、不教授**任何 root 获取方式，也不涉及 bootloader 解锁、漏洞利用、漏洞编号、注入步骤或工具。
+
+- 你需要**自行**拥有可加载内核模块的 root 环境；
+- 对于未解锁 BL 的临时 root 环境，root 的获取与每次重启后的恢复由你自行负责；
+- 本项目只做一件事：在**已经拥有 root 的前提下**，把 SUSFS 的 LKM 加载与规则下发自动化。
+
+### 4. 明确禁止的操作
+
+以下操作可能直接导致设备损坏且**难以恢复**，本项目明确不建议，作者不承担任何后果：
+
+- 执行 `rmmod susfs_guard_lkm`（上游明确标注 UAF / panic 风险，可能当场崩溃）
+- 为“修复模块”而解锁 bootloader、走 EDL / 9008、刷写 boot / init_boot
+- 在生产机、主力机、唯一设备上首次尝试
+- 在未备份、不了解恢复流程的情况下安装
+
+### 5. 合规与使用场景
+
+- 本项目面向**已获得设备所有权与操作权限**的用户，用于系统定制、隐私保护与安全研究。
+- 请遵守你所在地区的法律法规与设备厂商的服务条款。
+- **不得**用于侵犯他人设备、规避他人设备安全机制或任何未经授权的场景。
+- 若你将本模块用于商业分发或集成到自有产品，需自行完成法律与合规审查。
+
+### 6. 第三方组件与本项目无关
+
+`lib/*.ko`、`bin/susfs_insmod`、`bin/ksu_susfs_good` 均来自上游项目（见“与上游项目的关系”与 `NOTICE`），
+其正确性、安全性与行为由**原作者**负责。本作者仅按原样集成，未做修改，也不对其缺陷承担责任。
+
+### 7. 无支持承诺
+
+- Issue 与讨论区是**尽力而为**，不构成任何服务水平承诺。
+- 缺少日志（`load.log` / `apply.log`）、缺少环境信息的反馈可能无法得到回复。
+- 作者可随时停止维护、变更功能或删除仓库，无需事先通知。
+
+### 8. 许可证优先
+
+若本节内容与 `LICENSE`（GPL-2.0）存在冲突，以 **`LICENSE` 的法律条款为准**；本节仅为风险提示与使用建议。
+
+---
+
+**如果你不完全理解上述风险，请不要安装。**
+
