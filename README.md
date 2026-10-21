@@ -36,6 +36,7 @@ SUSFS 在 LKM 形态下每个 KMI 对应一个 `.ko`。手动流程是：查内�
 - [测试记录](#测试记录)
 - [构建](#构建)
 - [常见问题](#常见问题)
+- [与上游项目的关系](#与上游项目的关系)
 - [致谢](#致谢)
 - [许可证](#许可证)
 
@@ -199,6 +200,53 @@ late-load 模式下内核 `post-fs-data` 会被跳过，本模块已改为在 `b
 
 不会。优先使用管理器自带的二进制，仅在它无法与内核通信时才回退到模块内置备份，且不覆盖原文件。
 </details>
+
+## 与上游项目的关系
+
+本项目**不包含任何自研内核代码**。全部 SUSFS 能力来自以下上游项目，本仓库只做集成与适配：
+
+```
+├─ simonpunk / susfs4ksu        原始 SUSFS 内核补丁（GPL-2.0）
+│    └─ inforcqb / susfs4ksu-lkm    SUSFS 的 LKM 移植，产出 8 个 KMI 的 .ko + susfs_insmod
+│         ├─ 上游自带 loader        susfs_guard_lkm-module-<tag>-arm64.zip（只加载，无规则）
+│         └─ 本项目  ← 在本仓库     加载 + 规则下发 + WebUI + late-load 适配
+└─ sidex15 / ksu_module_susfs    ksu_susfs 用户态工具（AGPL-3.0）
+```
+
+| 上游 | 仓库 | 版本 | 本项目使用方式 |
+|---|---|---|---|
+| inforcqb / susfs4ksu-lkm | https://github.com/inforcqb/susfs4ksu-lkm | `v2.3.0-r18.4` | `lib/susfs_guard_lkm-*.ko`(8)、`bin/susfs_insmod`，**原样使用，哈希一致** |
+| sidex15 / ksu_module_susfs | https://github.com/sidex15/ksu_module_susfs | `v1.5.2-R28` | `bin/ksu_susfs_good`（回退用），**原样使用** |
+| simonpunk / susfs4ksu | 原始 SUSFS 项目 | — | 经 inforcqb 移植，本项目不直接引用 |
+
+### 上游自带的 loader 模块
+
+inforcqb 的 Release 里除了 `.ko`，还提供一个官方打包的模块 `susfs_guard_lkm-module-v2.3.0-r18.4-arm64.zip`。
+它的定位（上游 module.prop 原文）：
+
+```
+description=not loaded yet - loads the matching .ko on boot
+            (8 arm64 KMIs, 5.10-6.18). Loader only, no rules.
+```
+
+- **只负责加载**：`load.sh` 选 KMI → `susfs_insmod` → 写日志与 module.prop 描述，**不写任何 susfs 规则**
+- 依赖 `post-fs-data.sh` 这个阶段（可选 `early_load` 提前到 `post-fs-data.d`）
+- 没有 WebUI，没有规则管理，没有二进制回退
+
+### 本项目的增量
+
+| 能力 | 上游 loader | 本项目 |
+|---|---|---|
+| 按 KMI 加载 LKM | 有 | 有 |
+| 规则下发（sus_path/sus_mount/try_umount/hide_modules） | 无 | **有** |
+| **late-load（临时 root）适配** | 无（依赖 post-fs-data） | **有**（boot-completed 兜底） |
+| WebUI | 无 | **有** |
+| 分支兼容（SukiSU/ReSukiSU/Next/APatch） | 部分 | **有** |
+| ksu_susfs 二进制回退 | 无 | **有** |
+| 加载自限时 / 半加载保护 | 无 | **有** |
+| 配置导入（旧 susfs4ksu） | 无 | **有** |
+
+> 若你只需要“把 .ko 载进内核”，直接用上游官方模块即可。本项目的价值在于**加载之后的规则管理**与**临时 root 场景的适配**。
 
 ## 致谢
 
