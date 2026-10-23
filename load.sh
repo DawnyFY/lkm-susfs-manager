@@ -59,6 +59,7 @@ if lkm_present; then
     VERSION=$("$BIN" show version 2>/dev/null)
     [ -n "$VERSION" ] || fail "SUSFS 已存在，但 ksu_susfs 无法通信"
     echo 0 > "$STATE/fail_count"
+    apply_hide_modules
     set_description "✅ LKM 已加载 | ${VERSION} | 等待应用规则"
     echo "=== load ok ==="
     exit 0

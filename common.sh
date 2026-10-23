@@ -155,3 +155,22 @@ touch_marker() {
     mkdir -p "${_marker%/*}" 2>/dev/null
     touch "$_marker" 2>/dev/null
 }
+
+# 把 config/hide_modules.txt 里的模块名写回内核隐藏列表。
+# LKM 每次重新加载都会清空内核侧列表，所以 load 之后要重新下发一次。
+apply_hide_modules() {
+    _hf="$CONFIG/hide_modules.txt"
+    [ -f "$_hf" ] || return 0
+    [ -e /proc/susfs_hide_modules ] || return 0
+    while IFS= read -r _name || [ -n "$_name" ]; do
+        _name=$(printf '%s' "$_name" | tr -d '\r')
+        [ -n "$_name" ] || continue
+        case "$_name" in '#'*) continue ;; esac
+        if grep -qw "$_name" /proc/susfs_hide_modules 2>/dev/null; then
+            echo "[=] hide_module $_name (已隐藏)"
+            continue
+        fi
+        echo "add $_name" > /proc/susfs_hide_modules 2>/dev/null \
+            && echo "[+] hide_module $_name" || echo "[=] hide_module $_name (失败)"
+    done < "$_hf"
+}

@@ -71,6 +71,7 @@ fastboot 注入 ABL cmdline 漏洞 → 系统以 SELinux permissive 启动 → S
 - **8 个 KMI 自动匹配**（android12-5.10 ～ android17-6.18），按 `/proc/sys/kernel/osrelease` 选择；无法匹配时快速失败，不会误载。
 - **两种加载时机**：`post-fs-data`（常规设备）/ `boot-completed` 兜底（late-load 临时 root）；也可通过模块 Action 手动触发，无需重启。
 - **规则管理**：`sus_path`、`sus_mount`、`try_umount`、`hide_modules`、`hide_sus_mnts`、AVC 日志伪装开关。
+- **扩展隐藏（默认全关）**：隐藏 KSU LOOP 挂载、隐藏 REVANCED / YouTube 模块路径、隐藏自定义 ROM 路径、隐藏 COMPAT MATRIX、伪装 CMDLINE。只隐藏**实际存在**的路径，找不到就跳过并在日志里写明。
 - **管理器兼容**：官方 KernelSU / SukiSU / ReSukiSU / KernelSU Next，并兼容 APatch 二进制路径。
 - **二进制不覆盖**：优先使用管理器自带的 `ksu_susfs`，仅在无法通信时回退到模块内置备份。
 - **中文 MIUIX WebUI**：状态 / 配置 / 日志 / 关于；浅色深色跟随系统；**无外部 CDN**，断网可用。
@@ -207,6 +208,32 @@ late-load 模式下内核 `post-fs-data` 会被跳过，本模块已改为在 `b
 
 不会。优先使用管理器自带的二进制，仅在它无法与内核通信时才回退到模块内置备份，且不覆盖原文件。
 </details>
+
+## 与上游功能的差异
+
+上游模块的 WebUI 有十余个隐藏开关，本模块**只移植了在 late-load（临时 root）环境下不会出问题的那部分**。
+
+### 已支持
+
+| 开关 | 实现方式 |
+|---|---|
+| sus_path / sus_mount / try_umount | 规则文件逐条下发 |
+| hide_modules / hide_sus_mnts | `/proc/susfs_hide_modules`、`ksu_susfs` |
+| AVC 日志伪装 | `enable_avc_log_spoofing` |
+| 隐藏 KSU LOOP 挂载 | 扫描 `/proc/mounts` 中 `/data/adb` 下的 loop 挂载，逐个 `add_sus_path_loop` |
+| 隐藏 REVANCED / YouTube | 扫描 `*/revanced*`、`*/youtube*`、`*/microg*` 模块目录 |
+| 隐藏自定义 ROM 路径 | 扫描 lineage / evolution / pixel / derpfest 等实际存在目录 |
+| 隐藏 COMPAT MATRIX | 扫描 `*/etc/compat_matrix*` |
+| 伪装 CMDLINE | `set_cmdline_or_bootconfig` |
+
+### 刻意不移植
+
+| 开关 | 原因 |
+|---|---|
+| 模拟 VOLD 应用数据隔离 | 依赖 vold 在**开机早期**完成 app data 挂载。late-load 时该阶段早已结束，设置上去要么无效、要么与已挂载状态冲突 |
+| 隐藏 VENDOR SEPOLICY | init 与 selinux 在早期读取该文件，late 隐藏只对之后的读取者生效，可能让某些进程读不到而报错 |
+
+> 这两项如果确实需要，请使用上游模块 + 永久 root（已解锁 BL）环境。
 
 ## 与上游项目的关系
 

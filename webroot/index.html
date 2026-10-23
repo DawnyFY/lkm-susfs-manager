@@ -113,7 +113,37 @@
           <input type="checkbox" id="replaceRules">
           <span class="switch" aria-hidden="true"></span>
         </label>
+        <label class="switch-row">
+          <span>隐藏 KSU LOOP 挂载</span>
+          <input type="checkbox" id="hideKsuLoop">
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <label class="switch-row">
+          <span>隐藏 REVANCED / YouTube 模块路径</span>
+          <input type="checkbox" id="hideRevanced">
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <label class="switch-row">
+          <span>隐藏自定义 ROM 路径</span>
+          <input type="checkbox" id="hideCustomRom">
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <label class="switch-row">
+          <span>隐藏 COMPAT MATRIX</span>
+          <input type="checkbox" id="hideCompatMatrix">
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <label class="switch-row">
+          <span>伪装 CMDLINE</span>
+          <input type="checkbox" id="fakeCmdline">
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <label class="switch-row">
+          <span>CMDLINE 伪装内容</span>
+          <input type="text" id="fakeCmdlineValue" spellcheck="false" placeholder="留空则不生效">
+        </label>
         <p class="hint">关闭自动加载后，仍可在“状态”页手动加载。AVC 伪装默认关闭。“清空旧规则”打开时，删除路径会立即生效；如果还有其他模块也在管理 sus_path，请关闭它。</p>
+        <p class="hint">下面五项只隐藏实际存在的路径，默认全关，开启前请确认你确实需要。它们只影响隐藏可见性，不参与开机流程，所以在临时 root（late-load）环境下同样安全；但会让某些检测类应用看不到对应文件，自行权衡。</p>
       </div>
 
       <div class="card">

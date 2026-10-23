@@ -28,6 +28,12 @@ set_description() {
 hide_sus_mnts=${hide_sus_mnts:-1}
 avc_spoof=${avc_spoof:-0}
 replace_rules=${replace_rules:-1}
+hide_compat_matrix=${hide_compat_matrix:-0}
+hide_revanced=${hide_revanced:-0}
+hide_custom_rom=${hide_custom_rom:-0}
+hide_ksu_loop=${hide_ksu_loop:-0}
+fake_cmdline=${fake_cmdline:-0}
+fake_cmdline_value=${fake_cmdline_value:-}
 
 # 1. 确保 LKM
 if ! lkm_present; then
@@ -52,6 +58,8 @@ if [ -z "$VARIANT" ] && [ -x "$MODDIR/bin/ksu_susfs_good" ] && [ "$BIN" != "$MOD
 fi
 [ -n "$VARIANT" ] || { echo "[!] ksu_susfs 无法与内核通信"; set_description "❌ ksu_susfs 无法通信"; exit 1; }
 VERSION=$("$BIN" show version 2>/dev/null)
+FEATURES=$("$BIN" show enabled_features 2>/dev/null)
+has_feature() { printf "%s\n" "$FEATURES" | grep -qx "$1"; }
 REL=$(cat /proc/sys/kernel/osrelease 2>/dev/null)
 . "$MODDIR/kmi.sh"
 KMI=$(select_kmi "$REL" "$MODDIR" 2>/dev/null) || KMI=unknown
@@ -72,14 +80,22 @@ fi
 
 # 4. 特性开关
 if [ "$hide_sus_mnts" = "1" ]; then
-    "$BIN" hide_sus_mnts_for_non_su_procs 1 >/dev/null 2>&1 \
-        && echo "[i] hide_sus_mnts_for_non_su_procs=1"
+    if has_feature CONFIG_KSU_SUSFS_HIDE_SUS_MNTS; then
+        "$BIN" hide_sus_mnts_for_non_su_procs 1 >/dev/null 2>&1 \
+            && echo "[i] hide_sus_mnts_for_non_su_procs=1"
+    else
+        echo "[i] 内核未启用 HIDE_SUS_MNTS，跳过（当前 LKM 不支持）"
+    fi
 fi
-if [ "$avc_spoof" = "1" ]; then
-    "$BIN" enable_avc_log_spoofing 1 >/dev/null 2>&1 \
-        && echo "[i] avc_log_spoofing=1"
+if has_feature CONFIG_KSU_SUSFS_AVC_LOG_SPOOFING; then
+    if [ "$avc_spoof" = "1" ]; then
+        "$BIN" enable_avc_log_spoofing 1 >/dev/null 2>&1 \
+            && echo "[i] avc_log_spoofing=1"
+    else
+        "$BIN" enable_avc_log_spoofing 0 >/dev/null 2>&1
+    fi
 else
-    "$BIN" enable_avc_log_spoofing 0 >/dev/null 2>&1
+    echo "[i] 内核未启用 AVC_LOG_SPOOFING，跳过（当前 LKM 不支持）"
 fi
 
 # 读取配置文件的第一个字段，忽略注释和空行
@@ -102,7 +118,8 @@ if [ "$replace_rules" = "1" ] && [ -e /proc/susfs_path ]; then
     fi
 fi
 if [ -f "$CONFIG/sus_path.txt" ]; then
-    while IFS= read -r path; do
+    while IFS= read -r path || [ -n "$path" ]; do
+        path=$(printf '%s' "$path" | tr -d '\r')
         [ -n "$path" ] || continue
         if grep -F -q "path=$path " /proc/susfs_path 2>/dev/null; then
             echo "[=] sus_path $path (已存在)"
@@ -111,47 +128,104 @@ if [ -f "$CONFIG/sus_path.txt" ]; then
         else
             echo "[=] sus_path $path (失败)"
         fi
-    done <<EOF
-$(read_entries "$CONFIG/sus_path.txt")
-EOF
+    done < "$CONFIG/sus_path.txt"
+fi
+
+# 5b. 扩展隐藏开关（只隐藏实际存在的路径，默认全关）
+add_sus_path_safe() {
+    _p=$1
+    [ -n "$_p" ] || return 0
+    if grep -F -q "path=$_p " /proc/susfs_path 2>/dev/null; then
+        echo "[=] sus_path $_p (已存在)"
+    elif "$BIN" add_sus_path "$_p" >/dev/null 2>&1; then
+        echo "[+] sus_path $_p"
+    else
+        echo "[=] sus_path $_p (失败)"
+    fi
+}
+
+if [ "$hide_compat_matrix" = "1" ]; then
+    _n=0
+    for _p in /system/etc/compat_matrix* /system_ext/etc/compat_matrix* /product/etc/compat_matrix* /vendor/etc/compat_matrix*; do
+        [ -e "$_p" ] || continue
+        _n=$((_n + 1))
+        add_sus_path_safe "$_p"
+    done
+    [ "$_n" = "0" ] && echo "[i] 未发现 compat_matrix，跳过"
+fi
+
+if [ "$hide_revanced" = "1" ]; then
+    _n=0
+    for _d in /data/adb/modules/*revanced* /data/adb/modules/*youtube* /data/adb/modules/*microg* /data/adb/ksu/modules/*revanced* /data/adb/ksu/modules/*youtube*; do
+        [ -d "$_d" ] || continue
+        _n=$((_n + 1))
+        add_sus_path_safe "$_d"
+        [ -d "$_d/system" ] && add_sus_path_safe "$_d/system"
+    done
+    [ "$_n" = "0" ] && echo "[i] 未发现 revanced / youtube / microg 模块，跳过"
+fi
+
+if [ "$hide_custom_rom" = "1" ]; then
+    _n=0
+    for _p in /system/addon.d /system/etc/lineage /product/etc/lineage /system/etc/evolution /product/etc/evolution /system/etc/pixel /system/etc/derpfest /product/etc/derpfest; do
+        [ -e "$_p" ] || continue
+        _n=$((_n + 1))
+        add_sus_path_safe "$_p"
+    done
+    [ "$_n" = "0" ] && echo "[i] 未发现自定义 ROM 痕迹，跳过（官方系统属正常）"
+fi
+
+if [ "$hide_ksu_loop" = "1" ]; then
+    _loops=$(grep -E "^/dev/block/loop[0-9]+ /data/adb" /proc/mounts 2>/dev/null | cut -d" " -f2 | sort -u)
+    if [ -z "$_loops" ]; then
+        echo "[i] 未发现 /data/adb 下的 loop 挂载，跳过 KSU LOOP 隐藏"
+    else
+        while IFS= read -r _m; do
+            [ -n "$_m" ] || continue
+            add_sus_path_safe "$_m"
+        done <<EOFL
+$_loops
+EOFL
+    fi
+fi
+
+if [ "$fake_cmdline" = "1" ] && [ -n "$fake_cmdline_value" ]; then
+    if has_feature CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG; then
+        _cf="$STATE/fake_cmdline.txt"
+        mkdir -p "$STATE" 2>/dev/null
+        printf "%s\n" "$fake_cmdline_value" > "$_cf"
+        if "$BIN" set_cmdline_or_bootconfig "$_cf" >/dev/null 2>&1; then
+            echo "[i] cmdline 伪装已生效: $fake_cmdline_value"
+        else
+            echo "[!] cmdline 伪装设置失败（内核已启用该特性，请查内核日志）"
+        fi
+    else
+        echo "[i] 内核未启用 SPOOF_CMDLINE_OR_BOOTCONFIG，跳过 cmdline 伪装"
+    fi
 fi
 
 # 6. sus_mount
 if [ -f "$CONFIG/sus_mount.txt" ]; then
-    while IFS= read -r path; do
+    while IFS= read -r path || [ -n "$path" ]; do
+        path=$(printf '%s' "$path" | tr -d '\r')
         [ -n "$path" ] || continue
         "$BIN" add_sus_mount "$path" >/dev/null 2>&1 \
             && echo "[+] sus_mount $path" || echo "[=] sus_mount $path (失败)"
-    done <<EOF
-$(read_entries "$CONFIG/sus_mount.txt")
-EOF
+    done < "$CONFIG/sus_mount.txt"
 fi
 
 # 7. try_umount
 if [ -f "$CONFIG/try_umount.txt" ]; then
-    while IFS= read -r path; do
+    while IFS= read -r path || [ -n "$path" ]; do
+        path=$(printf '%s' "$path" | tr -d '\r')
         [ -n "$path" ] || continue
         "$BIN" add_try_umount "$path" 1 >/dev/null 2>&1 \
             && echo "[+] try_umount $path" || echo "[=] try_umount $path (失败)"
-    done <<EOF
-$(read_entries "$CONFIG/try_umount.txt")
-EOF
+    done < "$CONFIG/try_umount.txt"
 fi
 
-# 8. hide_modules
-if [ -f "$CONFIG/hide_modules.txt" ]; then
-    while IFS= read -r name; do
-        [ -n "$name" ] || continue
-        if grep -qw "$name" /proc/susfs_hide_modules 2>/dev/null; then
-            echo "[=] hide_module $name (已存在)"
-        else
-            echo "add $name" > /proc/susfs_hide_modules 2>/dev/null \
-                && echo "[+] hide_module $name" || echo "[=] hide_module $name (失败)"
-        fi
-    done <<EOF
-$(read_entries "$CONFIG/hide_modules.txt")
-EOF
-fi
+# 8. hide_modules（统一走 common.sh 的助手）
+apply_hide_modules
 
 # 9. WebUI 兼容标记 + 统计
 touch_marker

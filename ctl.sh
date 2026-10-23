@@ -181,6 +181,12 @@ auto_load=1
 hide_sus_mnts=1
 avc_spoof=0
 replace_rules=1
+hide_ksu_loop=0
+hide_revanced=0
+hide_custom_rom=0
+hide_compat_matrix=0
+fake_cmdline=0
+fake_cmdline_value=
 EOF
         cat > "$CONFIG/sus_path.txt" <<'EOF'
 # 每行一个要隐藏的路径，支持以 # 开头的注释

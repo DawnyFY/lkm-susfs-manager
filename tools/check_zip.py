@@ -15,7 +15,7 @@ import zipfile
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent
-DEFAULT = BASE / "dist" / "susfs_allinone-1.1.6.zip"
+DEFAULT = BASE / "dist" / "susfs_allinone-1.1.7.zip"
 EXPECTED_SHA256 = "03379F24D150FCA0B7D2436E15A99EE359D626E670E5D20F87AB7F54D9B79B35"
 
 REQUIRED = {
@@ -65,8 +65,8 @@ def main() -> int:
         prop = z.read("module.prop").decode("utf-8")
         if "name=LKM SUSFS管理器" not in prop:
             fail("module.prop name is not LKM SUSFS管理器")
-        if "version=1.1.6" not in prop or "versionCode=8" not in prop:
-            fail("module.prop version is not 1.1.6 / 8")
+        if "version=1.1.7" not in prop or "versionCode=9" not in prop:
+            fail("module.prop version is not 1.1.7 / 9")
 
         common = z.read("common.sh").decode("utf-8")
         for token in ("find_susfs_bin", "select_susfs_bin", "ksu_branch", "marker_exists"):

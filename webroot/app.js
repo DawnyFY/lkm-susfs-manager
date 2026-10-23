@@ -193,10 +193,21 @@ async function loadConfig() {
   const hide = cfg.hide_sus_mnts === undefined ? "1" : cfg.hide_sus_mnts;
   const avc = cfg.avc_spoof === undefined ? "0" : cfg.avc_spoof;
   const replace = cfg.replace_rules === undefined ? "1" : cfg.replace_rules;
+  const ksuLoop = cfg.hide_ksu_loop === undefined ? "0" : cfg.hide_ksu_loop;
+  const revanced = cfg.hide_revanced === undefined ? "0" : cfg.hide_revanced;
+  const customRom = cfg.hide_custom_rom === undefined ? "0" : cfg.hide_custom_rom;
+  const compat = cfg.hide_compat_matrix === undefined ? "0" : cfg.hide_compat_matrix;
+  const fakeCmd = cfg.fake_cmdline === undefined ? "0" : cfg.fake_cmdline;
   $("autoLoad").checked = auto === "1";
   $("hideSusMnts").checked = hide === "1";
   $("avcSpoof").checked = avc === "1";
   $("replaceRules").checked = replace === "1";
+  $("hideKsuLoop").checked = ksuLoop === "1";
+  $("hideRevanced").checked = revanced === "1";
+  $("hideCustomRom").checked = customRom === "1";
+  $("hideCompatMatrix").checked = compat === "1";
+  $("fakeCmdline").checked = fakeCmd === "1";
+  $("fakeCmdlineValue").value = cfg.fake_cmdline_value || "";
 
   for (const name of Object.keys(FILE_IDS)) {
     try {
@@ -238,6 +249,12 @@ async function saveConfig() {
     `hide_sus_mnts=${$("hideSusMnts").checked ? 1 : 0}`,
     `avc_spoof=${$("avcSpoof").checked ? 1 : 0}`,
     `replace_rules=${$("replaceRules").checked ? 1 : 0}`,
+    `hide_ksu_loop=${$("hideKsuLoop").checked ? 1 : 0}`,
+    `hide_revanced=${$("hideRevanced").checked ? 1 : 0}`,
+    `hide_custom_rom=${$("hideCustomRom").checked ? 1 : 0}`,
+    `hide_compat_matrix=${$("hideCompatMatrix").checked ? 1 : 0}`,
+    `fake_cmdline=${$("fakeCmdline").checked ? 1 : 0}`,
+    `fake_cmdline_value=${$("fakeCmdlineValue").value.trim()}`,
     "",
   ].join("\n");
 

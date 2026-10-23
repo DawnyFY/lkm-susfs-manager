@@ -54,7 +54,7 @@ def check(path: Path) -> list[str]:
 
 
 def main() -> int:
-    paths = [Path(a) for a in sys.argv[1:]] or [Path("dist/susfs_allinone-1.1.6.zip")]
+    paths = [Path(a) for a in sys.argv[1:]] or [Path("dist/susfs_allinone-1.1.7.zip")]
     rc = 0
     for path in paths:
         if not path.is_file():
