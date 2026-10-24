@@ -28,3 +28,25 @@ select_kmi() {
   [ "$n" = 1 ] && { echo "$match"; return 0; }
   return 1
 }
+
+# 列出所有已打包的 KMI（lib/ 下真实存在的 .ko）
+list_kmis() {
+    _d=$1
+    [ -f "$_d/kmis" ] || return 0
+    while IFS= read -r _k; do
+        [ -n "$_k" ] || continue
+        [ -s "$_d/lib/susfs_guard_lkm-$_k.ko" ] && echo "$_k"
+    done < "$_d/kmis"
+}
+
+# 当自动匹配失败时，尽力猜一个候选：版本号只对上一档就够了
+guess_kmis() {
+    _rel=$1
+    _d=$2
+    for _k in $(list_kmis "$_d"); do
+        _kver=${_k#*-}
+        case "$_rel" in
+            "$_kver".*) echo "$_k" ;;
+        esac
+    done
+}

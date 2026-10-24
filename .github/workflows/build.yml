@@ -15,14 +15,13 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Check for CRLF in shell scripts
-        run: |
-          python -c "import pathlib,sys; bad=[p for p in pathlib.Path(chr(46)).rglob(chr(42)+chr(46)+chr(115)+chr(104)) if bytes([13]) in p.read_bytes()]; print(bad); sys.exit(1 if bad else 0)"
+      - name: Check text files for CR bytes
+        run: python tools/check_no_crlf.py
 
       - name: Build module ZIP
         run: python tools/build_module_zip.py
 
-      - name: Validate module ZIP
+      - name: Validate module ZIP (archive, files, KMI, WebUI JS syntax)
         run: python tools/check_zip.py
 
       - name: License compliance gate

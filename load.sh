@@ -15,10 +15,18 @@ exec >>"$LOG" 2>&1
 echo "=== SUSFS 管理器 load $(date '+%F %T') ==="
 echo "[i] root: $(root_family)"
 
+# 尽早记录真实内核：此处一定还没被本模块伪装过
+save_real_uname
+
 set_description() {
     prop="$MODDIR/module.prop"
     [ -f "$prop" ] || return 0
-    sed -i "s#^description=.*#description=$1#" "$prop" 2>/dev/null
+    _tmp="$prop.tmp"
+    # 用 awk 写入，避免描述里的 # & 等字符破坏 sed 表达式
+    awk -v d="$1" '
+        /^description=/ { print "description=" d; next }
+        { print }
+    ' "$prop" > "$_tmp" 2>/dev/null && mv -f "$_tmp" "$prop" 2>/dev/null
 }
 
 note_fail() {
@@ -65,10 +73,30 @@ if lkm_present; then
     exit 0
 fi
 
+# 先落盘真实内核信息：此时尚未伪装，拿到的一定是真实值
+save_real_uname
+
 REL=$(cat /proc/sys/kernel/osrelease 2>/dev/null)
 [ -n "$REL" ] || fail "无法读取内核版本"
 . "$MODDIR/kmi.sh"
-KMI=$(select_kmi "$REL" "$MODDIR") || fail "没有匹配 $REL 的 LKM"
+[ -f "$CONFIG/config.sh" ] && . "$CONFIG/config.sh"
+force_kmi=${force_kmi:-}
+# 只允许 KMI 名称字符，防止路径穿越
+case "$force_kmi" in *[!A-Za-z0-9._-]*) force_kmi="" ;; esac
+KMI=$(select_kmi "$REL" "$MODDIR" 2>/dev/null)
+if [ -n "$force_kmi" ] && [ -s "$MODDIR/lib/susfs_guard_lkm-$force_kmi.ko" ]; then
+    echo "[!] 使用强制指定的 KMI: $force_kmi"
+    KMI="$force_kmi"
+fi
+if [ -z "$KMI" ]; then
+    echo "[!] 未能匹配内核: $REL"
+    echo "[i] 已打包 KMI: $(list_kmis "$MODDIR" | tr '\n' ' ')"
+    echo "[i] 版本号疑似: $(guess_kmis "$REL" "$MODDIR" | tr '\n' ' ')"
+    echo "[i] 可在 WebUI 配置页强制指定 KMI 后再次加载"
+    set_description "⚠️ 未匹配内核 | $REL | 请在 WebUI 指定 KMI"
+    echo "=== load skip ==="
+    exit 0
+fi
 KO="$MODDIR/lib/susfs_guard_lkm-$KMI.ko"
 [ -s "$KO" ] || fail "缺少 $KMI 的 LKM 文件"
 echo "[i] 内核: $REL"

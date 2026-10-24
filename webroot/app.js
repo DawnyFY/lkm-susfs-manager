@@ -198,6 +198,8 @@ async function loadConfig() {
   const customRom = cfg.hide_custom_rom === undefined ? "0" : cfg.hide_custom_rom;
   const compat = cfg.hide_compat_matrix === undefined ? "0" : cfg.hide_compat_matrix;
   const fakeCmd = cfg.fake_cmdline === undefined ? "0" : cfg.fake_cmdline;
+  const forceKmi = cfg.force_kmi || "";
+  const spoofU = cfg.spoof_uname === undefined ? "0" : cfg.spoof_uname;
   $("autoLoad").checked = auto === "1";
   $("hideSusMnts").checked = hide === "1";
   $("avcSpoof").checked = avc === "1";
@@ -208,6 +210,32 @@ async function loadConfig() {
   $("hideCompatMatrix").checked = compat === "1";
   $("fakeCmdline").checked = fakeCmd === "1";
   $("fakeCmdlineValue").value = cfg.fake_cmdline_value || "";
+
+  // 强制 KMI 用下拉：选项来自模块实际打包的 .ko，避免手输拼错
+  try {
+    const kmis = (await exec(`${CTL} list_kmis`))
+      .split("\n")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    const sel = $("forceKmi");
+    sel.innerHTML = '<option value="">自动匹配（推荐）</option>';
+    for (const k of kmis) {
+      const opt = document.createElement("option");
+      opt.value = k;
+      opt.textContent = k;
+      sel.appendChild(opt);
+    }
+    // 配过一个已不存在的 KMI 时保留显示，提醒用户
+    if (forceKmi && !kmis.includes(forceKmi)) {
+      const opt = document.createElement("option");
+      opt.value = forceKmi;
+      opt.textContent = forceKmi + "（未打包）";
+      sel.appendChild(opt);
+    }
+    sel.value = forceKmi || "";
+  } catch (e) {
+    $("forceKmi").value = forceKmi || "";
+  }
 
   for (const name of Object.keys(FILE_IDS)) {
     try {
@@ -223,13 +251,79 @@ async function refreshLog() {
   $("log").textContent = out && out.trim() ? out : "暂无日志。";
 }
 
+function modalAlert(title, message) {
+  return new Promise((resolve) => {
+    const modal = $("modal");
+    if (!modal) {
+      console.log(title + "\n" + message);
+      resolve();
+      return;
+    }
+    const ok = $("modalOk");
+    const cancel = $("modalCancel");
+    const text = $("modalText");
+    const titleEl = $("modalTitle");
+    if (titleEl) titleEl.textContent = title;
+    text.textContent = message;
+    text.style.whiteSpace = "pre-wrap";
+    if (cancel) cancel.style.display = "none";
+    const close = () => {
+      modal.classList.add("hidden");
+      ok.removeEventListener("click", close);
+      if (cancel) cancel.style.display = "";
+      resolve();
+    };
+    ok.addEventListener("click", close);
+    modal.classList.remove("hidden");
+  });
+}
+
+let loadNoticeShown = false;
+
+const LOAD_FAIL_TEXT = {
+  nomatch: "没有匹配当前内核的 KMI，LKM 未加载。",
+  insmod_failed: "匹配到了 .ko，但 insmod 返回错误，加载失败。",
+  not_loaded: "LKM 未加载，日志里没有明确原因。"
+};
+
+// 读 loadstatus，异常时弹窗（每次打开 WebUI 只弹一次）
+async function checkLoadHealth() {
+  if (loadNoticeShown) return;
+  let st;
+  try {
+    st = parseKV(await exec(`${CTL} loadstatus`));
+  } catch (e) {
+    return;
+  }
+  if (!st || !st.result || st.result === "ok") return;
+  loadNoticeShown = true;
+  const lines = [LOAD_FAIL_TEXT[st.result] || "LKM 未加载。", ""];
+  if (st.osrelease) lines.push("当前内核: " + st.osrelease);
+  if (st.reason) lines.push("日志原因: " + st.reason);
+  if (st.fail_count && st.fail_count !== "0") lines.push("累计失败次数: " + st.fail_count);
+  lines.push("");
+  if (st.result === "nomatch") {
+    lines.push("怎么处理:");
+    lines.push("1. 到「配置」页，把「强制指定 KMI」选成对应版本");
+    lines.push("2. 保存后点「加载并应用」");
+    lines.push("3. 仍失败就把「日志」页的 load.log 发给作者");
+  } else {
+    lines.push("怎么处理:");
+    lines.push("1. 先在管理器里禁用本模块，重启确认能正常开机");
+    lines.push("2. 把 load.log 内容反馈给作者，不要反复重试");
+  }
+  await modalAlert("LKM 未正常加载", lines.join("\n"));
+}
+
 async function runLoad() {
   showBanner("正在加载 LKM 并应用配置…", "info");
   await exec(`${CTL} load`);
   await refreshStatus();
   await loadConfig();
+  loadNoticeShown = false;
   showBanner("加载并应用完成。", "ok", 5000);
   toast("加载并应用完成");
+  await checkLoadHealth();
 }
 
 async function runApply() {
@@ -255,6 +349,10 @@ async function saveConfig() {
     `hide_compat_matrix=${$("hideCompatMatrix").checked ? 1 : 0}`,
     `fake_cmdline=${$("fakeCmdline").checked ? 1 : 0}`,
     `fake_cmdline_value=${$("fakeCmdlineValue").value.trim()}`,
+    `force_kmi=${$("forceKmi").value.trim()}`,
+    `spoof_uname=${$("spoofUname").checked ? 1 : 0}`,
+    `spoof_uname_release=${$("spoofUnameRelease").value.trim()}`,
+    `spoof_uname_version=${$("spoofUnameVersion").value.trim()}`,
     "",
   ].join("\n");
 
@@ -345,6 +443,7 @@ async function init() {
     await refreshStatus();
     await loadConfig();
     await refreshLog();
+    await checkLoadHealth();
   } catch (e) {
     showBanner(`初始化失败：${e.message}`, "error");
   }

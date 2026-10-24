@@ -401,3 +401,71 @@ load.log / apply.log 内容（可附件）
 
 **如果你不完全理解上述风险，请不要安装。**
 
+
+## 内核匹配失败怎么办
+
+模块按内核版本字符串里的 -androidXX-<kver> 标记选择 .ko。以下情况无法自动匹配：
+
+- 内核字符串没有 Android 标记（常见于厂商自改内核，如 5.15.178-gxxx-dirty）
+- 版本号对应多个 KMI（5.10 / 5.15 各有两个候选）
+
+### 1. 先看诊断
+
+su -c "sh /data/adb/modules/susfs_allinone/ctl.sh kmiinfo"
+
+输出包含 osrelease、matched、packaged、guessed，以及 CONFIG_LOCALVERSION / CONFIG_MODVERSIONS / CONFIG_CFI_CLANG。
+
+### 2. 手动指定 KMI
+
+即使自动匹配失败，模块也会照常安装。在 WebUI 配置页填写「强制指定 KMI」，例如 android14-5.15，保存后点「加载并应用」。
+
+### 3. 判断能不能用
+
+- 官方 GKI（字符串带 -androidXX-）：用对应 KMI，成功率较高
+- 自编译内核（带 -dirty）：很可能因符号或 CFI 不匹配加载失败，不要反复尝试
+
+## 伪装内核版本（uname spoof）
+
+WebUI「配置」页可开启 uname 伪装，只影响**用户态看到的内核版本**（`uname -r`、`/proc/version`），不影响 `.ko` 加载校验，也不能用来跨版本加载模块。
+
+### 开机先记录真实内核
+
+`load.sh` 在加载 LKM 时（任何伪装生效之前）会把真实值写入：
+
+```
+/data/adb/modules/susfs_allinone/state/real_uname.txt
+```
+
+```
+release=6.6.77-android15-8-gca30f3b4bef6-abogki440974771-4k
+version=#1 SMP PREEMPT Mon Sep  1 06:06:55 UTC 2025
+saved_at=2026-10-24 00:19:24
+```
+
+只写一次；只有在「关闭伪装并成功还原」后才强制刷新，所以内核升级后会自动更新，也不会把伪装值误记成真实值。
+
+### 出问题时的救援
+
+```
+su -c "sh /data/adb/modules/susfs_allinone/ctl.sh restore_uname"
+```
+
+直接读取快照并还原，**不需要重启**。
+
+排查时用 `kmiinfo` 可同时看到当前值与快照值：
+
+```
+su -c "sh /data/adb/modules/susfs_allinone/ctl.sh kmiinfo"
+```
+
+输出末尾的 `--- real ---` 段就是开机时的真实内核。
+
+### 与其他模块冲突时
+
+若有别的模块强制加载全部模块、或手动 `insmod` 了不匹配的 `.ko` 导致异常：
+
+1. 先看 `real_uname.txt` 确认真实内核版本
+2. 用 `restore_uname` 撤销伪装
+3. 仍不稳定则在管理器中禁用本模块后重启
+
+> 快照文件位于 `/data/adb`，重启与模块禁用都不会删除。

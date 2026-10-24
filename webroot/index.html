@@ -140,8 +140,32 @@
         </label>
         <label class="switch-row">
           <span>CMDLINE 伪装内容</span>
-          <input type="text" id="fakeCmdlineValue" spellcheck="false" placeholder="留空则不生效">
+          <input type="text" id="fakeCmdlineValue" spellcheck="false" placeholder="留空不生效">
         </label>
+        <p class="row-hint">伪装后内核读到的 cmdline 内容；留空则不下发。</p>
+        <label class="switch-row">
+          <span>强制指定 KMI</span>
+          <select id="forceKmi">
+            <option value="">自动匹配（推荐）</option>
+          </select>
+        </label>
+        <p class="row-hint">只在自动匹配失败时用。选项会自动列出本模块实际打包的 KMI，选错也不会加载不存在的文件。</p>
+        <label class="switch-row">
+          <span>伪装内核版本（uname）</span>
+          <input type="checkbox" id="spoofUname">
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <p class="row-hint">只影响用户态看到的版本，不能用来跨版本加载 .ko。</p>
+        <label class="switch-row">
+          <span>内核 release</span>
+          <input type="text" id="spoofUnameRelease" spellcheck="false" placeholder="如 6.6.99-custom">
+        </label>
+        <p class="row-hint">伪装后的 uname -r 内容；留空则传 default。开机时的真实值已记在 state/real_uname.txt。</p>
+        <label class="switch-row">
+          <span>内核 version</span>
+          <input type="text" id="spoofUnameVersion" spellcheck="false" placeholder="如 #1 SMP PREEMPT">
+        </label>
+        <p class="row-hint">伪装后的 uname -v 内容；留空则传 default。填错可用 ctl.sh restore_uname 还原。</p>
         <p class="hint">关闭自动加载后，仍可在“状态”页手动加载。AVC 伪装默认关闭。“清空旧规则”打开时，删除路径会立即生效；如果还有其他模块也在管理 sus_path，请关闭它。</p>
         <p class="hint">下面五项只隐藏实际存在的路径，默认全关，开启前请确认你确实需要。它们只影响隐藏可见性，不参与开机流程，所以在临时 root（late-load）环境下同样安全；但会让某些检测类应用看不到对应文件，自行权衡。</p>
       </div>

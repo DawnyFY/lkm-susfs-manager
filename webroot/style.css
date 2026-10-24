@@ -567,12 +567,36 @@ textarea:focus {
   min-width: 0;
 }
 
-.switch-row input {
+.switch-row input[type="checkbox"] {
   position: absolute;
   width: 1px;
   height: 1px;
   opacity: 0;
   pointer-events: none;
+}
+
+/* 文本输入框：浅底 + 描边，避免看起来像空白 */
+.switch-row input[type="text"] {
+  flex: 0 1 58%;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card-2);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+  text-align: left;
+  outline: none;
+}
+
+.switch-row input[type="text"]::placeholder {
+  color: var(--text-3);
+}
+
+.switch-row input[type="text"]:focus {
+  border-color: var(--accent, #4d7cfe);
+  background: var(--card);
 }
 
 .switch {
@@ -1032,4 +1056,47 @@ footer {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+/* 每个输入项下面的灰色说明 */
+.row-hint {
+  margin: -6px 0 12px;
+  padding-left: 2px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-3);
+  font-weight: 400;
+}
+/* 下拉框与文本框保持一致的观感 */
+.switch-row select {
+  flex: 0 1 58%;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card-2);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-3) 50%),
+                    linear-gradient(135deg, var(--text-3) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 32px;
+}
+
+.switch-row select:focus {
+  border-color: var(--accent);
+  background-color: var(--card);
+}
+/* 错误弹窗正文：保留换行 */
+#modalText {
+  white-space: pre-wrap;
+  text-align: left;
+  line-height: 1.6;
+  max-height: 46vh;
+  overflow-y: auto;
 }

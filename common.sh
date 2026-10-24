@@ -174,3 +174,58 @@ apply_hide_modules() {
             && echo "[+] hide_module $_name" || echo "[=] hide_module $_name (失败)"
     done < "$_hf"
 }
+
+# 输出内核诊断信息（供 WebUI 与命令行排查用）
+kmiinfo() {
+    _rel=$(cat /proc/sys/kernel/osrelease 2>/dev/null)
+    echo "osrelease=$_rel"
+    echo "proc_version=$(cat /proc/version 2>/dev/null)"
+    . "$MODDIR/kmi.sh" 2>/dev/null
+    echo "matched=$(select_kmi "$_rel" "$MODDIR" 2>/dev/null)"
+    echo "packaged=$(list_kmis "$MODDIR" | tr '
+' ' ')"
+    echo "guessed=$(guess_kmis "$_rel" "$MODDIR" | tr '
+' ' ')"
+    if [ -r /proc/config.gz ]; then
+        zcat /proc/config.gz 2>/dev/null | grep -E "^CONFIG_LOCALVERSION=|^CONFIG_MODVERSIONS=|^CONFIG_CFI_CLANG=" | sed "s/^/cfg_/"
+    else
+        echo "cfg_unavailable=/proc/config.gz 不存在"
+    fi
+}
+
+# 伪装 uname 之前把真实内核信息落盘，供出错后还原与排查。
+# 只在文件不存在时写入：冷启动后第一次调用拿到的必然是真实值。
+save_real_uname() {
+    _f="$STATE/real_uname.txt"
+    # 不带 force 时只在首次记录；带 force 用于「确认未伪装」时刷新（内核升级后自愈）
+    [ -f "$_f" ] && [ "$1" != "force" ] && return 0
+    _r=$(uname -r 2>/dev/null)
+    [ -n "$_r" ] || return 0
+    _v=$(uname -v 2>/dev/null)
+    mkdir -p "$STATE" 2>/dev/null
+    {
+        echo "# 真实内核信息（伪装生效前记录）"
+        echo "release=$_r"
+        echo "version=$_v"
+        echo "saved_at=$(date '+%F %T' 2>/dev/null)"
+    } > "$_f" 2>/dev/null && echo "[i] 已记录真实内核: $_r"
+}
+
+# 用记录的真实值还原 uname（伪装出问题时手动救命用）
+restore_real_uname() {
+    _f="$STATE/real_uname.txt"
+    if [ ! -f "$_f" ]; then
+        echo "[!] 没有 real_uname.txt，无法还原"
+        return 1
+    fi
+    _r=$(grep '^release=' "$_f" | head -1 | cut -d= -f2-)
+    _v=$(grep '^version=' "$_f" | head -1 | cut -d= -f2-)
+    [ -n "$_r" ] || { echo "[!] 记录里没有 release"; return 1; }
+    _b=$(select_susfs_bin) || return 1
+    if "$_b" set_uname "$_r" "${_v:-default}" >/dev/null 2>&1; then
+        echo "[i] 已还原为: $_r"
+        return 0
+    fi
+    echo "[!] 还原失败"
+    return 1
+}

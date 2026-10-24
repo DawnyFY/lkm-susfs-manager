@@ -73,6 +73,9 @@ def main() -> int:
                 rel = full.relative_to(SRC).as_posix()
                 if rel in SKIP_FILES or rel.endswith((".log", ".tmp")):
                     continue
+                # 发布说明等开发文档不属于模块内容
+                if rel.startswith("RELEASE_NOTES") or rel.startswith("CHANGELOG"):
+                    continue
                 # Fixed timestamps keep the ZIP byte-reproducible across machines.
                 info = zipfile.ZipInfo(rel, date_time=(1980, 1, 1, 0, 0, 0))
                 info.external_attr = ((0o755 if rel in EXEC_NAMES else 0o644) & 0xFFFF) << 16

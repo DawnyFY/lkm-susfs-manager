@@ -10,13 +10,17 @@ support strings, WebUI fields, and executable modes.
 from __future__ import annotations
 
 import hashlib
+import re
 import sys
 import zipfile
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent
-DEFAULT = BASE / "dist" / "susfs_allinone-1.1.7.zip"
-EXPECTED_SHA256 = "03379F24D150FCA0B7D2436E15A99EE359D626E670E5D20F87AB7F54D9B79B35"
+def _newest_zip() -> Path:
+    zips = sorted((BASE / "dist").glob("susfs_allinone-*.zip"))
+    return zips[-1] if zips else BASE / "dist" / "susfs_allinone.zip"
+
+DEFAULT = _newest_zip()
 
 REQUIRED = {
     "module.prop",
@@ -50,8 +54,6 @@ def main() -> int:
     print(f"file: {path}")
     print(f"size: {len(raw)}")
     print(f"sha256: {digest}")
-    if path == DEFAULT and digest != EXPECTED_SHA256:
-        print(f"WARN: expected handoff SHA256 is {EXPECTED_SHA256}")
 
     with zipfile.ZipFile(path) as z:
         bad = z.testzip()
@@ -65,8 +67,13 @@ def main() -> int:
         prop = z.read("module.prop").decode("utf-8")
         if "name=LKM SUSFS管理器" not in prop:
             fail("module.prop name is not LKM SUSFS管理器")
-        if "version=1.1.7" not in prop or "versionCode=9" not in prop:
-            fail("module.prop version is not 1.1.7 / 9")
+        _src = (BASE / "module.prop")
+        _expect_v = re.search(r"^version=(.+)$", _src.read_text(encoding="utf-8"), re.M)
+        _expect_c = re.search(r"^versionCode=(.+)$", _src.read_text(encoding="utf-8"), re.M)
+        if _expect_v and f"version={_expect_v.group(1).strip()}" not in prop:
+            fail("module.prop version mismatch vs repo module.prop")
+        if _expect_c and f"versionCode={_expect_c.group(1).strip()}" not in prop:
+            fail("module.prop versionCode mismatch vs repo module.prop")
 
         common = z.read("common.sh").decode("utf-8")
         for token in ("find_susfs_bin", "select_susfs_bin", "ksu_branch", "marker_exists"):

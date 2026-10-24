@@ -85,6 +85,53 @@ case "$1" in
     status)
         status
         ;;
+    kmiinfo)
+        kmiinfo
+        echo "--- real ---"
+        if [ -f "$STATE/real_uname.txt" ]; then
+            grep -E "^(release|version|saved_at)=" "$STATE/real_uname.txt"
+        else
+            echo "real_uname=未记录"
+        fi
+        echo "--- install ---"
+        if [ -f "$MODDIR/install_kmi.txt" ]; then
+            grep -vE "^(#|$)" "$MODDIR/install_kmi.txt"
+        else
+            echo "install_record=无（安装时已自动匹配）"
+        fi
+        ;;
+    restore_uname)
+        restore_real_uname
+        ;;
+    list_kmis)
+        . "$MODDIR/kmi.sh"
+        list_kmis "$MODDIR"
+        ;;
+    loadstatus)
+        _rel=$(cat /proc/sys/kernel/osrelease 2>/dev/null)
+        echo "osrelease=$_rel"
+        if lkm_present; then
+            echo "lkm=1"
+            echo "result=ok"
+        else
+            echo "lkm=0"
+            if grep -q "load skip" "$MODDIR/load.log" 2>/dev/null; then
+                echo "result=nomatch"
+            elif grep -qE "susfs_insmod 失败|insmod .*失败|缺少 .* 的 LKM" "$MODDIR/load.log" 2>/dev/null; then
+                echo "result=insmod_failed"
+            else
+                echo "result=not_loaded"
+            fi
+        fi
+        echo "fail_count=$(cat "$STATE/fail_count" 2>/dev/null || echo 0)"
+        _r=$(grep -E "未能匹配内核|susfs_insmod 失败|缺少 .* 的 LKM|无法读取内核版本|safe mode" "$MODDIR/load.log" 2>/dev/null | tail -1)
+        echo "reason=$_r"
+        _last=$(grep -n "=== SUSFS 管理器 load" "$MODDIR/load.log" 2>/dev/null | tail -1 | cut -d: -f1)
+        if [ -n "$_last" ]; then
+            echo "--- lastrun ---"
+            tail -n +"$_last" "$MODDIR/load.log" | head -n 10
+        fi
+        ;;
     load)
         sh "$MODDIR/load.sh" manual
         sh "$MODDIR/apply.sh"
@@ -116,6 +163,12 @@ case "$1" in
         [ -n "$2" ] || { echo "empty config"; exit 1; }
         valid_b64 "$2" || { echo "invalid base64"; exit 1; }
         printf '%s' "$2" | base64 -d > "$CONFIG/config.sh.tmp" || { echo "decode failed"; exit 1; }
+        # 拒绝可疑内容：配置会被 root shell source，禁止命令替换与分隔符
+        if grep -qE '[$`]|;|&&|\|\|' "$CONFIG/config.sh.tmp" 2>/dev/null; then
+            rm -f "$CONFIG/config.sh.tmp"
+            echo "rejected: unsafe characters in config"
+            exit 1
+        fi
         mv -f "$CONFIG/config.sh.tmp" "$CONFIG/config.sh"
         echo "saved"
         ;;
@@ -187,6 +240,10 @@ hide_custom_rom=0
 hide_compat_matrix=0
 fake_cmdline=0
 fake_cmdline_value=
+force_kmi=
+spoof_uname=0
+spoof_uname_release=
+spoof_uname_version=
 EOF
         cat > "$CONFIG/sus_path.txt" <<'EOF'
 # 每行一个要隐藏的路径，支持以 # 开头的注释

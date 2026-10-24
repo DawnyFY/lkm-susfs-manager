@@ -17,7 +17,12 @@ echo "[i] root: $(root_family)"
 set_description() {
     prop="$MODDIR/module.prop"
     [ -f "$prop" ] || return 0
-    sed -i "s#^description=.*#description=$1#" "$prop" 2>/dev/null
+    _tmp="$prop.tmp"
+    # 用 awk 写入，避免描述里的 # & 等字符破坏 sed 表达式
+    awk -v d="$1" '
+        /^description=/ { print "description=" d; next }
+        { print }
+    ' "$prop" > "$_tmp" 2>/dev/null && mv -f "$_tmp" "$prop" 2>/dev/null
 }
 
 [ -f "$MODDIR/disable" ] && { echo "模块已禁用"; exit 0; }
@@ -34,6 +39,12 @@ hide_custom_rom=${hide_custom_rom:-0}
 hide_ksu_loop=${hide_ksu_loop:-0}
 fake_cmdline=${fake_cmdline:-0}
 fake_cmdline_value=${fake_cmdline_value:-}
+force_kmi=${force_kmi:-}
+# 只允许 KMI 名称字符，防止路径穿越
+case "$force_kmi" in *[!A-Za-z0-9._-]*) force_kmi="" ;; esac
+spoof_uname=${spoof_uname:-0}
+spoof_uname_release=${spoof_uname_release:-}
+spoof_uname_version=${spoof_uname_version:-}
 
 # 1. 确保 LKM
 if ! lkm_present; then
@@ -62,7 +73,9 @@ FEATURES=$("$BIN" show enabled_features 2>/dev/null)
 has_feature() { printf "%s\n" "$FEATURES" | grep -qx "$1"; }
 REL=$(cat /proc/sys/kernel/osrelease 2>/dev/null)
 . "$MODDIR/kmi.sh"
-KMI=$(select_kmi "$REL" "$MODDIR" 2>/dev/null) || KMI=unknown
+KMI=$(select_kmi "$REL" "$MODDIR" 2>/dev/null)
+[ -n "$force_kmi" ] && [ -s "$MODDIR/lib/susfs_guard_lkm-$force_kmi.ko" ] && KMI="$force_kmi"
+KMI=${KMI:-unknown}
 
 # 3. sus_path 依赖 sdcard 根路径，先等待 /sdcard/Android/data
 count=0
@@ -71,9 +84,14 @@ until [ -d /sdcard/Android/data ] || [ "$count" -ge 15 ]; do
     count=$((count + 1))
 done
 if [ -d /sdcard/Android/data ]; then
-    "$BIN" set_sdcard_root_path /sdcard
-    "$BIN" set_android_data_root_path /sdcard/Android/data
-    echo "[i] sdcard 根路径已设置"
+    # 部分内核不支持这两个命令（需要 susfs v1.5.8+），按返回码如实记录
+    _sd_out=$("$BIN" set_sdcard_root_path /sdcard 2>&1); _sd_rc=$?
+    _ad_out=$("$BIN" set_android_data_root_path /sdcard/Android/data 2>&1); _ad_rc=$?
+    if [ "$_sd_rc" = "0" ] && [ "$_ad_rc" = "0" ]; then
+        echo "[i] sdcard 根路径已设置"
+    else
+        echo "[i] 内核不支持 sdcard 根路径设置（需 susfs v1.5.8+），跳过"
+    fi
 else
     echo "[!] /sdcard/Android/data 15 秒内未出现，sus_path 可能不生效"
 fi
@@ -109,6 +127,14 @@ read_entries() {
     done < "$file"
 }
 
+# 清洗单行：去 \r、去注释、去首尾空白
+clean_entry() {
+    _v=$(printf '%s' "$1" | tr -d '\r')
+    _v=${_v%%#*}
+    _v=$(printf '%s' "$_v" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    printf '%s' "$_v"
+}
+
 # 5. sus_path（可选：先清空普通规则，让删除立即生效）
 if [ "$replace_rules" = "1" ] && [ -e /proc/susfs_path ]; then
     if echo clear > /proc/susfs_path 2>/dev/null; then
@@ -118,8 +144,8 @@ if [ "$replace_rules" = "1" ] && [ -e /proc/susfs_path ]; then
     fi
 fi
 if [ -f "$CONFIG/sus_path.txt" ]; then
-    while IFS= read -r path || [ -n "$path" ]; do
-        path=$(printf '%s' "$path" | tr -d '\r')
+    while IFS= read -r _line || [ -n "$_line" ]; do
+        path=$(clean_entry "$_line")
         [ -n "$path" ] || continue
         if grep -F -q "path=$path " /proc/susfs_path 2>/dev/null; then
             echo "[=] sus_path $path (已存在)"
@@ -206,8 +232,8 @@ fi
 
 # 6. sus_mount
 if [ -f "$CONFIG/sus_mount.txt" ]; then
-    while IFS= read -r path || [ -n "$path" ]; do
-        path=$(printf '%s' "$path" | tr -d '\r')
+    while IFS= read -r _line || [ -n "$_line" ]; do
+        path=$(clean_entry "$_line")
         [ -n "$path" ] || continue
         "$BIN" add_sus_mount "$path" >/dev/null 2>&1 \
             && echo "[+] sus_mount $path" || echo "[=] sus_mount $path (失败)"
@@ -216,8 +242,8 @@ fi
 
 # 7. try_umount
 if [ -f "$CONFIG/try_umount.txt" ]; then
-    while IFS= read -r path || [ -n "$path" ]; do
-        path=$(printf '%s' "$path" | tr -d '\r')
+    while IFS= read -r _line || [ -n "$_line" ]; do
+        path=$(clean_entry "$_line")
         [ -n "$path" ] || continue
         "$BIN" add_try_umount "$path" 1 >/dev/null 2>&1 \
             && echo "[+] try_umount $path" || echo "[=] try_umount $path (失败)"
@@ -226,6 +252,28 @@ fi
 
 # 8. hide_modules（统一走 common.sh 的助手）
 apply_hide_modules
+
+# 8b. 伪装 uname（只影响用户态看到的内核版本）
+# 伪装前先记下真实内核，出问题时可用 ctl.sh restore_uname 还原
+save_real_uname
+if has_feature CONFIG_KSU_SUSFS_SPOOF_UNAME; then
+    if [ "$spoof_uname" = "1" ]; then
+        _r=${spoof_uname_release:-default}
+        _v=${spoof_uname_version:-default}
+        if "$BIN" set_uname "$_r" "$_v" >/dev/null 2>&1; then
+            echo "[i] uname 伪装已生效: $_r / $_v"
+        else
+            echo "[!] uname 伪装设置失败"
+        fi
+    else
+        if "$BIN" set_uname default default >/dev/null 2>&1; then
+            echo "[i] uname 伪装已还原"
+            save_real_uname force
+        fi
+    fi
+else
+    echo "[i] 内核未启用 SPOOF_UNAME，跳过"
+fi
 
 # 9. WebUI 兼容标记 + 统计
 touch_marker
