@@ -2,6 +2,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| 1.1.9 | 启动守卫（防重启循环，覆盖 late-load）；BL 解锁检测与 `bootloader=` 状态；仅解锁可用的 sepolicy / VOLD 隔离（未解锁时整组隐藏）；隐藏 GAPPS / DEX2OAT / Scene 痕迹；预设隐藏项弹窗；`kmiinfo` 与工具链修正；BakaSU 识别（与 ReSukiSU 包名相同，显示组合名 + `manager_name` 覆盖）；清理死代码（`read_entries`、重复快照调用、未用样式），开机门禁合并为 `boot_gate_ok` |
 | 1.1.8 | 内核诊断 `kmiinfo`；强制 KMI 下拉；匹配失败仍可安装；uname 伪装与自动还原、开机真实内核快照；加载失败自动弹窗；修注释行被当规则下发、描述写入转义、`force_kmi` 白名单、配置内容校验 |
 | 1.1.7 | 新增 5 个隐藏开关（KSU LOOP / REVANCED / 自定义 ROM / COMPAT MATRIX / CMDLINE）；修复热重启后 hide_modules 丢失；内核特性门控；构建增加 JS 语法检查 |
 | 1.1.6 | 第三方声明补充 SUSFS 原始作者 simonpunk；构建可复现（固定时间戳） |

@@ -58,6 +58,13 @@ fi
 BIN=$(ensure_susfs_bin)
 echo "[i] ksu_susfs: ${BIN:-无}"
 
+# 自动路径：若上次加载后未能完成启动，本次不再尝试
+if autoload_paused && [ "$1" != "manual" ]; then
+    echo "[!] 自动加载已暂停（守卫标记存在），跳过本次加载"
+    set_description "⚠️ 自动加载已暂停，请在 WebUI 恢复"
+    exit 0
+fi
+
 # 已经加载过就不再叠加
 if lkm_present; then
     rm -f "$STATE/loading"
@@ -72,9 +79,6 @@ if lkm_present; then
     echo "=== load ok ==="
     exit 0
 fi
-
-# 先落盘真实内核信息：此时尚未伪装，拿到的一定是真实值
-save_real_uname
 
 REL=$(cat /proc/sys/kernel/osrelease 2>/dev/null)
 [ -n "$REL" ] || fail "无法读取内核版本"

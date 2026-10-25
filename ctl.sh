@@ -79,6 +79,8 @@ status() {
     printf 'selinux=%s\n' "$(getenforce 2>/dev/null)"
     printf 'fail_count=%s\n' "$FAILS"
     printf 'lkm_size=%s\n' "$LSIZE"
+    if autoload_paused; then printf 'autoload=paused\n'; else printf 'autoload=ok\n'; fi
+    printf 'bootloader=%s\n' "$(bootloader_state)"
 }
 
 case "$1" in
@@ -102,6 +104,44 @@ case "$1" in
         ;;
     restore_uname)
         restore_real_uname
+        ;;
+    resume_autoload)
+        resume_autoload
+        ;;
+    preset_paths)
+        # 输出当前设备上真实存在的建议隐藏路径（已配置的由前端标记，不在此过滤）
+        _cur="$CONFIG/sus_path.txt"
+        for _p in /data/adb/ksu /data/adb/ap /data/adb/magisk /data/adb/modules \
+                  /data/adb/ksu/bin /data/adb/ap/bin \
+                  /data/adb/ksu/susfs4ksu /data/adb/ap/susfs4ksu /data/adb/susfs4ksu \
+                  /data/adb/ksu/modules /data/adb/ap/modules \
+                  /data/adb/post-fs-data.d /data/adb/service.d \
+                  /data/swap_config.conf \
+                  /data/local/stryker /data/local/tmp/luckys \
+                  /data/local/tmp/HyperCeiler /data/local/tmp/simpleHook \
+                  /data/local/tmp/resetprop \
+                  /data/adb/mount_mask /data/adb/mount_mark \
+                  /data/local/tmp/mount_mask /data/local/tmp/mount_mark; do
+            if [ -e "$_p" ]; then
+                printf '%s\t1\n' "$_p"
+            else
+                printf '%s\t0\n' "$_p"
+            fi
+        done
+        # /dev 下随机命名的 scene 痕迹目录（名字每次可能不同，按内容识别）
+        for _f in /dev/*/scene_mode_category; do
+            [ -e "$_f" ] || continue
+            _d=${_f%/scene_mode_category}
+            printf '%s\t1\n' "$_d"
+        done
+        ;;
+    guard_status)
+        if autoload_paused; then
+            echo "autoload=paused"
+            [ -f "$STATE/boot_guard" ] && grep -E "^(kmi|at)=" "$STATE/boot_guard"
+        else
+            echo "autoload=ok"
+        fi
         ;;
     list_kmis)
         . "$MODDIR/kmi.sh"
@@ -238,9 +278,15 @@ hide_ksu_loop=0
 hide_revanced=0
 hide_custom_rom=0
 hide_compat_matrix=0
+hide_gapps=0
+hide_dex2oat=0
+hide_scene=0
 fake_cmdline=0
 fake_cmdline_value=
 force_kmi=
+manager_name=
+hide_vendor_sepolicy=0
+vold_isolation=0
 spoof_uname=0
 spoof_uname_release=
 spoof_uname_version=

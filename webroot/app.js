@@ -68,6 +68,17 @@ function b64EncodeUnicode(str) {
   return btoa(binary);
 }
 
+// 弹窗打开时锁住背景滚动，避免只滑动到下层页面
+let modalLock = 0;
+function lockBackground() {
+  modalLock += 1;
+  document.body.classList.add("modal-open");
+}
+function unlockBackground() {
+  modalLock = Math.max(0, modalLock - 1);
+  if (modalLock === 0) document.body.classList.remove("modal-open");
+}
+
 function ask(message) {
   return new Promise((resolve) => {
     const modal = $("modal");
@@ -80,6 +91,7 @@ function ask(message) {
     const text = $("modalText");
     const close = (value) => {
       modal.classList.add("hidden");
+      unlockBackground();
       ok.removeEventListener("click", onOk);
       cancel.removeEventListener("click", onCancel);
       modal.removeEventListener("click", onBackdrop);
@@ -95,6 +107,7 @@ function ask(message) {
       if (event.key === "Escape") close(false);
     };
     text.textContent = message;
+    lockBackground();
     modal.classList.remove("hidden");
     ok.addEventListener("click", onOk);
     cancel.addEventListener("click", onCancel);
@@ -182,9 +195,18 @@ function renderStatus() {
   setText("subtitle", s.description || "自动匹配内核 · 一键加载 · 规则管理");
 }
 
+// 仅解锁 BL 可用的选项：临时 root 下整组隐藏，避免误导
+function applyBlVisibility() {
+  const group = $("blOnlyGroup");
+  if (!group) return;
+  const unlocked = statusData && statusData.bootloader === "unlocked";
+  group.style.display = unlocked ? "" : "none";
+}
+
 async function refreshStatus() {
   statusData = parseKV(await exec(`${CTL} status`));
   renderStatus();
+  applyBlVisibility();
 }
 
 async function loadConfig() {
@@ -197,9 +219,15 @@ async function loadConfig() {
   const revanced = cfg.hide_revanced === undefined ? "0" : cfg.hide_revanced;
   const customRom = cfg.hide_custom_rom === undefined ? "0" : cfg.hide_custom_rom;
   const compat = cfg.hide_compat_matrix === undefined ? "0" : cfg.hide_compat_matrix;
+  const gapps = cfg.hide_gapps === undefined ? "0" : cfg.hide_gapps;
+  const dex2oat = cfg.hide_dex2oat === undefined ? "0" : cfg.hide_dex2oat;
+  const scene = cfg.hide_scene === undefined ? "0" : cfg.hide_scene;
   const fakeCmd = cfg.fake_cmdline === undefined ? "0" : cfg.fake_cmdline;
   const forceKmi = cfg.force_kmi || "";
+  const managerName = cfg.manager_name || "";
   const spoofU = cfg.spoof_uname === undefined ? "0" : cfg.spoof_uname;
+  const sepolicy = cfg.hide_vendor_sepolicy === undefined ? "0" : cfg.hide_vendor_sepolicy;
+  const vold = cfg.vold_isolation === undefined ? "0" : cfg.vold_isolation;
   $("autoLoad").checked = auto === "1";
   $("hideSusMnts").checked = hide === "1";
   $("avcSpoof").checked = avc === "1";
@@ -208,7 +236,12 @@ async function loadConfig() {
   $("hideRevanced").checked = revanced === "1";
   $("hideCustomRom").checked = customRom === "1";
   $("hideCompatMatrix").checked = compat === "1";
+  $("hideGapps").checked = gapps === "1";
+  $("hideDex2oat").checked = dex2oat === "1";
+  $("hideScene").checked = scene === "1";
   $("fakeCmdline").checked = fakeCmd === "1";
+  $("hideVendorSepolicy").checked = sepolicy === "1";
+  $("voldIsolation").checked = vold === "1";
   $("fakeCmdlineValue").value = cfg.fake_cmdline_value || "";
 
   // 强制 KMI 用下拉：选项来自模块实际打包的 .ko，避免手输拼错
@@ -315,6 +348,127 @@ async function checkLoadHealth() {
   await modalAlert("LKM 未正常加载", lines.join("\n"));
 }
 
+
+// 预设隐藏项：弹窗列出候选目录（不存在的也列出并标注），勾选后追加到 sus_path
+async function openPresetModal() {
+  const modal = $("presetModal");
+  const list = $("presetList");
+  if (!modal || !list) return;
+
+  let items = [];
+  try {
+    const out = await exec(`${CTL} preset_paths`);
+    items = out
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => {
+        const tab = line.lastIndexOf("\t");
+        if (tab < 0) return { path: line, exists: true };
+        return { path: line.slice(0, tab), exists: line.slice(tab + 1) === "1" };
+      });
+  } catch (e) {
+    showBanner(`读取预设失败：${e.message}`, "error");
+    return;
+  }
+
+  const cur = $("susPath").value.split("\n").map((x) => x.trim());
+  list.innerHTML = "";
+
+  // 全选行
+  const allRow = document.createElement("label");
+  allRow.className = "preset-row preset-all";
+  const allCb = document.createElement("input");
+  allCb.type = "checkbox";
+  const allSpan = document.createElement("span");
+  allSpan.textContent = "全选";
+  const allTag = document.createElement("em");
+  allRow.appendChild(allCb);
+  allRow.appendChild(allSpan);
+  allRow.appendChild(allTag);
+  list.appendChild(allRow);
+
+  // 具体项
+  for (const it of items) {
+    const inList = cur.includes(it.path);
+    const row = document.createElement("label");
+    row.className = "preset-row" + (it.exists ? "" : " preset-missing");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = it.path;
+    cb.checked = it.exists && !inList;
+    cb.disabled = inList;
+    cb.dataset.exists = it.exists ? "1" : "0";
+    const span = document.createElement("span");
+    span.textContent = it.path;
+    row.appendChild(cb);
+    row.appendChild(span);
+    const tag = document.createElement("em");
+    if (inList) tag.textContent = "（已在列表）";
+    else if (!it.exists) tag.textContent = "（未发现）";
+    if (tag.textContent) row.appendChild(tag);
+    list.appendChild(row);
+  }
+
+  const actionable = () =>
+    [...list.querySelectorAll('input[type="checkbox"]')].filter(
+      (c) => c !== allCb && !c.disabled && c.dataset.exists === "1"
+    );
+
+  const syncAll = () => {
+    const boxes = actionable();
+    const total = boxes.length;
+    const checked = boxes.filter((c) => c.checked).length;
+    if (total === 0) {
+      allCb.checked = false;
+      allCb.indeterminate = false;
+      allCb.disabled = true;
+      allTag.textContent = "（没有可追加的项）";
+      return;
+    }
+    allCb.disabled = false;
+    allCb.checked = checked === total;
+    allCb.indeterminate = checked > 0 && checked < total;
+    allTag.textContent = `${checked}/${total}`;
+  };
+
+  allCb.addEventListener("change", () => {
+    const on = allCb.checked;
+    actionable().forEach((c) => {
+      c.checked = on;
+    });
+    syncAll();
+  });
+
+  list.addEventListener("change", (event) => {
+    if (event.target === allCb) return;
+    syncAll();
+  });
+
+  syncAll();
+  lockBackground();
+  modal.classList.remove("hidden");
+}
+
+function closePresetModal() {
+  $("presetModal").classList.add("hidden");
+  unlockBackground();
+}
+
+function applyPresetSelection() {
+  const list = $("presetList");
+  const picked = [...list.querySelectorAll("input[type=checkbox]")]
+    .filter((c) => c.checked)
+    .map((c) => c.value);
+  const ta = $("susPath");
+  const cur = ta.value.split("\n").map((x) => x.trim()).filter((x) => x.length > 0);
+  const fresh = picked.filter((p) => !cur.includes(p));
+  if (!fresh.length) { toast("没有需要追加的项"); closePresetModal(); return; }
+  ta.value = [...cur, ...fresh].join("\n");
+  closePresetModal();
+  toast(`已追加 ${fresh.length} 项，记得点保存`);
+}
+
 async function runLoad() {
   showBanner("正在加载 LKM 并应用配置…", "info");
   await exec(`${CTL} load`);
@@ -347,12 +501,18 @@ async function saveConfig() {
     `hide_revanced=${$("hideRevanced").checked ? 1 : 0}`,
     `hide_custom_rom=${$("hideCustomRom").checked ? 1 : 0}`,
     `hide_compat_matrix=${$("hideCompatMatrix").checked ? 1 : 0}`,
+    `hide_gapps=${$("hideGapps").checked ? 1 : 0}`,
+    `hide_dex2oat=${$("hideDex2oat").checked ? 1 : 0}`,
+    `hide_scene=${$("hideScene").checked ? 1 : 0}`,
     `fake_cmdline=${$("fakeCmdline").checked ? 1 : 0}`,
     `fake_cmdline_value=${$("fakeCmdlineValue").value.trim()}`,
     `force_kmi=${$("forceKmi").value.trim()}`,
+    `manager_name=${managerName}`,
     `spoof_uname=${$("spoofUname").checked ? 1 : 0}`,
     `spoof_uname_release=${$("spoofUnameRelease").value.trim()}`,
     `spoof_uname_version=${$("spoofUnameVersion").value.trim()}`,
+    `hide_vendor_sepolicy=${$("hideVendorSepolicy").checked ? 1 : 0}`,
+    `vold_isolation=${$("voldIsolation").checked ? 1 : 0}`,
     "",
   ].join("\n");
 
@@ -418,6 +578,16 @@ function initTabs() {
   });
 }
 
+// 把说明文字和它所属的那一行视觉归组：描边移到说明下方
+function attachRowHints() {
+  document.querySelectorAll(".row-hint").forEach((hint) => {
+    const prev = hint.previousElementSibling;
+    if (!prev || !prev.classList.contains("switch-row")) return;
+    prev.style.borderBottom = "none";
+    hint.classList.add("hint-attached");
+  });
+}
+
 function bind() {
   $("btnLoad").addEventListener("click", (e) => withBusy(e.currentTarget, runLoad));
   $("btnApply").addEventListener("click", (e) => withBusy(e.currentTarget, runApply));
@@ -426,13 +596,35 @@ function bind() {
     showBanner("状态已刷新。", "ok", 3000);
   }));
   $("btnSave").addEventListener("click", (e) => withBusy(e.currentTarget, saveConfig));
+  $("btnPreset").addEventListener("click", (e) => withBusy(e.currentTarget, openPresetModal));
+  $("presetCancel").addEventListener("click", closePresetModal);
+  $("presetOk").addEventListener("click", applyPresetSelection);
   $("btnImport").addEventListener("click", (e) => withBusy(e.currentTarget, importLegacy));
   $("btnReset").addEventListener("click", (e) => withBusy(e.currentTarget, resetDefaults));
   $("btnLog").addEventListener("click", (e) => withBusy(e.currentTarget, refreshLog));
 }
 
+// 启动守卫：上次加载后未能完成启动时会暂停自动加载，这里提示并支持恢复
+async function checkBootGuard() {
+  if (!statusData || statusData.autoload !== "paused") return;
+  const yes = await ask(
+    "检测到上次加载 LKM 后设备未能完成启动，已自动暂停加载。\n\n" +
+    "要继续自动加载吗？如果上次是加载了不匹配的 .ko 导致重启，请先到「配置」页选对 KMI。"
+  );
+  if (!yes) return;
+  try {
+    await exec(`${CTL} resume_autoload`);
+    await refreshStatus();
+    showBanner("已恢复自动加载。下次开机会重新尝试。", "ok", 5000);
+    toast("已恢复自动加载");
+  } catch (e) {
+    showBanner(`恢复失败：${e.message}`, "error");
+  }
+}
+
 async function init() {
   initTabs();
+  attachRowHints();
   bind();
   if (!(await waitForKsu())) {
     showBanner("请在 SukiSU 的 WebUI 中打开本页面。", "error");
@@ -444,6 +636,7 @@ async function init() {
     await loadConfig();
     await refreshLog();
     await checkLoadHealth();
+    await checkBootGuard();
   } catch (e) {
     showBanner(`初始化失败：${e.message}`, "error");
   }

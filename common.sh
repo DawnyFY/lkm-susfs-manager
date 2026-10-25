@@ -110,11 +110,17 @@ root_family() {
 
 # 仅状态页调用；pm 在开机早期可能不可用，失败时回退到“KernelSU 系列”。
 ksu_branch() {
+    # 允许手动固定显示名（配置项 manager_name），用于包名相同无法区分的分支
+    _mn=$(grep -s "^manager_name=" "$CONFIG/config.sh" 2>/dev/null | tail -1 | cut -d= -f2-)
+    [ -n "$_mn" ] && { echo "$_mn"; return 0; }
+
     if [ -d /data/adb/ksu ]; then
         _pkgs=$(pm list packages 2>/dev/null)
         case "$_pkgs" in
             *com.sukisu.ultra*) echo "SukiSU"; return 0 ;;
-            *com.resukisu*) echo "ReSukiSU"; return 0 ;;
+            # BakaSU 沿用 ReSukiSU 的包名（com.resukisu.resukisu），仅凭包名无法区分
+            *org.bakasu*) echo "BakaSU"; return 0 ;;
+            *com.resukisu*) echo "ReSukiSU / BakaSU"; return 0 ;;
             *com.rifsxd.ksunext*) echo "KernelSU Next"; return 0 ;;
             *me.weishu.kernelsu*) echo "KernelSU"; return 0 ;;
             *) echo "KernelSU 系列"; return 0 ;;
@@ -228,4 +234,83 @@ restore_real_uname() {
     fi
     echo "[!] 还原失败"
     return 1
+}
+# ---- 启动守卫：防止错误 .ko 造成开机循环 ----
+# 自动加载前先落标记；只有真正开机完成（boot-completed）才会清除该标记。
+# 若上次加载后设备没能完成启动（panic/卡死），下次开机会发现标记仍在，
+# 自动停止加载并等待用户确认，避免无限重启。
+
+boot_guard_path() {
+    echo "$STATE/boot_guard"
+}
+
+autoload_paused() {
+    [ -f "$STATE/autoload_paused" ]
+}
+
+mark_boot_guard() {
+    mkdir -p "$STATE" 2>/dev/null
+    {
+        echo "kmi=${1:-unknown}"
+        echo "at=$(date '+%F %T' 2>/dev/null)"
+    } > "$(boot_guard_path)" 2>/dev/null
+}
+
+clear_boot_guard() {
+    rm -f "$(boot_guard_path)" "$STATE/autoload_paused" 2>/dev/null
+}
+
+# 自动加载前的检查：返回 0 表示可以继续，1 表示应暂停自动加载
+boot_guard_should_pause() {
+    [ -f "$(boot_guard_path)" ] || return 0
+    mkdir -p "$STATE" 2>/dev/null
+    date '+%F %T' > "$STATE/autoload_paused" 2>/dev/null
+    echo "[!] 检测到上次加载后未能完成启动，已暂停自动加载"
+    echo "[!] 确认内核可用后在 WebUI 点「恢复自动加载」，或执行 ctl.sh resume_autoload"
+    return 1
+}
+
+pause_autoload() {
+    mkdir -p "$STATE" 2>/dev/null
+    date '+%F %T' > "$STATE/autoload_paused" 2>/dev/null
+}
+
+resume_autoload() {
+    clear_boot_guard
+    rm -f "$STATE/fail_count" 2>/dev/null
+    echo "[i] 已恢复自动加载（守卫标记已清除）"
+}
+# ---- 引导加载器（BL）锁状态检测 ----
+# 未解锁：临时 root 场景，模块在 late-load 之后才运行，早期阶段功能不可靠
+# 已解锁：永久 root，模块可在 post-fs-data 早期运行，可开放更多隐藏项
+bootloader_state() {
+    _vb=$(getprop ro.boot.verifiedbootstate 2>/dev/null)
+    _lock=$(getprop ro.boot.flash.locked 2>/dev/null)
+    _sb=$(getprop ro.secureboot.lockstate 2>/dev/null)
+    case "$_vb" in
+        orange|yellow) echo unlocked; return 0 ;;
+    esac
+    case "$_lock" in
+        0) echo unlocked; return 0 ;;
+        1) echo locked; return 0 ;;
+    esac
+    case "$_sb" in
+        unlocked) echo unlocked; return 0 ;;
+        locked) echo locked; return 0 ;;
+    esac
+    echo unknown
+}
+
+bl_unlocked() {
+    [ "$(bootloader_state)" = "unlocked" ]
+}
+
+# 开机脚本统一门禁：返回 0 表示应继续执行
+boot_gate_ok() {
+    [ -f "$MODDIR/disable" ] && return 1
+    [ -f "$MODDIR/remove" ] && return 1
+    [ -f "$MODDIR/disable_autoload" ] && return 1
+    [ "$(getprop persist.sys.safemode)" = "1" ] && return 1
+    [ "$(getprop ro.sys.safemode)" = "1" ] && return 1
+    return 0
 }

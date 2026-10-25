@@ -70,9 +70,16 @@ fastboot 注入 ABL cmdline 漏洞 → 系统以 SELinux permissive 启动 → S
 
 - **8 个 KMI 自动匹配**（android12-5.10 ～ android17-6.18），按 `/proc/sys/kernel/osrelease` 选择；无法匹配时快速失败，不会误载。
 - **两种加载时机**：`post-fs-data`（常规设备）/ `boot-completed` 兜底（late-load 临时 root）；也可通过模块 Action 手动触发，无需重启。
+- **启动守卫（防重启循环）**：自动加载前落标记，只有真正跑完 `boot-completed` 才清除。若加载错 `.ko` 导致 panic，下次开机检测到标记残留就**自动暂停加载**，设备正常进入系统；修好 KMI 后点「加载并应用」即可恢复。
 - **规则管理**：`sus_path`、`sus_mount`、`try_umount`、`hide_modules`、`hide_sus_mnts`、AVC 日志伪装开关。
-- **扩展隐藏（默认全关）**：隐藏 KSU LOOP 挂载、隐藏 REVANCED / YouTube 模块路径、隐藏自定义 ROM 路径、隐藏 COMPAT MATRIX、伪装 CMDLINE。只隐藏**实际存在**的路径，找不到就跳过并在日志里写明。
-- **管理器兼容**：官方 KernelSU / SukiSU / ReSukiSU / KernelSU Next，并兼容 APatch 二进制路径。
+- **扩展隐藏（默认全关）**：隐藏 KSU LOOP 挂载、REVANCED / YouTube 模块路径、自定义 ROM 路径、COMPAT MATRIX、GAPPS、DEX2OAT 挂载、Scene 痕迹、伪装 CMDLINE。只隐藏**实际存在**的路径，找不到就跳过并写明原因。
+- **仅解锁 BL 可用**：隐藏 VENDOR SEPOLICY、模拟 VOLD 应用数据隔离。未解锁的设备（临时 root）在 WebUI 里直接看不到这两项——开机早期阶段已过，做了也无效。
+- **预设隐藏项**：配置页「开关」右侧按钮打开窗口，按当前设备**真实存在**的目录列出候选（KSU / APatch / Magisk 目录、post-fs-data.d、service.d、susfs4ksu、`/dev` 下的 Scene 痕迹），勾选后追加到 `sus_path`，不覆盖手写内容。
+- **BL 状态检测**：读取 `ro.boot.verifiedbootstate` / `ro.boot.flash.locked` / `ro.secureboot.lockstate`，`ctl.sh status` 输出 `bootloader=locked|unlocked|unknown`。
+- **内核诊断**：`ctl.sh kmiinfo` 一次打印内核版本、匹配结果、已打包 KMI、版本号猜测、内核配置与安装记录。
+- **管理器兼容**：官方 KernelSU / SukiSU / ReSukiSU / BakaSU / KernelSU Next，并兼容 APatch 二进制路径。
+  适配方式是**认结构不认名字**：只要分支保留 `/data/adb/ksu`（或 APatch 的 `/data/adb/ap`）并自带 `ksu_susfs`，就能正常工作，无需专门适配。
+  BakaSU 与 ReSukiSU 的包名相同（`com.resukisu.resukisu`），状态页会显示「ReSukiSU / BakaSU」；想精确显示可在 `config/config.sh` 里设 `manager_name=BakaSU`。
 - **二进制不覆盖**：优先使用管理器自带的 `ksu_susfs`，仅在无法通信时回退到模块内置备份。
 - **中文 MIUIX WebUI**：状态 / 配置 / 日志 / 关于；浅色深色跟随系统；**无外部 CDN**，断网可用。
 - **升级友好**：模块 ID 固定为 `susfs_allinone`，升级保留配置；首次安装可尝试导入旧 `susfs4ksu` 配置。
@@ -95,7 +102,7 @@ fastboot 注入 ABL cmdline 漏洞 → 系统以 SELinux permissive 启动 → S
 ## 要求
 
 - **arm64** 设备
-- KernelSU 系列管理器（官方 KernelSU / SukiSU / ReSukiSU / KernelSU Next）
+- KernelSU 系列管理器（官方 KernelSU / SukiSU / ReSukiSU / BakaSU / KernelSU Next）
 - 内核 KMI 在上表内
 - 能加载内核模块的 root 环境；临时 root 方案请自行确认可用性
 
@@ -275,7 +282,7 @@ description=not loaded yet - loads the matching .ko on boot
 | 规则下发（sus_path/sus_mount/try_umount/hide_modules） | 无 | **有** |
 | **late-load（临时 root）适配** | 无（依赖 post-fs-data） | **有**（boot-completed 兜底） |
 | WebUI | 无 | **有** |
-| 分支兼容（SukiSU/ReSukiSU/Next/APatch） | 部分 | **有** |
+| 分支兼容（SukiSU / ReSukiSU / BakaSU / Next / APatch） | 部分 | **有** |
 | ksu_susfs 二进制回退 | 无 | **有** |
 | 加载自限时 / 半加载保护 | 无 | **有** |
 | 配置导入（旧 susfs4ksu） | 无 | **有** |
@@ -355,7 +362,7 @@ load.log / apply.log 内容（可附件）
 
 - **仅在以下环境实测**：Xiaomi 15 Ultra（25019PNF3C）/ Android 16 / 内核 6.6.77（`android15-6.6`）/ SukiSU Ultra 4.2.1 / bootloader 未解锁的临时 root。
 - 其余 7 个 KMI 的 `.ko` 为上游编译产物，**本作者未实机验证**。
-- 官方 KernelSU / ReSukiSU / KernelSU Next **未实机测试**，代码层面做了兼容但无法保证。
+- 官方 KernelSU / ReSukiSU / BakaSU / KernelSU Next **未实机测试**，代码层面做了兼容但无法保证。
 - 其他机型、其他内核版本、其他管理器组合，均属**未验证**范围。
 
 ### 3. 与 root / 解锁无关

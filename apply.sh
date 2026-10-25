@@ -40,6 +40,11 @@ hide_ksu_loop=${hide_ksu_loop:-0}
 fake_cmdline=${fake_cmdline:-0}
 fake_cmdline_value=${fake_cmdline_value:-}
 force_kmi=${force_kmi:-}
+hide_gapps=${hide_gapps:-0}
+hide_dex2oat=${hide_dex2oat:-0}
+hide_scene=${hide_scene:-0}
+hide_vendor_sepolicy=${hide_vendor_sepolicy:-0}
+vold_isolation=${vold_isolation:-0}
 # 只允许 KMI 名称字符，防止路径穿越
 case "$force_kmi" in *[!A-Za-z0-9._-]*) force_kmi="" ;; esac
 spoof_uname=${spoof_uname:-0}
@@ -48,8 +53,25 @@ spoof_uname_version=${spoof_uname_version:-}
 
 # 1. 确保 LKM
 if ! lkm_present; then
+    if [ "$AUTOLOAD" = "1" ]; then
+        # 上次自动加载后没能完成启动（marker 还在），本次暂停
+        if autoload_paused || [ -f "$(boot_guard_path)" ]; then
+            pause_autoload
+            echo "[!] 上次加载后未能完成启动，本次暂停自动加载"
+            echo "[i] 请先确认 KMI 选对：WebUI 配置页的「强制指定 KMI」，或执行 ctl.sh kmiinfo 查看"
+            echo "[i] 确认后点「加载并应用」（手动路径不受暂停限制），或执行 ctl.sh resume_autoload"
+            set_description "⚠️ 自动加载已暂停（上次启动未完成），请检查 KMI 后手动加载"
+            exit 1
+        fi
+    fi
     echo "[i] LKM 未加载，先加载"
-    sh "$MODDIR/load.sh" manual
+    if [ "$AUTOLOAD" = "1" ]; then
+        # 自动路径：先落守卫标记，加载后若没能完成启动，下次会自动暂停
+        mark_boot_guard "$(cat /proc/sys/kernel/osrelease 2>/dev/null)"
+        sh "$MODDIR/load.sh" auto
+    else
+        sh "$MODDIR/load.sh" manual
+    fi
     rc=$?
     if [ "$rc" != "0" ]; then
         echo "[!] 加载失败，无法应用规则"
@@ -117,16 +139,6 @@ else
 fi
 
 # 读取配置文件的第一个字段，忽略注释和空行
-read_entries() {
-    file=$1
-    [ -f "$file" ] || return 0
-    while IFS= read -r line; do
-        line=$(printf '%s\n' "$line" | sed 's/#.*//' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-        [ -n "$line" ] || continue
-        printf '%s\n' "$line" | awk '{print $1}'
-    done < "$file"
-}
-
 # 清洗单行：去 \r、去注释、去首尾空白
 clean_entry() {
     _v=$(printf '%s' "$1" | tr -d '\r')
@@ -273,6 +285,70 @@ if has_feature CONFIG_KSU_SUSFS_SPOOF_UNAME; then
     fi
 else
     echo "[i] 内核未启用 SPOOF_UNAME，跳过"
+fi
+
+# 5c. 仅解锁 BL 可用的隐藏项（临时 root 下早期阶段已过，做了也无效）
+if [ "$hide_vendor_sepolicy" = "1" ] || [ "$vold_isolation" = "1" ]; then
+    if bl_unlocked; then
+        if [ "$hide_vendor_sepolicy" = "1" ]; then
+            _n=0
+            for _p in /vendor/etc/selinux/vendor_sepolicy.cil /vendor/etc/selinux/plat_sepolicy.cil /vendor/etc/selinux/precompiled_sepolicy /system/etc/selinux/plat_sepolicy.cil; do
+                [ -e "$_p" ] || continue
+                _n=$((_n + 1))
+                add_sus_path_safe "$_p"
+            done
+            [ "$_n" = "0" ] && echo "[i] 未发现 sepolicy 文件，跳过"
+        fi
+        if [ "$vold_isolation" = "1" ]; then
+            _n=0
+            for _p in /sdcard/Android/data /sdcard/Android/obb /data/media/0/Android/data /data/media/0/Android/obb; do
+                [ -e "$_p" ] || continue
+                _n=$((_n + 1))
+                add_sus_path_safe "$_p"
+            done
+            [ "$_n" = "0" ] && echo "[i] 未发现 Android/data 目录，跳过"
+        fi
+    else
+        echo "[i] 未解锁 BL（BL=$(bootloader_state)）：sepolicy / VOLD 隔离在临时 root 下无效，跳过"
+    fi
+fi
+
+# 5d. GAPPS / DEX2OAT 隐藏
+if [ "$hide_gapps" = "1" ]; then
+    _n=0
+    for _p in /system/app/GmsCore /system/priv-app/GmsCore /product/app/GmsCore               /product/priv-app/GmsCore /system/app/GoogleServicesFramework               /system/priv-app/GoogleServicesFramework /system/app/Phonesky               /product/app/Phonesky /system/app/Vending /product/app/Vending; do
+        [ -e "$_p" ] || continue
+        _n=$((_n + 1))
+        add_sus_path_safe "$_p"
+    done
+    [ "$_n" = "0" ] && echo "[i] 未发现 GAPPS 路径，跳过（国行系统属正常）"
+fi
+
+if [ "$hide_dex2oat" = "1" ]; then
+    _n=0
+    for _m in $(grep -E " (/(system|apex|product)/[^ ]*/oat|/data/dalvik-cache)" /proc/mounts 2>/dev/null | cut -d" " -f2 | sort -u); do
+        [ -d "$_m" ] || continue
+        _n=$((_n + 1))
+        if "$BIN" add_sus_mount "$_m" >/dev/null 2>&1; then
+            echo "[+] sus_mount $_m (dex2oat)"
+        else
+            echo "[=] sus_mount $_m (失败)"
+        fi
+    done
+    [ "$_n" = "0" ] && echo "[i] 未发现 dex2oat 挂载，跳过"
+fi
+
+# 5e. Scene 痕迹（/dev 下随机命名的目录，内含 scene_mode_category）
+if [ "$hide_scene" = "1" ]; then
+    _n=0
+    for _f in /dev/*/scene_mode_category; do
+        [ -e "$_f" ] || continue
+        _d=${_f%/scene_mode_category}
+        _n=$((_n + 1))
+        add_sus_path_safe "$_d"
+        add_sus_path_safe "$_f"
+    done
+    [ "$_n" = "0" ] && echo "[i] 未发现 scene 痕迹，跳过"
 fi
 
 # 9. WebUI 兼容标记 + 统计

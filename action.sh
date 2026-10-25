@@ -23,6 +23,7 @@ if lkm_present; then
     if grep -qw kernelsu /proc/susfs_hide_modules 2>/dev/null; then echo "是"; else echo "否"; fi
     echo "[i] ksu_susfs: ${BIN:-无}"
     echo "[i] 日志: $MODDIR/apply.log"
+    clear_boot_guard
     echo "[i] 完成，不需要重启。"
 else
     echo "[!] 加载失败 (rc=$rc)"

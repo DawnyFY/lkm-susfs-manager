@@ -1,15 +1,21 @@
 #!/system/bin/sh
 # 开机早期：只负责加载 LKM，规则留到 boot-completed 再应用。
 MODDIR=/data/adb/modules/susfs_allinone
+. "$MODDIR/common.sh"
 
-[ -f "$MODDIR/disable" ] && exit 0
-[ -f "$MODDIR/remove" ] && exit 0
-[ -f "$MODDIR/disable_autoload" ] && exit 0
-[ "$(getprop persist.sys.safemode)" = "1" ] && exit 0
-[ "$(getprop ro.sys.safemode)" = "1" ] && exit 0
+boot_gate_ok || exit 0
 
 [ -f "$MODDIR/config/config.sh" ] && . "$MODDIR/config/config.sh"
 [ "${auto_load:-1}" = "1" ] || exit 0
+
+# 守卫：上次加载后没能完成启动（panic/卡死），这次不再自动加载
+if ! boot_guard_should_pause; then
+    echo "=== post-fs-data: 暂停自动加载 ===" >> "$MODDIR/load.log" 2>/dev/null
+    exit 0
+fi
+
+# 自动加载前落标记，只有 boot-completed 才会清除
+mark_boot_guard "$(cat /proc/sys/kernel/osrelease 2>/dev/null)"
 
 if command -v timeout >/dev/null 2>&1; then
     timeout 20 /system/bin/sh "$MODDIR/load.sh"

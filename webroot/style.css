@@ -1100,3 +1100,112 @@ footer {
   max-height: 46vh;
   overflow-y: auto;
 }
+/* 卡片标题行：标题 + 右侧操作按钮 */
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.card-head h2 {
+  margin: 0;
+}
+
+.btn.small {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* 预设项列表 */
+.preset-list {
+  max-height: 46vh;
+  overflow-y: auto;
+  margin: 10px 0 16px;
+  text-align: left;
+}
+
+.preset-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.preset-row span {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+}
+
+.preset-row em {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--text-3);
+}
+/* 说明文字与其所属行视觉归组：描边从行移到说明下方（由 JS 处理相邻关系） */
+.row-hint.hint-attached {
+  margin: -2px 0 0;
+  padding: 2px 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* 标签列优先占位，避免被输入框挤成两行 */
+.switch-row > span:first-child {
+  flex: 1 1 auto;
+  padding-right: 10px;
+}
+
+.switch-row input[type="text"],
+.switch-row select {
+  flex: 0 0 52%;
+}
+/* 预设列表：全选行与不存在项 */
+.preset-row.preset-all {
+  border-bottom: 2px solid var(--line);
+  font-weight: 600;
+}
+
+.preset-row.preset-missing {
+  opacity: 0.45;
+}
+
+.preset-row.preset-missing em {
+  color: var(--danger, #d9534f);
+}
+/* 弹窗打开时锁住背景滚动；弹窗自身可滚动 */
+body.modal-open {
+  overflow: hidden;
+}
+
+/* 只锁页面内容区的触摸，弹窗本身保持可点 */
+body.modal-open .app {
+  touch-action: none;
+}
+
+body.modal-open .modal-box {
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+
+.modal-box {
+  max-height: 86vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.preset-list {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+/* 全选行的计数标签 */
+.preset-row.preset-all em {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-3);
+}
+
+.preset-row input[type="checkbox"]:disabled + span {
+  color: var(--text-3);
+}
