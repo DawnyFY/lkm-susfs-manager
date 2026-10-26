@@ -11,6 +11,7 @@ const FILE_IDS = {
 let execSeq = 0;
 let busy = false;
 let statusData = {};
+let managerName = ""; // 手动覆盖管理器显示名（配置项 manager_name）
 
 const $ = (id) => document.getElementById(id);
 
@@ -224,7 +225,7 @@ async function loadConfig() {
   const scene = cfg.hide_scene === undefined ? "0" : cfg.hide_scene;
   const fakeCmd = cfg.fake_cmdline === undefined ? "0" : cfg.fake_cmdline;
   const forceKmi = cfg.force_kmi || "";
-  const managerName = cfg.manager_name || "";
+  managerName = cfg.manager_name || "";
   const spoofU = cfg.spoof_uname === undefined ? "0" : cfg.spoof_uname;
   const sepolicy = cfg.hide_vendor_sepolicy === undefined ? "0" : cfg.hide_vendor_sepolicy;
   const vold = cfg.vold_isolation === undefined ? "0" : cfg.vold_isolation;
