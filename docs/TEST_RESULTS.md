@@ -1,5 +1,8 @@
 # 测试记录
 
+> 本文档记录的是 **1.1.0 时期**的真机测试，不能代表 1.2.0。1.2.0 的验收见
+> `26-audit-1.2.0-full.md` 与 `tools/test_*.sh`（离线回归）。
+
 日期：2026-10-20  
 测试对象：`susfs_allinone` 1.1.0（SUSFS 管理器）  
 设备：Xiaomi 15 Ultra / Android 16 / kernel 6.6.77-android15-6.6 / SukiSU Ultra 临时 root

@@ -54,7 +54,17 @@ def check(path: Path) -> list[str]:
 
 
 def main() -> int:
-    paths = [Path(a) for a in sys.argv[1:]] or [Path("dist/susfs_allinone-1.1.7.zip")]
+    args = sys.argv[1:]
+    if args:
+        paths = [Path(a) for a in args]
+    else:
+        # 不带参数时选 dist 下版本号最新的 zip，避免默认值随版本过期
+        cands = sorted(Path("dist").glob("susfs_allinone-*.zip"))
+        if not cands:
+            print("no zip found under dist/; pass a path explicitly")
+            return 1
+        print(f"(no path given, using latest: {cands[-1]})")
+        paths = [cands[-1]]
     rc = 0
     for path in paths:
         if not path.is_file():

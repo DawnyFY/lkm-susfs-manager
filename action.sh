@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # 模块 Action：手动加载并应用，不依赖开机自动加载。
 # 兼容 KernelSU 官方版及 SukiSU / ReSukiSU / KernelSU Next 等分支。
 MODDIR=/data/adb/modules/susfs_allinone

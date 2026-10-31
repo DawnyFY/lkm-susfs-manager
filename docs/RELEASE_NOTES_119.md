@@ -9,6 +9,8 @@
 - **BakaSU 识别**：与 ReSukiSU 包名相同（`com.resukisu.resukisu`），显示为「ReSukiSU / BakaSU」；可用配置项 `manager_name=BakaSU` 精确显示。
 
 ### 修复
+- 修复 1.1.9 首版 WebUI 保存失败：`managerName is not defined`（变量作用域错误，#1）。
+- 回退资源 `?v=` 查询串，避免 `file://` 加载时资源失败。
 - 弹窗打开时背景仍可滚动、触摸锁选择器写错（`.container` → `.app`）。
 - 预设弹窗复选框全部被禁用导致无法勾选。
 - 全选改为标准三态逻辑，仅作用于已发现项，未发现项可单独勾选。

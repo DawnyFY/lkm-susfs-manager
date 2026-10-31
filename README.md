@@ -68,18 +68,21 @@ fastboot 注入 ABL cmdline 漏洞 → 系统以 SELinux permissive 启动 → S
 
 ## 功能
 
-- **8 个 KMI 自动匹配**（android12-5.10 ～ android17-6.18），按 `/proc/sys/kernel/osrelease` 选择；无法匹配时快速失败，不会误载。
+- **8 个 KMI 自动匹配**（android12-5.10 ～ android17-6.18），按真实内核选择（优先 `/proc/version`，回退开机时的真实内核快照，最后才用 `osrelease`）；无法匹配时快速失败，不会误载。
+- **伪回锁支持**：状态页可「手动确认 BL 已解锁」，把标记写入 `state/force_bl_unlocked`（独立文件，通用配置写入命令无法改动），让 vendor sepolicy 隐藏与 VOLD 隔离不再被 `ro.boot.*` 属性门控（首次开启需等待 10 秒确认）。
 - **两种加载时机**：`post-fs-data`（常规设备）/ `boot-completed` 兜底（late-load 临时 root）；也可通过模块 Action 手动触发，无需重启。
 - **启动守卫（防重启循环）**：自动加载前落标记，只有真正跑完 `boot-completed` 才清除。若加载错 `.ko` 导致 panic，下次开机检测到标记残留就**自动暂停加载**，设备正常进入系统；修好 KMI 后点「加载并应用」即可恢复。
 - **规则管理**：`sus_path`、`sus_mount`、`try_umount`、`hide_modules`、`hide_sus_mnts`、AVC 日志伪装开关。
 - **扩展隐藏（默认全关）**：隐藏 KSU LOOP 挂载、REVANCED / YouTube 模块路径、自定义 ROM 路径、COMPAT MATRIX、GAPPS、DEX2OAT 挂载、Scene 痕迹、伪装 CMDLINE。只隐藏**实际存在**的路径，找不到就跳过并写明原因。
+- **Scene 痕迹持续隐藏**：Scene 每次重启在 `/dev` 下重建随机名目录，`apply` 内最多三轮扫描（0s/5s/10s），WebUI 另有「重扫 Scene」按钮可随时补扫。
+- **挂载清理**：「自动 try_umount（模块挂载）」按 `/proc/1/mountinfo` 识别 KSU overlay 与 bind 自 `/data/adb` 的挂载，并始终过滤真实分区（内核未启用 `TRY_UMOUNT` 时明确跳过）。
 - **仅解锁 BL 可用**：隐藏 VENDOR SEPOLICY、模拟 VOLD 应用数据隔离。未解锁的设备（临时 root）在 WebUI 里直接看不到这两项——开机早期阶段已过，做了也无效。
 - **预设隐藏项**：配置页「开关」右侧按钮打开窗口，按当前设备**真实存在**的目录列出候选（KSU / APatch / Magisk 目录、post-fs-data.d、service.d、susfs4ksu、`/dev` 下的 Scene 痕迹），勾选后追加到 `sus_path`，不覆盖手写内容。
 - **BL 状态检测**：读取 `ro.boot.verifiedbootstate` / `ro.boot.flash.locked` / `ro.secureboot.lockstate`，`ctl.sh status` 输出 `bootloader=locked|unlocked|unknown`。
 - **内核诊断**：`ctl.sh kmiinfo` 一次打印内核版本、匹配结果、已打包 KMI、版本号猜测、内核配置与安装记录。
 - **管理器兼容**：官方 KernelSU / SukiSU / ReSukiSU / BakaSU / KernelSU Next，并兼容 APatch 二进制路径。
   适配方式是**认结构不认名字**：只要分支保留 `/data/adb/ksu`（或 APatch 的 `/data/adb/ap`）并自带 `ksu_susfs`，就能正常工作，无需专门适配。
-  BakaSU 与 ReSukiSU 的包名相同（`com.resukisu.resukisu`），状态页会显示「ReSukiSU / BakaSU」；想精确显示可在 `config/config.sh` 里设 `manager_name=BakaSU`。
+  BakaSU 与 ReSukiSU 的包名相同（`com.resukisu.resukisu`），状态页会显示「ReSukiSU / BakaSU」；想精确显示可在 `config/config.ini` 里设 `manager_name=BakaSU`。
 - **二进制不覆盖**：优先使用管理器自带的 `ksu_susfs`，仅在无法通信时回退到模块内置备份。
 - **中文 MIUIX WebUI**：状态 / 配置 / 日志 / 关于；浅色深色跟随系统；**无外部 CDN**，断网可用。
 - **升级友好**：模块 ID 固定为 `susfs_allinone`，升级保留配置；首次安装可尝试导入旧 `susfs4ksu` 配置。
@@ -117,20 +120,21 @@ fastboot 注入 ABL cmdline 漏洞 → 系统以 SELinux permissive 启动 → S
 
 ## 配置
 
-`config/config.sh`：
+`config/config.ini`：
 
 ```sh
 auto_load=1        # 1=开机自动加载并应用规则；0=仅手动
 hide_sus_mnts=1    # 对非 root 进程隐藏 SUS 挂载点
 avc_spoof=0        # AVC 日志伪装（默认关闭）
-replace_rules=1    # 应用前清空未列出的普通 sus_path 规则
+replace_rules=0    # 0=只追加；1=只清理本模块上次写入的；2=整表清空（慎用）
 ```
 
+- `config/config.ini`：纯 `KEY=VALUE` 配置（不会被 shell 执行；旧版 `config.sh` 会自动迁移为 `config.sh.bak`）。
 - `config/sus_path.txt`：每行一个路径，`#` 开头为注释。
 - `config/hide_modules.txt`：每行一个模块名，默认 `kernelsu`。
 - `config/sus_mount.txt` / `try_umount.txt`：挂载相关规则，默认空。
 
-> 若还有其他工具在写 `sus_path`，把 `replace_rules` 改为 `0`，避免互相清空。
+> `replace_rules=1` 只删本模块自己写过的路径，不会动其他模块的规则；`2` 才会整表清空。
 
 ## WebUI
 
@@ -333,6 +337,7 @@ load.log / apply.log 内容（可附件）
 - **inforcqb** — [susfs4ksu-lkm](https://github.com/inforcqb/susfs4ksu-lkm)，SUSFS 的 LKM 移植
 - **sidex15** — [ksu_module_susfs](https://github.com/sidex15/ksu_module_susfs)，`ksu_susfs` 实现
 - **SukiSU Ultra 团队** — 管理器与 late-load 机制
+- **旧梦一场雨**（[@hhgbmh8-ux](https://github.com/hhgbmh8-ux)）— 帮忙测试模块
 
 ## 许可证
 
@@ -433,7 +438,7 @@ su -c "sh /data/adb/modules/susfs_allinone/ctl.sh kmiinfo"
 
 ## 伪装内核版本（uname spoof）
 
-WebUI「配置」页可开启 uname 伪装，只影响**用户态看到的内核版本**（`uname -r`、`/proc/version`），不影响 `.ko` 加载校验，也不能用来跨版本加载模块。
+WebUI「配置」页可开启 uname 伪装，只影响**用户态通过 uname 系统调用看到的内核版本**（`uname -r` 等）。本模块选 KMI 时优先读 `/proc/version` 并校验形态，不采用伪装值，也不会据此跨版本加载模块；`/proc/version` 是否被某个具体 LKM 改写取决于实现，可用 `ctl.sh kmiinfo` 对比。
 
 ### 开机先记录真实内核
 

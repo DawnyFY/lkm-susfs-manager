@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 :root {
   color-scheme: light dark;
   --bg: #f4f5f7;
@@ -774,6 +775,92 @@ textarea:focus {
   background: rgba(255, 149, 0, 0.16);
 }
 
+.about .contributor-list {
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.about .contributor {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 0;
+}
+
+.about .contributor + .contributor {
+  border-top: 1px solid var(--line);
+}
+
+.about .avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--line-strong);
+  flex: none;
+}
+
+.about .who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.about .who strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.about .who .gh {
+  color: var(--accent);
+  font-size: 12.5px;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.about .who .what {
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+
+/* ——— 滚动触发（关于页贡献者）——— */
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.reveal.in {
+  opacity: 1;
+  transform: none;
+}
+
+.reveal .avatar {
+  transform: scale(0.92);
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.12s;
+}
+
+.reveal.in .avatar {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal.in,
+  .reveal .avatar,
+  .reveal.in .avatar {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
 footer {
   display: flex;
   justify-content: space-between;
@@ -1208,4 +1295,24 @@ body.modal-open .modal-box {
 
 .preset-row input[type="checkbox"]:disabled + span {
   color: var(--text-3);
+}
+/* 卡片内的小操作行（如「重扫 Scene」） */
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 2px 0 14px;
+  padding: 0;
+}
+
+.row-actions .btn {
+  flex: 0 0 auto;
+}
+
+.row-actions .row-hint {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  flex: 1 1 180px;
 }

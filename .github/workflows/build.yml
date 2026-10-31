@@ -18,6 +18,13 @@ jobs:
       - name: Check text files for CR bytes
         run: python tools/check_no_crlf.py
 
+      - name: Offline unit tests
+        run: |
+          for t in tools/test_*.sh; do
+            echo "== $t"
+            sh "$t" "$PWD"
+          done
+
       - name: Build module ZIP
         run: python tools/build_module_zip.py
 

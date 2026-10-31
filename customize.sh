@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # KernelSU 系列安装脚本（官方版 / SukiSU / ReSukiSU / KernelSU Next）
 if [ "$KSU" = true ] || [ -n "$KSU_VER" ] || [ -n "$KSU_KERNEL_VER_CODE" ] || [ -d /data/adb/ksu ]; then
     :
@@ -11,7 +12,58 @@ if [ -n "$KSU_VER" ]; then
     ui_print "- 管理器: $KSU_VER"
 fi
 
-REL=$(cat /proc/sys/kernel/osrelease) || abort "- 无法读取内核版本"
+# 升级时保留用户配置与规则清单：安装包里的 config 只是默认值，不能覆盖已改过的配置
+INSTALLED=/data/adb/modules/susfs_allinone
+COPIED_CONFIG=0
+if [ -d "$INSTALLED/config" ]; then
+    for _f in config.ini sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt; do
+        if [ -f "$INSTALLED/config/$_f" ]; then
+            cp -f "$INSTALLED/config/$_f" "$MODPATH/config/$_f" 2>/dev/null && COPIED_CONFIG=1 && ui_print "- 保留配置: $_f"
+        fi
+    done
+    # 旧版只有 config.sh：安装时先迁移到 config.ini（只提取 KEY=VALUE，绝不 source）
+    if [ ! -f "$INSTALLED/config/config.ini" ] && [ -f "$INSTALLED/config/config.sh" ]; then
+        _dst="$MODPATH/config/config.ini"
+        _tmp="$MODPATH/config/config.ini.migrate"
+        _dropped=0
+        : > "$_tmp" 2>/dev/null
+        while IFS= read -r _line || [ -n "$_line" ]; do
+            case "$_line" in
+                ""|"#"*) printf '%s\n' "$_line" >> "$_tmp" ;;
+                [A-Za-z_]*=*) printf '%s\n' "$_line" >> "$_tmp" ;;
+                *) _dropped=$((_dropped + 1)) ;;
+            esac
+        done < "$INSTALLED/config/config.sh"
+        if [ -s "$_tmp" ]; then
+            mv -f "$_tmp" "$_dst"
+            cp -f "$INSTALLED/config/config.sh" "$MODPATH/config/config.sh.bak" 2>/dev/null
+            COPIED_CONFIG=1
+            ui_print "- 已迁移旧配置 config.sh -> config.ini"
+            [ "$_dropped" -gt 0 ] && ui_print "- 迁移时丢弃 $_dropped 行非 KEY=VALUE 内容"
+        else
+            rm -f "$_tmp"
+        fi
+    fi
+    # 保留 sus_path 归属清单：丢了会让 replace_rules=1 退化为"按配置清理"
+    if [ -f "$INSTALLED/state/our_paths.txt" ]; then
+        mkdir -p "$MODPATH/state" 2>/dev/null
+        cp -f "$INSTALLED/state/our_paths.txt" "$MODPATH/state/our_paths.txt" 2>/dev/null \
+            && ui_print "- 保留规则清单: state/our_paths.txt"
+    fi
+elif [ -f /data/adb/susfs4ksu/sus_path.txt ]; then
+    # 首次安装：继承旧 susfs4ksu 的规则文件
+    for _f in sus_path sus_mount try_umount; do
+        if [ -f "/data/adb/susfs4ksu/$_f.txt" ]; then
+            cp -f "/data/adb/susfs4ksu/$_f.txt" "$MODPATH/config/$_f.txt" && COPIED_CONFIG=1
+        fi
+    done
+    [ -s "$MODPATH/config/hide_modules.txt" ] || echo "kernelsu" > "$MODPATH/config/hide_modules.txt"
+fi
+
+# 用真实内核选 KMI（/proc/version 通常不受 uname 伪装影响）
+REL=$(awk 'NR==1 { if ($3 ~ /^[0-9]+\.[0-9]+/ && $3 ~ /android[0-9]/) print $3 }' /proc/version 2>/dev/null)
+[ -n "$REL" ] || REL=$(cat /proc/sys/kernel/osrelease 2>/dev/null)
+[ -n "$REL" ] || abort "- 无法读取内核版本"
 . "$MODPATH/kmi.sh"
 KMI=$(select_kmi "$REL" "$MODPATH" 2>/dev/null) || KMI=""
 if [ -z "$KMI" ]; then
@@ -30,7 +82,7 @@ if [ -z "$KMI" ]; then
         echo "packaged=$PACKED"
         echo "saved_at=$(date '+%F %T' 2>/dev/null)"
     } > "$MODPATH/install_kmi.txt" 2>/dev/null
-    # 同时写进模块描述，管理器卡片上直接可见
+# 同时写进模块描述，管理器卡片上直接可见
     awk -v d="⚠️ 未匹配内核 | $REL | 疑似: $GUESS" '
         /^description=/ { print "description=" d; next }
         { print }
@@ -44,26 +96,6 @@ if [ "$KMI" != "unmatched" ]; then
     ui_print "- 内核 $REL -> $KMI"
 else
     KMI=unknown
-fi
-
-# 升级时保留本模块已有配置；首次安装时继承旧 susfs4ksu 配置
-INSTALLED=/data/adb/modules/susfs_allinone
-COPIED_CONFIG=0
-if [ -f "$INSTALLED/config/sus_path.txt" ]; then
-    for f in config.sh sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt; do
-        if [ -f "$INSTALLED/config/$f" ]; then
-            cp -f "$INSTALLED/config/$f" "$MODPATH/config/$f"
-            COPIED_CONFIG=1
-        fi
-    done
-elif [ -f /data/adb/susfs4ksu/sus_path.txt ]; then
-    for f in sus_path sus_mount try_umount; do
-        if [ -f "/data/adb/susfs4ksu/$f.txt" ]; then
-            cp -f "/data/adb/susfs4ksu/$f.txt" "$MODPATH/config/$f.txt"
-            COPIED_CONFIG=1
-        fi
-    done
-    echo "kernelsu" > "$MODPATH/config/hide_modules.txt"
 fi
 
 set_perm_recursive "$MODPATH" 0 0 0755 0644

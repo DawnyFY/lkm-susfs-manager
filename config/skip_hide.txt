@@ -1,0 +1,5 @@
+# 不隐藏的包名/路径片段，每行一个（子串匹配，支持 # 注释）
+# 隐藏检测类应用自己的数据目录会让它判定异常，需要时把包名加到这里
+duckdetector
+appvisibility
+nativecheck

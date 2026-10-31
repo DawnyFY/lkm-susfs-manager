@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- SPDX-License-Identifier: GPL-2.0-only -->
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -75,6 +76,19 @@
         </div>
       </div>
 
+      <div class="card">
+        <label class="switch-row">
+          <span>手动确认 BL 已解锁</span>
+          <input type="checkbox" id="forceBlUnlocked">
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <p class="row-hint">
+          仅用于<b>伪回锁</b>设备（BL 实际已解锁，但 <code>ro.boot.*</code> 被伪装成 locked）。<br>
+          打开后模块会永久记住「已解锁」，允许执行 <b>隐藏 vendor sepolicy</b> 与 <b>VOLD 隔离</b>；
+          这两项会改变系统可见状态，<b>可能导致应用读不到自己的外部存储</b>。确认设备确实已解锁 BL 再开启。
+        </p>
+      </div>
+
       <div class="card rows">
         <div class="row"><span>管理器</span><span id="rootManager">—</span></div>
         <div class="row"><span>LKM 变体</span><span id="variant" class="mono">—</span></div>
@@ -86,7 +100,7 @@
 
       <div class="card note">
         <strong>工作方式</strong>
-        <p>开机时 <code>post-fs-data</code> 先读取 <code>uname -r</code>，从模块自带的 8 个 KMI 中选出匹配的 LKM 并加载；<code>boot-completed</code> 再设置 sdcard 根路径并应用规则。热重启不会卸载 LKM，冷重启后会自动重新加载。</p>
+        <p>开机时 <code>post-fs-data</code> 先取真实内核版本（优先 <code>/proc/version</code>，回退 <code>state/real_uname.txt</code>），从模块自带的 8 个 KMI 中选出匹配的 LKM 并加载；<code>boot-completed</code> 再设置 sdcard 根路径并应用规则。热重启不会卸载 LKM，冷重启后会自动重新加载。</p>
       </div>
     </section>
 
@@ -112,7 +126,7 @@
           <span class="switch" aria-hidden="true"></span>
         </label>
         <label class="switch-row">
-          <span>应用时清空未列出的旧 sus_path 规则</span>
+          <span>应用时清理本模块上次写入的 sus_path 规则</span>
           <input type="checkbox" id="replaceRules">
           <span class="switch" aria-hidden="true"></span>
         </label>
@@ -151,6 +165,28 @@
           <input type="checkbox" id="hideScene">
           <span class="switch" aria-hidden="true"></span>
         </label>
+        <div class="row-actions">
+          <button id="btnRescanScene" class="btn small" type="button">重扫 Scene</button>
+          <span class="row-hint">开过 Scene 后点一下，把新目录补进隐藏列表</span>
+        </div>
+        <label class="switch-row">
+          <span>自动 try_umount（模块挂载）</span>
+          <input type="checkbox" id="autoTryUmount">
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <p class="row-hint">扫描 /proc/1/mountinfo，把来源在 /data/adb 下的挂载加入卸载列表，不用手写路径。</p>
+        <label class="switch-row">
+          <span>过滤真实系统分区（始终开启）</span>
+          <input type="checkbox" id="skipLegitMounts" disabled>
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <p class="row-hint">开启上一项后，erofs/ext4/f2fs/squashfs/vfat 且根挂载为 / 的真实分区一律跳过，避免误卸系统分区。</p>
+        <label class="switch-row">
+          <span>不隐藏检测类应用的数据目录</span>
+          <input type="checkbox" id="skipDetectionPaths">
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <p class="row-hint">命中列表见 <code>config/skip_hide.txt</code>。隐藏检测工具自身目录可能反而让它判定异常。</p>
         <label class="switch-row">
           <span>伪装 CMDLINE</span>
           <input type="checkbox" id="fakeCmdline">
@@ -160,7 +196,7 @@
           <span>CMDLINE 伪装内容</span>
           <input type="text" id="fakeCmdlineValue" spellcheck="false" placeholder="留空不生效">
         </label>
-        <p class="row-hint">伪装后内核读到的 cmdline 内容；留空则不下发。</p>
+        <p class="row-hint">伪装后内核读到的 cmdline 内容；留空则不下发。<br>注意：改写启动参数可能被部分检测工具判为异常（例如启动参数痕迹），不确定时保持关闭。</p>
         <label class="switch-row">
           <span>强制指定 KMI</span>
           <select id="forceKmi">
@@ -196,7 +232,7 @@
             <input type="checkbox" id="voldIsolation">
             <span class="switch" aria-hidden="true"></span>
           </label>
-          <p class="row-hint">仅解锁 BL 可用。把 Android/data、Android/obb 从可见路径里藏掉，模拟分区隔离。</p>
+          <p class="row-hint">仅解锁 BL 可用。把 Android/data、Android/obb 从可见路径里藏掉，模拟分区隔离。<br>注意：部分应用会因此读不到自己的外部存储，出现异常时先关闭本项。</p>
         </div>
         <p class="hint">关闭自动加载后，仍可在“状态”页手动加载。AVC 伪装默认关闭。“清空旧规则”打开时，删除路径会立即生效；如果还有其他模块也在管理 sus_path，请关闭它。</p>
         <p class="hint">下面五项只隐藏实际存在的路径，默认全关，开启前请确认你确实需要。它们只影响隐藏可见性，不参与开机流程，所以在临时 root（late-load）环境下同样安全；但会让某些检测类应用看不到对应文件，自行权衡。</p>
@@ -212,6 +248,12 @@
         <h2>hide_modules <span class="badge">隐藏模块名</span></h2>
         <p class="hint">每行一个模块名，写入 <code>/proc/susfs_hide_modules</code>。LKM 会自动隐藏自己，这里通常只需要 <code>kernelsu</code>。</p>
         <textarea id="hideModules" spellcheck="false" rows="5" placeholder="kernelsu"></textarea>
+      </div>
+
+      <div class="card">
+        <h2>skip_hide <span class="badge">不隐藏的包名</span></h2>
+        <p class="hint">每行一个包名或路径片段（子串匹配，支持 <code>#</code> 注释）。命中这里的应用不会被隐藏其数据目录；检测类工具通常需要加进来，否则它可能把"看不见自己"判为异常。</p>
+        <textarea id="skipHide" spellcheck="false" rows="6" placeholder="duckdetector"></textarea>
       </div>
 
       <details class="card advanced">
@@ -253,6 +295,21 @@
         </ul>
         <p class="warn">不要执行 <code>rmmod susfs_guard_lkm</code>。已知存在 UAF/panic 风险。热重启不会卸载 LKM；冷重启后由本模块重新加载。</p>
         <p class="hint">自动加载带 KMI 校验和失败日志。内核更新后如果 KMI 不在支持列表，模块会拒绝加载并给出提示，不会强行注入。</p>
+      </div>
+
+      <div class="card about reveal">
+        <h2>贡献者</h2>
+        <ul class="contributor-list">
+          <li class="contributor">
+            <img class="avatar" src="contributor-hhgbmh8-ux.jpg" alt="旧梦一场雨" width="44" height="44">
+            <span class="who">
+              <strong>旧梦一场雨</strong>
+              <a class="gh" href="https://github.com/hhgbmh8-ux" rel="noopener noreferrer">@hhgbmh8-ux</a>
+              <span class="what">1.2.0 版本主要测试贡献者：强制隐藏 LSPosed 等多处问题由他的真机测试发现，后续修复也都经过他的复现与验证。</span>
+            </span>
+          </li>
+        </ul>
+        <p class="hint">头像与昵称由贡献者本人提供。</p>
       </div>
     </section>
   </main>

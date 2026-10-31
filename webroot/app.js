@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 "use strict";
 
 const CTL = "sh /data/adb/modules/susfs_allinone/ctl.sh";
@@ -6,12 +7,21 @@ const FILE_IDS = {
   hide_modules: "hideModules",
   sus_mount: "susMount",
   try_umount: "tryUmount",
+  skip_hide: "skipHide",
 };
 
 let execSeq = 0;
 let busy = false;
 let statusData = {};
-let managerName = ""; // 手动覆盖管理器显示名（配置项 manager_name）
+// 手动覆盖管理器显示名（配置项 manager_name）
+let managerName = "";
+// 当前配置原文：保存时以它为基底，保留未识别的键与注释
+let rawConfigText = "";
+// 加载时的 replace_rules 原值，用于保留 2（整表清空）这种 UI 无法表达的取值
+let originalReplace = "0";
+// 规则文件是否读取成功；失败时禁止保存
+let filesLoaded = false;
+let warnedReplace2 = false;
 
 const $ = (id) => document.getElementById(id);
 
@@ -48,6 +58,27 @@ function toast(message) {
   try {
     if (window.ksu && typeof window.ksu.toast === "function") window.ksu.toast(message);
   } catch (_) {}
+}
+
+// 把 updates 合并进原始配置文本：已知键替换值，未知键与注释原样保留
+function mergeConfigText(raw, updates) {
+  const seen = new Set();
+  const out = [];
+  const lines = String(raw || "").split(/\r?\n/);
+  for (const line of lines) {
+    const m = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
+    if (m && Object.prototype.hasOwnProperty.call(updates, m[1])) {
+      out.push(`${m[1]}=${updates[m[1]]}`);
+      seen.add(m[1]);
+    } else {
+      out.push(line);
+    }
+  }
+  for (const key of Object.keys(updates)) {
+    if (!seen.has(key)) out.push(`${key}=${updates[key]}`);
+  }
+  while (out.length && out[out.length - 1] === "") out.pop();
+  return out.join("\n") + "\n";
 }
 
 function parseKV(text) {
@@ -115,6 +146,60 @@ function ask(message) {
     modal.addEventListener("click", onBackdrop);
     document.addEventListener("keydown", onKey);
   });
+}
+
+// 高风险确认：确定按钮倒计时 seconds 秒后才可点击
+function confirmDanger(title, message, seconds) {
+  return new Promise((resolve) => {
+    const modal = $("modal");
+    if (!modal) { resolve(false); return; }
+    const ok = $("modalOk");
+    const cancel = $("modalCancel");
+    const text = $("modalText");
+    const heading = $("modalTitle");
+    let timer = null;
+    const cleanup = () => {
+      if (timer) clearInterval(timer);
+      timer = null;
+      modal.classList.add("hidden");
+      unlockBackground();
+      ok.removeEventListener("click", onOk);
+      cancel.removeEventListener("click", onCancel);
+      ok.disabled = false;
+      ok.textContent = "确定";
+      heading.textContent = "确认操作";
+    };
+    const close = (v) => { cleanup(); resolve(v); };
+    const onOk = () => close(true);
+    const onCancel = () => close(false);
+    heading.textContent = title;
+    text.textContent = message;
+    lockBackground();
+    modal.classList.remove("hidden");
+    let left = seconds;
+    ok.disabled = true;
+    ok.textContent = "请等待 " + left + "s";
+    timer = setInterval(() => {
+      left -= 1;
+      if (left <= 0) {
+        clearInterval(timer);
+        timer = null;
+        ok.disabled = false;
+        ok.textContent = "我已了解风险，继续";
+      } else {
+        ok.textContent = "请等待 " + left + "s";
+      }
+    }, 1000);
+    ok.addEventListener("click", onOk);
+    cancel.addEventListener("click", onCancel);
+  });
+}
+
+// 白名单标记位（目前只有 force_bl_unlocked）
+async function setFlag(key, value) {
+  const out = (await exec(`${CTL} set_flag ${key} ${value}`)).trim();
+  if (!out.includes("saved")) throw new Error(out || "set_flag failed");
+  await refreshStatus();
 }
 
 function setBusy(btn, on) {
@@ -191,7 +276,7 @@ function renderStatus() {
   setText("marker", s.marker === "1" ? "已创建" : "未创建");
   setText("fails", s.fail_count || "0");
   setText("moduleVersion", s.module_version ? `v${s.module_version}` : "—");
-  setText("footerVersion", s.module_version ? `模块 v${s.module_version}` : "模块 v1.1.0");
+  setText("footerVersion", s.module_version ? `模块 v${s.module_version}` : "模块版本未知");
   setText("footerKernel", s.kernel || "");
   setText("subtitle", s.description || "自动匹配内核 · 一键加载 · 规则管理");
 }
@@ -211,11 +296,13 @@ async function refreshStatus() {
 }
 
 async function loadConfig() {
-  const cfg = parseKV(await exec(`${CTL} get_config`));
+  rawConfigText = await exec(`${CTL} get_config`);
+  const cfg = parseKV(rawConfigText);
+  originalReplace = cfg.replace_rules === undefined ? "0" : cfg.replace_rules;
   const auto = cfg.auto_load === undefined ? "1" : cfg.auto_load;
   const hide = cfg.hide_sus_mnts === undefined ? "1" : cfg.hide_sus_mnts;
   const avc = cfg.avc_spoof === undefined ? "0" : cfg.avc_spoof;
-  const replace = cfg.replace_rules === undefined ? "1" : cfg.replace_rules;
+  const replace = originalReplace;
   const ksuLoop = cfg.hide_ksu_loop === undefined ? "0" : cfg.hide_ksu_loop;
   const revanced = cfg.hide_revanced === undefined ? "0" : cfg.hide_revanced;
   const customRom = cfg.hide_custom_rom === undefined ? "0" : cfg.hide_custom_rom;
@@ -223,6 +310,7 @@ async function loadConfig() {
   const gapps = cfg.hide_gapps === undefined ? "0" : cfg.hide_gapps;
   const dex2oat = cfg.hide_dex2oat === undefined ? "0" : cfg.hide_dex2oat;
   const scene = cfg.hide_scene === undefined ? "0" : cfg.hide_scene;
+  const autoUmount = cfg.auto_try_umount === undefined ? "0" : cfg.auto_try_umount;
   const fakeCmd = cfg.fake_cmdline === undefined ? "0" : cfg.fake_cmdline;
   const forceKmi = cfg.force_kmi || "";
   managerName = cfg.manager_name || "";
@@ -232,7 +320,11 @@ async function loadConfig() {
   $("autoLoad").checked = auto === "1";
   $("hideSusMnts").checked = hide === "1";
   $("avcSpoof").checked = avc === "1";
-  $("replaceRules").checked = replace === "1";
+  $("replaceRules").checked = replace === "1" || replace === "2";
+  const skipDet = cfg.skip_detection_paths === undefined ? "1" : cfg.skip_detection_paths;
+  $("skipDetectionPaths").checked = skipDet === "1";
+  // 该标记不在 config.ini 里，由 status 输出
+  $("forceBlUnlocked").checked = (statusData && statusData.force_bl_unlocked === "1");
   $("hideKsuLoop").checked = ksuLoop === "1";
   $("hideRevanced").checked = revanced === "1";
   $("hideCustomRom").checked = customRom === "1";
@@ -240,6 +332,9 @@ async function loadConfig() {
   $("hideGapps").checked = gapps === "1";
   $("hideDex2oat").checked = dex2oat === "1";
   $("hideScene").checked = scene === "1";
+  $("autoTryUmount").checked = autoUmount === "1";
+  // 真实分区过滤不可关闭，始终勾选
+  $("skipLegitMounts").checked = true;
   $("fakeCmdline").checked = fakeCmd === "1";
   $("hideVendorSepolicy").checked = sepolicy === "1";
   $("voldIsolation").checked = vold === "1";
@@ -271,13 +366,26 @@ async function loadConfig() {
     $("forceKmi").value = forceKmi || "";
   }
 
+  // replace_rules=2 是整表清空，容易误伤其他模块，进来时显式提醒一次
+  if (originalReplace === "2" && !warnedReplace2) {
+    warnedReplace2 = true;
+    showBanner("⚠️ 当前 replace_rules=2：每次应用都会清空整张 sus_path 表（含其他模块的规则）", "error", 9000);
+  }
+
+  let filesOk = true;
   for (const name of Object.keys(FILE_IDS)) {
     try {
       $(FILE_IDS[name]).value = await exec(`${CTL} get_file ${name}`);
     } catch (e) {
+      filesOk = false;
       $(FILE_IDS[name]).value = "";
     }
   }
+  // 读取失败时禁止保存：否则一次保存会用空内容覆盖四个规则文件
+  filesLoaded = filesOk;
+  const saveBtn = $("btnSave");
+  if (saveBtn) saveBtn.disabled = !filesOk;
+  if (!filesOk) showBanner("规则文件读取失败，已禁用保存以免覆盖现有内容", "error", 6000);
 }
 
 async function refreshLog() {
@@ -490,38 +598,54 @@ async function runApply() {
 }
 
 async function saveConfig() {
+  if (!filesLoaded) {
+    showBanner("规则文件未成功读取，已阻止保存", "error", 6000);
+    return;
+  }
   showBanner("正在保存并应用…", "info");
   const auto = $("autoLoad").checked ? 1 : 0;
-  const configText = [
-    "# LKM SUSFS管理器配置",
-    `auto_load=${auto}`,
-    `hide_sus_mnts=${$("hideSusMnts").checked ? 1 : 0}`,
-    `avc_spoof=${$("avcSpoof").checked ? 1 : 0}`,
-    `replace_rules=${$("replaceRules").checked ? 1 : 0}`,
-    `hide_ksu_loop=${$("hideKsuLoop").checked ? 1 : 0}`,
-    `hide_revanced=${$("hideRevanced").checked ? 1 : 0}`,
-    `hide_custom_rom=${$("hideCustomRom").checked ? 1 : 0}`,
-    `hide_compat_matrix=${$("hideCompatMatrix").checked ? 1 : 0}`,
-    `hide_gapps=${$("hideGapps").checked ? 1 : 0}`,
-    `hide_dex2oat=${$("hideDex2oat").checked ? 1 : 0}`,
-    `hide_scene=${$("hideScene").checked ? 1 : 0}`,
-    `fake_cmdline=${$("fakeCmdline").checked ? 1 : 0}`,
-    `fake_cmdline_value=${$("fakeCmdlineValue").value.trim()}`,
-    `force_kmi=${$("forceKmi").value.trim()}`,
-    `manager_name=${managerName}`,
-    `spoof_uname=${$("spoofUname").checked ? 1 : 0}`,
-    `spoof_uname_release=${$("spoofUnameRelease").value.trim()}`,
-    `spoof_uname_version=${$("spoofUnameVersion").value.trim()}`,
-    `hide_vendor_sepolicy=${$("hideVendorSepolicy").checked ? 1 : 0}`,
-    `vold_isolation=${$("voldIsolation").checked ? 1 : 0}`,
-    "",
-  ].join("\n");
+  // 保留用户手写的未识别键与注释：以现有配置为基底，只更新已知键。
+  // replace_rules：勾选=1；取消勾选=0；原本是 2（整表清空）且用户没取消时保留 2。
+  let newReplace = $("replaceRules").checked ? "1" : "0";
+  if (originalReplace === "2" && $("replaceRules").checked) newReplace = "2";
+  const updates = {
+    auto_load: auto,
+    hide_sus_mnts: $("hideSusMnts").checked ? 1 : 0,
+    avc_spoof: $("avcSpoof").checked ? 1 : 0,
+    replace_rules: newReplace,
+    hide_ksu_loop: $("hideKsuLoop").checked ? 1 : 0,
+    hide_revanced: $("hideRevanced").checked ? 1 : 0,
+    hide_custom_rom: $("hideCustomRom").checked ? 1 : 0,
+    hide_compat_matrix: $("hideCompatMatrix").checked ? 1 : 0,
+    hide_gapps: $("hideGapps").checked ? 1 : 0,
+    hide_dex2oat: $("hideDex2oat").checked ? 1 : 0,
+    hide_scene: $("hideScene").checked ? 1 : 0,
+    auto_try_umount: $("autoTryUmount").checked ? 1 : 0,
+    skip_legit_mounts: 1,
+    skip_detection_paths: $("skipDetectionPaths").checked ? 1 : 0,
+    fake_cmdline: $("fakeCmdline").checked ? 1 : 0,
+    fake_cmdline_value: $("fakeCmdlineValue").value.trim(),
+    force_kmi: $("forceKmi").value.trim(),
+    manager_name: managerName,
+    spoof_uname: $("spoofUname").checked ? 1 : 0,
+    spoof_uname_release: $("spoofUnameRelease").value.trim(),
+    spoof_uname_version: $("spoofUnameVersion").value.trim(),
+    hide_vendor_sepolicy: $("hideVendorSepolicy").checked ? 1 : 0,
+    vold_isolation: $("voldIsolation").checked ? 1 : 0,
+  };
+  const configText = mergeConfigText(rawConfigText, updates);
 
-  await exec(`${CTL} set_config '${b64EncodeUnicode(configText)}'`);
-  await exec(`${CTL} set_auto ${auto}`);
-  for (const name of Object.keys(FILE_IDS)) {
-    await exec(`${CTL} set_file ${name} '${b64EncodeUnicode($(FILE_IDS[name]).value)}'`);
-  }
+  // 一次提交 config + 5 个规则文件：避免 apply 在多次调用之间读到中间状态
+  const bundleOrder = [
+    configText,
+    $("susPath").value,
+    $("hideModules").value,
+    $("skipHide").value,
+    $("susMount").value,
+    $("tryUmount").value,
+  ];
+  const bundle = b64EncodeUnicode(bundleOrder.map((v) => b64EncodeUnicode(v)).join("|"));
+  await exec(`${CTL} set_bundle '${bundle}'`);
   await exec(`${CTL} apply`);
   await refreshStatus();
   await loadConfig();
@@ -549,6 +673,23 @@ async function resetDefaults() {
   toast("已恢复默认");
 }
 
+// 重新扫描 /dev 下的 Scene 痕迹并补充隐藏
+async function rescanScene() {
+  try {
+    const out = (await exec(`${CTL} rescan_scene`)).trim();
+    const hidden = out.split("\n").filter((l) => l.startsWith("hidden "));
+    if (!hidden.length) {
+      showBanner("没有发现新的 Scene 痕迹。", "ok", 4000);
+      return;
+    }
+    const list = hidden.map((l) => l.replace(/^hidden\s+/, "")).join("\n");
+    showBanner(`已补充隐藏 ${hidden.length} 项：\n${list}`, "ok", 6000);
+    await refreshStatus();
+  } catch (e) {
+    showBanner(`重扫失败：${e.message}`, "error");
+  }
+}
+
 async function withBusy(btn, fn) {
   if (busy) return;
   busy = true;
@@ -570,6 +711,9 @@ function initTabs() {
       document.querySelectorAll(".tab-panel").forEach((p) => {
         p.classList.toggle("active", p.id === `tab-${btn.dataset.tab}`);
       });
+      if (btn.dataset.tab === "about" && revealCheck) {
+        setTimeout(revealCheck, 80);
+      }
       if (btn.dataset.tab === "log") {
         refreshLog().catch((e) => {
           $("log").textContent = `读取日志失败：${e.message}`;
@@ -592,12 +736,45 @@ function attachRowHints() {
 function bind() {
   $("btnLoad").addEventListener("click", (e) => withBusy(e.currentTarget, runLoad));
   $("btnApply").addEventListener("click", (e) => withBusy(e.currentTarget, runApply));
+  $("forceBlUnlocked").addEventListener("change", async (e) => {
+    const box = e.currentTarget;
+    if (!box.checked) {
+      try {
+        await setFlag("force_bl_unlocked", "0");
+        showBanner("已关闭手动解锁标记，BL 判定恢复为读取系统属性", "ok", 5000);
+      } catch (err) {
+        box.checked = true;
+        showBanner("写入失败：" + err.message, "error");
+      }
+      return;
+    }
+    box.checked = false;
+    const ok = await confirmDanger(
+      "⚠️ 确认 BL 已解锁",
+      "打开后模块会永久记住「BL 已解锁」，并允许执行 vendor sepolicy 隐藏与 VOLD 隔离。\n\n" +
+      "这两项会改变系统可见状态：应用可能读不到自己的 Android/data，出现异常时需关闭本开关并重新应用配置。\n\n" +
+      "只在你确认设备确实已解锁 bootloader（伪回锁）时继续。",
+      10
+    );
+    if (!ok) return;
+    box.checked = true;
+    try {
+      await setFlag("force_bl_unlocked", "1");
+      await exec(`${CTL} apply`);
+      await refreshStatus();
+      showBanner("已写入配置并应用：BL 视为已解锁", "ok", 6000);
+    } catch (err) {
+      box.checked = false;
+      showBanner("写入失败：" + err.message, "error");
+    }
+  });
   $("btnRefresh").addEventListener("click", (e) => withBusy(e.currentTarget, async () => {
     await refreshStatus();
     showBanner("状态已刷新。", "ok", 3000);
   }));
   $("btnSave").addEventListener("click", (e) => withBusy(e.currentTarget, saveConfig));
   $("btnPreset").addEventListener("click", (e) => withBusy(e.currentTarget, openPresetModal));
+  $("btnRescanScene").addEventListener("click", (e) => withBusy(e.currentTarget, rescanScene));
   $("presetCancel").addEventListener("click", closePresetModal);
   $("presetOk").addEventListener("click", applyPresetSelection);
   $("btnImport").addEventListener("click", (e) => withBusy(e.currentTarget, importLegacy));
@@ -623,8 +800,44 @@ async function checkBootGuard() {
   }
 }
 
+// 滚动/切页时触发一次进入动画（关于页贡献者）
+let revealCheck = null;
+
+function setupReveal() {
+  const els = Array.from(document.querySelectorAll(".reveal"));
+  if (!els.length) return;
+
+  const show = (el) => el.classList.add("in");
+  const visible = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.top < window.innerHeight && r.bottom > 0;
+  };
+
+  if (!("IntersectionObserver" in window)) {
+    els.forEach(show);
+    return;
+  }
+
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      show(entry.target);
+      io.unobserve(entry.target);
+    });
+  }, { threshold: 0.18 });
+  els.forEach((el) => io.observe(el));
+
+  // 切到「关于」页时补一次检查：display 切换不一定会触发 observer
+  revealCheck = () => {
+    els.forEach((el) => {
+      if (!el.classList.contains("in") && visible(el)) show(el);
+    });
+  };
+}
+
 async function init() {
   initTabs();
+  setupReveal();
   attachRowHints();
   bind();
   if (!(await waitForKsu())) {
