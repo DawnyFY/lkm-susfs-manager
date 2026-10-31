@@ -32,6 +32,8 @@
 
 ### 诊断与自愈
 
+- **`ctl.sh caps`**：一次列出 LKM 能力位（sus_mount / try_umount / open_redirect 等）、取值来源（特性位 / proc 节点 / 实测降级）与降级标记，便于判断"为什么某项没生效"\
+- **`ctl.sh compat`**：检查模块与当前管理器 / 内核的兼容性（ELF 架构、KernelSU 分支识别、LKM 是否已加载、KMI 匹配结果）\
 - **`ctl.sh diag`**：一次输出内核/KMI/LKM 状态、两个 `ksu_susfs` 二进制的 `show version`/`variant`/`features`（带 rc 与原始输出）、dmesg 相关行、日志尾部。
 - **坏二进制只回退不替换**：管理器自带的 `ksu_susfs` 若无法执行（架构不符/文件损坏），本次运行改用模块内置备份，不向管理器目录写任何文件。
 - **ELF 架构识别**：`elf_machine()` 读 ELF 头判断 `aarch64` / `x86_64` / `arm` / `x86` / `not-elf`。
