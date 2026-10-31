@@ -19,9 +19,13 @@ chk "/proc/version 优先级" "$(PROC_VERSION_FILE="$TMP/pv" real_kernel_release
 printf "Linux version 5.10.101 (builder@x) #1 SMP\n" > "$TMP/pv2"
 chk "无 android 标签回退快照" "$(PROC_VERSION_FILE="$TMP/pv2" real_kernel_release)" "6.12.35-android16-5-real"
 
-# 两者都不可用时回退 osrelease（本机有则比对，无则跳过）
+# 两者都不可用时回退 osrelease（先移除快照，否则会命中快照分支）
 if [ -r /proc/sys/kernel/osrelease ]; then
+    _snap="$STATE/real_uname.txt"
+    [ -f "$_snap" ] && cp -f "$_snap" "$TMP/snap.bak"
+    rm -f "$_snap"
     chk "回退 osrelease" "$(PROC_VERSION_FILE=/nonexistent/pv real_kernel_release)" "$(cat /proc/sys/kernel/osrelease)"
+    [ -f "$TMP/snap.bak" ] && cp -f "$TMP/snap.bak" "$_snap"
 else
     echo "SKIP  回退 osrelease（本机无 /proc/sys/kernel/osrelease）"
 fi
