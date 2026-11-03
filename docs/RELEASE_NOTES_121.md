@@ -1,12 +1,12 @@
 # LKM SUSFS管理器 1.2.1
 
-本次只做一件事：**升级内核模块（LKM）到上游 `v2.3.0-r18.6`**。
+本次只做一件事：**升级内核模块（LKM）到上游 `v2.3.0-r18.8`**。
 
 ## 为什么升
 
-`v2.3.0-r18.6` 修了一个会**开机变砖**的问题：
+`v2.3.0-r18.8` 修了一个会**开机变砖**的问题：
 
-> #159 — 在 5.15 以下内核上，`filename_lookup()` 之后不应再调用 `putname()`；原来的写法会造成 create_gate double free（双重释放）并触发 bootloop。同一处潜伏路径在 `susfs_or_entry.c` 也已修正。
+> #169 — 在 5.15 以下内核上，`filename_lookup()` 之后不应再调用 `putname()`；原来的写法会造成 create_gate double free（双重释放）并触发 bootloop。同一处潜伏路径在 `susfs_or_entry.c` 也已修正。
 
 也就是说：如果你用的是 Android 12/13（5.10 / 5.15 内核），旧版 LKM 在某些挂载/创建场景下可能直接把系统搞崩。1.2.1 换掉了这个实现。
 
@@ -74,4 +74,4 @@ su -c "cat /proc/susfs_hide_mounts"
 
 https://github.com/DawnyFY/lkm-susfs-manager/releases/tag/v1.2.1
 
-升级直接覆盖安装。**如果你用的是 5.10 / 5.15 内核，建议升级**——那是 #159 影响的范围。
+升级直接覆盖安装。**如果你用的是 5.10 / 5.15 内核，建议升级**——那是 #169 影响的范围。
