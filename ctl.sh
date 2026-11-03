@@ -180,6 +180,7 @@ case "$1" in
         exit 0
         ;;
     rescan_scene)
+        _cf_gate || { echo "文件与发布包不一致，拒绝执行"; exit 1; }
         # 立即重扫 /dev 下的 Scene 痕迹目录（名字随机，按内容特征识别）
         BIN=$(select_susfs_bin 2>/dev/null) || { echo "no ksu_susfs"; exit 1; }
         _n=0
@@ -324,6 +325,9 @@ case "$1" in
         echo "saved"
         ;;
     set_bundle)
+        # 和 apply 共用一把锁，避免写规则文件时被另一次 apply 读到半截
+        lock_acquire "$STATE/apply.lock" 900 || { echo "apply busy"; exit 1; }
+        trap 'lock_release "$STATE/apply.lock"' EXIT
         # 一次写入 config + 6 个规则文件：WebUI 保存从 7 次调用降到 1 次，
         # 避免开机 apply 读到「新配置 + 旧规则文件」的中间状态。
         # 参数：base64( "b64(config)|b64(sus_path)|b64(hide_modules)|b64(skip_hide)|b64(sus_mount)|b64(try_umount)|b64(sus_map)" ) —— 共 7 段

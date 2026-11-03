@@ -63,7 +63,7 @@ fi
 # 互斥：开机与手动可能同时触发 load
 if ! lock_acquire "$STATE/load.lock" 300; then
     echo "[!] 另一个 load 正在运行，跳过本次"
-    exit 0
+    exit 1
 fi
 trap 'lock_release "$STATE/load.lock"' EXIT
 
@@ -117,9 +117,13 @@ if lkm_present; then
     fi
     echo 0 > "$STATE/fail_count"
     apply_hide_modules
+    # LKM 重载后内核里的挂载/映射注册已清空，去重账本必须一起失效
+    rm -f "$STATE/sus_mount_added.txt" "$STATE/sus_mount_added.txt.boot" \
+          "$STATE/sus_map_added.txt" "$STATE/sus_map_added.txt.boot" \
+          "$STATE/try_umount_added.txt" "$STATE/try_umount_added.txt.boot" 2>/dev/null
     set_description "✅ LKM 已加载 | ${VERSION} | 等待应用规则"
     _cf_run 2>&1 || true
-echo "=== load ok ==="
+    echo "=== load ok ==="
     exit 0
 fi
 

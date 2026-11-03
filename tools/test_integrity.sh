@@ -13,7 +13,8 @@ printf "body{}\n" > "$MOD/webroot/style.css"
 
 # 生成清单（与构建脚本同样的格式）
 ( cd "$MOD" && sha256sum apply.sh webroot/style.css > .cache.files )
-printf "version=1.2.1\nmanifest_sha256=abc\n" > "$MOD/.cache.meta"
+_MFSHA=$(sha256sum "$MOD/.cache.files" | cut -d' ' -f1)
+printf "version=1.2.1\nmanifest_sha256=%s\n" "$_MFSHA" > "$MOD/.cache.meta"
 
 MODDIR="$MOD"; mkdir -p "$MOD/state"
 . "$REPO/common.sh"
@@ -54,6 +55,8 @@ rm -f "$MOD/.cache.files"
 ( cd "$MOD" && sha256sum apply.sh > .cache.files )
 printf "echo hi\n" > "$MOD/apply.sh"
 ( cd "$MOD" && sha256sum apply.sh > .cache.files )
+_MFSHA=$(sha256sum "$MOD/.cache.files" | cut -d" " -f1)
+printf "version=1.2.1\nmanifest_sha256=%s\n" "$_MFSHA" > "$MOD/.cache.meta"
 _cf_gate; chk "闸门放行正常文件" "$?" "0"
 printf "echo evil\n" >> "$MOD/apply.sh"
 _cf_gate >/dev/null 2>&1; chk "闸门拦截被改文件" "$?" "1"

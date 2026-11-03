@@ -42,7 +42,8 @@ fi
 # 互斥：开机脚本与 WebUI 可能同时触发 apply，重复执行会让 our_paths 清单错乱
 if ! lock_acquire "$STATE/apply.lock" 900; then
     echo "[!] 另一个 apply 正在运行，跳过本次"
-    exit 0
+    # 返回非 0：调用方（boot-completed）不能把"没执行"当成成功
+    exit 1
 fi
 trap 'lock_release "$STATE/apply.lock"' EXIT
 
@@ -514,7 +515,7 @@ fi
 # 5e. Scene 痕迹（/dev 下随机命名的目录，内含 scene_mode_category）
 if [ "$hide_scene" = "1" ]; then
     # Scene 的目录名每次开机都变，创建时机也可能晚于本脚本。
-    # 只有开机自动应用才值得等（最多 2 轮 5 秒）；WebUI 手动保存时扫一次就走，
+    # 只有开机自动应用才值得等（最多 3 轮 5 秒）；WebUI 手动保存时扫一次就走，
     # 否则每次「保存并应用」都要干等 10 秒，而目录往往根本不存在。
     _tries=0
     _n=0

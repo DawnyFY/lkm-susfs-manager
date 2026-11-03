@@ -176,6 +176,14 @@ cfg_migrate() {
 _cf() {
     [ -f "$_CF" ] || return 2
     command -v sha256sum >/dev/null 2>&1 || return 2
+    # 清单与 meta 交叉校验：只换 .cache.files 不改 .cache.meta 会被发现
+    if [ -f "$MODDIR/.cache.meta" ]; then
+        _want=$(sed -n 's/^manifest_sha256=//p' "$MODDIR/.cache.meta" 2>/dev/null)
+        if [ -n "$_want" ]; then
+            _have=$(sha256sum "$_CF" 2>/dev/null | cut -d" " -f1)
+            [ "$_want" = "$_have" ] || return 1
+        fi
+    fi
     _o=$(cd "$MODDIR" 2>/dev/null && sha256sum -c "$_CF" 2>&1) || {
         # toybox 对打不开的文件只打 perror，输出里没有 FAILED 行，改按 OK 行数比对
         _ok_n=$(printf '%s\n' "$_o" | awk '/: OK/{n++} END{print n+0}')
