@@ -307,8 +307,8 @@ if [ "$fake_cmdline" = "1" ] && [ -n "$fake_cmdline_value" ]; then
     if has_feature CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG; then
         _cfl="$STATE/fake_cmdline.txt"
         mkdir -p "$STATE" 2>/dev/null
-        printf "%s\n" "$fake_cmdline_value" > "$_cf"
-        if "$BIN" set_cmdline_or_bootconfig "$_cf" >/dev/null 2>&1; then
+        printf "%s\n" "$fake_cmdline_value" > "$_cfl"
+        if "$BIN" set_cmdline_or_bootconfig "$_cfl" >/dev/null 2>&1; then
             echo "[i] cmdline 伪装已生效: $fake_cmdline_value"
         else
             echo "[!] cmdline 伪装设置失败（内核已启用该特性，请查内核日志）"

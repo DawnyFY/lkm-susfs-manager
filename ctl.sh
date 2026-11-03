@@ -433,7 +433,7 @@ case "$1" in
         ;;
     reset_defaults)
         printf '# 每行一个文件路径\n' > "$CONFIG/sus_map.txt" 2>/dev/null
-        printf '# 每行一个包名子串\n' > "$CONFIG/skip_hide.txt" 2>/dev/null
+        printf '# 每行一个包名子串，命中则不隐藏其数据目录\nduckdetector\nappvisibility\nnativecheck\n' > "$CONFIG/skip_hide.txt" 2>/dev/null
         cat > "$CONFIG/config.ini" <<'EOF'
 # SUSFS 管理器配置
 auto_load=1
@@ -456,7 +456,6 @@ force_kmi=
 manager_name=
 hide_vendor_sepolicy=0
 vold_isolation=0
-force_bl_unlocked=0
 spoof_uname=0
 spoof_uname_release=
 spoof_uname_version=

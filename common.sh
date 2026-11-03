@@ -177,10 +177,12 @@ _cf() {
     [ -f "$_CF" ] || return 2
     command -v sha256sum >/dev/null 2>&1 || return 2
     _o=$(cd "$MODDIR" 2>/dev/null && sha256sum -c "$_CF" 2>&1) || {
-        _n=$(printf '%s\n' "$_o" | grep -c ': FAILED')
-        if [ "$_n" -gt 0 ] 2>/dev/null; then
-            echo "[!] $_n 个文件与发布包不一致"
-            printf '%s\n' "$_o" | grep ': FAILED' | sed 's/: FAILED//' | head -3
+        # toybox 对打不开的文件只打 perror，输出里没有 FAILED 行，改按 OK 行数比对
+        _ok_n=$(printf '%s\n' "$_o" | awk '/: OK/{n++} END{print n+0}')
+        _all_n=$(grep -c . "$_CF" 2>/dev/null)
+        if [ -n "$_all_n" ] && [ "$_all_n" -gt 0 ] && [ "$_ok_n" -lt "$_all_n" ]; then
+            echo "[!] $((_all_n - _ok_n)) 个文件与发布包不一致"
+            printf '%s\n' "$_o" | grep -v ': OK' | head -3
             return 1
         fi
         return 3
@@ -545,7 +547,7 @@ hide_mounts_has() {
     _node=$HIDE_MOUNTS_NODE
     [ -e "$_node" ] || _node=/proc/susfs_hide_mounts
     [ -e "$_node" ] || return 1
-    _pref=$(sed -n 's/^prefixes: *//p' "$_node" 2>/dev/null)
+    _pref=$(sed -n 's/^#[[:space:]]*prefixes:[[:space:]]*//p; s/^prefixes:[[:space:]]*//p' "$_node" 2>/dev/null)
     [ -n "$_pref" ] || return 1
     case " $_pref " in
         *" $1 "*) return 0 ;;
@@ -573,7 +575,6 @@ record_own_hide_mount() {
     case " $HIDE_MOUNTS_DEFAULT_PREFIXES " in
         *" $_n "*) return 0 ;;
     esac
-    cat "$(own_hide_mounts_file)" 2>/dev/null | grep -Fqx -- "$1" && return 0
     grep -Fqx -- "$1" "$(own_hide_mounts_file)" 2>/dev/null && return 0
     mkdir -p "$STATE" 2>/dev/null
     printf '%s\n' "$1" >> "$(own_hide_mounts_file)" 2>/dev/null
