@@ -7,6 +7,8 @@ fail=0
 chk() { if [ "$2" = "$3" ]; then echo "PASS  $1"; else echo "FAIL  $1 expect=[$3] got=[$2]"; fail=1; fi; }
 
 MODDIR="$TMP"; mkdir -p "$TMP/config" "$TMP/state"
+export PROC_BOOT_ID_FILE="$TMP/boot_id"
+printf "boot-1\n" > "$PROC_BOOT_ID_FILE"
 # 假 BIN：把调用追加到 calls 文件，支持 add_sus_mount / add_try_umount
 cat > "$TMP/bin" <<"EOF"
 #!/bin/sh
@@ -29,7 +31,7 @@ try_umount_add_once /apex/x;  chk "try_umount 重复跳过" "$?" "2"
 chk "try_umount 只调用一次" "$(grep -c "tu /apex/x" "$CALLS")" "1"
 
 # boot_id 变化：记录失效，可重新添加
-printf "different-boot\n" > "$STATE/sus_mount_added.txt.boot"
+printf "boot-2\n" > "$PROC_BOOT_ID_FILE"
 sus_mount_add_once /data/adb/modules/a; chk "新 boot 重新添加" "$?" "0"
 chk "新 boot 后总调用 2 次" "$(grep -c "sm /data/adb/modules/a" "$CALLS")" "2"
 

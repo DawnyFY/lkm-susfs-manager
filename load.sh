@@ -16,6 +16,9 @@ exec >>"$LOG" 2>&1
 echo "=== SUSFS 管理器 load $(date '+%F %T') ==="
 echo "[i] root: $(root_family)"
 
+# 加载前校验：文件被改过就不注入内核
+_cf_gate || { echo "[!] 模块文件与发布包不一致，拒绝加载"; exit 1; }
+
 # 尽早记录真实内核：此处一定还没被本模块伪装过
 save_real_uname
 
@@ -115,7 +118,8 @@ if lkm_present; then
     echo 0 > "$STATE/fail_count"
     apply_hide_modules
     set_description "✅ LKM 已加载 | ${VERSION} | 等待应用规则"
-    echo "=== load ok ==="
+    _cf_run 2>&1 || true
+echo "=== load ok ==="
     exit 0
 fi
 
@@ -151,10 +155,11 @@ if [ -z "$KMI" ]; then
     echo "[i] 版本号疑似: $(guess_kmis "$REL" "$MODDIR" | tr '\n' ' ')"
     echo "[i] 可在 WebUI 配置页强制指定 KMI 后再次加载"
     set_description "⚠️ 未匹配内核 | $REL | 请在 WebUI 指定 KMI"
-    # 没有尝试加载，不属于"加载后未能启动"，不能留下守卫把下次自动加载暂停
+    # 没有尝试加载，不属于"加载后未能启动"，不能留下守卫把下次自动加载暂停；
+    # 但也绝不能返回 0——否则 boot-completed 会把"没加载"当成"加载成功"。
     clear_boot_guard
     echo "=== load skip ==="
-    exit 0
+    exit 2
 fi
 KO="$MODDIR/lib/susfs_guard_lkm-$KMI.ko"
 [ -s "$KO" ] || fail "缺少 $KMI 的 LKM 文件"

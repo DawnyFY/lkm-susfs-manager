@@ -8,6 +8,7 @@ const FILE_IDS = {
   sus_mount: "susMount",
   try_umount: "tryUmount",
   skip_hide: "skipHide",
+  sus_map: "susMap",
 };
 
 let execSeq = 0;
@@ -202,6 +203,20 @@ async function setFlag(key, value) {
   await refreshStatus();
 }
 
+function showIntegrityWarning() {
+  const modal = $("integrityModal");
+  if (!modal) return;
+  const ok = $("integrityOk");
+  const close = () => {
+    modal.classList.add("hidden");
+    unlockBackground();
+    ok.removeEventListener("click", close);
+  };
+  lockBackground();
+  modal.classList.remove("hidden");
+  ok.addEventListener("click", close);
+}
+
 function setBusy(btn, on) {
   if (!btn) return;
   if (on) {
@@ -275,6 +290,10 @@ function renderStatus() {
   setText("binPath", s.ksu_bin_path || "—");
   setText("marker", s.marker === "1" ? "已创建" : "未创建");
   setText("fails", s.fail_count || "0");
+  if (s.integrity === "modified" && !sessionStorage.getItem("integrityWarned")) {
+    sessionStorage.setItem("integrityWarned", "1");
+    showIntegrityWarning();
+  }
   setText("moduleVersion", s.module_version ? `v${s.module_version}` : "—");
   setText("footerVersion", s.module_version ? `模块 v${s.module_version}` : "模块版本未知");
   setText("footerKernel", s.kernel || "");
@@ -643,6 +662,7 @@ async function saveConfig() {
     $("skipHide").value,
     $("susMount").value,
     $("tryUmount").value,
+    $("susMap").value,
   ];
   const bundle = b64EncodeUnicode(bundleOrder.map((v) => b64EncodeUnicode(v)).join("|"));
   await exec(`${CTL} set_bundle '${bundle}'`);

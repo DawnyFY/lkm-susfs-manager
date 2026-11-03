@@ -16,7 +16,7 @@ fi
 INSTALLED=/data/adb/modules/susfs_allinone
 COPIED_CONFIG=0
 if [ -d "$INSTALLED/config" ]; then
-    for _f in config.ini sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt; do
+    for _f in config.ini sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt; do
         if [ -f "$INSTALLED/config/$_f" ]; then
             cp -f "$INSTALLED/config/$_f" "$MODPATH/config/$_f" 2>/dev/null && COPIED_CONFIG=1 && ui_print "- 保留配置: $_f"
         fi
@@ -44,12 +44,14 @@ if [ -d "$INSTALLED/config" ]; then
             rm -f "$_tmp"
         fi
     fi
-    # 保留 sus_path 归属清单：丢了会让 replace_rules=1 退化为"按配置清理"
-    if [ -f "$INSTALLED/state/our_paths.txt" ]; then
-        mkdir -p "$MODPATH/state" 2>/dev/null
-        cp -f "$INSTALLED/state/our_paths.txt" "$MODPATH/state/our_paths.txt" 2>/dev/null \
-            && ui_print "- 保留规则清单: state/our_paths.txt"
-    fi
+    # 保留归属清单：丢了会让 replace_rules=1 退化为"按配置清理"
+    mkdir -p "$MODPATH/state" 2>/dev/null
+    for _sf in our_paths.txt hide_mounts_added.txt sus_map_added.txt; do
+        if [ -f "$INSTALLED/state/$_sf" ]; then
+            cp -f "$INSTALLED/state/$_sf" "$MODPATH/state/$_sf" 2>/dev/null \
+                && ui_print "- 保留规则清单: state/$_sf"
+        fi
+    done
 elif [ -f /data/adb/susfs4ksu/sus_path.txt ]; then
     # 首次安装：继承旧 susfs4ksu 的规则文件
     for _f in sus_path sus_mount try_umount; do

@@ -11,8 +11,24 @@ select_kmi() {
       "$kver".*-"$os"-*) echo "$kmi"; return 0 ;;
     esac
   done < "$2/kmis"
-  # A present but non-matching Android tag is a real mismatch, not a tag-less kernel.
-  case "$rel" in *android[0-9]*) return 1 ;; esac
+  # 有 android 标签但不配对：先按内核版本兜底（唯一命中才用），避免 Android 版本号
+  # 跟平台走而内核 ABI 仍是旧分支时整机静默不加载。
+  case "$rel" in
+    *android[0-9]*)
+      _fb=""
+      _fn=0
+      while IFS= read -r _kmi; do
+        [ -n "$_kmi" ] || continue
+        _kver="${_kmi#*-}"
+        case "$rel" in "$_kver".*) ;; *) continue ;; esac
+        _p="${rel#"$_kver".}"; _p="${_p%%-*}"
+        case "$_p" in ''|*[!0-9]*) continue ;; esac
+        _fb="$_kmi"; _fn=$((_fn + 1))
+      done < "$2/kmis"
+      [ "$_fn" = 1 ] && { echo "$_fb"; return 0; }
+      return 1
+      ;;
+  esac
   # Tag-less: match by version alone, only when it maps to one packaged KMI (5.10 and
   # 5.15 are shared, so refused), with a numeric patch level.
   match=""

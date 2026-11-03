@@ -84,6 +84,8 @@ for _j in /data/local/tmp/.susfs_probe_dir /data/local/tmp/.susfs_cap_probe /dat
     [ -e "$_j" ] && echo "[i] 发现旧版遗留目录，可手动删除：$_j"
 done
 
+_cf_run 2>&1 || { echo "[!] 文件被修改，拒绝应用规则"; exit 1; }
+
 # 1. 确保 LKM
 if ! lkm_present; then
     if [ "$AUTOLOAD" = "1" ]; then
@@ -207,6 +209,9 @@ clean_entry() {
 # replace_rules=2：整表清空（显式高危，会连同其他模块的规则一起清掉）
 case "$replace_rules" in
     1)
+        # hide_mounts / sus_map 的归属清单与 sus_path 无关，必须无条件撤销
+        clear_own_hide_mounts
+        clear_own_sus_map
         if [ -s "$(our_paths_file)" ]; then
             clear_own_paths
         else
@@ -300,7 +305,7 @@ fi
 
 if [ "$fake_cmdline" = "1" ] && [ -n "$fake_cmdline_value" ]; then
     if has_feature CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG; then
-        _cf="$STATE/fake_cmdline.txt"
+        _cfl="$STATE/fake_cmdline.txt"
         mkdir -p "$STATE" 2>/dev/null
         printf "%s\n" "$fake_cmdline_value" > "$_cf"
         if "$BIN" set_cmdline_or_bootconfig "$_cf" >/dev/null 2>&1; then
@@ -323,16 +328,59 @@ if [ -f "$CONFIG/sus_mount.txt" ]; then
             /*) ;;
             *) echo "[!] 忽略非绝对路径: $path"; continue ;;
         esac
-        sus_mount_add_once "$path"
-        case $? in
-            0) _sm_ok=$((_sm_ok + 1)); echo "[+] sus_mount $path" ;;
-            2) echo "[=] sus_mount $path (本次开机已添加，跳过)" ;;
-            *) _sm_bad=$((_sm_bad + 1)); echo "[=] sus_mount $path (失败)" ;;
-        esac
+        # 优先用上游现行接口（r18.5+ 的前缀表），旧 LKM 才回退 add_sus_mount
+        if hide_mounts_has "$path"; then
+            echo "[=] hide_mounts $path (已在表中，跳过)"
+        elif hide_mounts_add "$path"; then
+            _sm_ok=$((_sm_ok + 1))
+            record_own_hide_mount "$path"
+            echo "[+] hide_mounts $path"
+        else
+            sus_mount_add_once "$path"
+            case $? in
+                0) _sm_ok=$((_sm_ok + 1)); echo "[+] sus_mount $path" ;;
+                2) echo "[=] sus_mount $path (本次开机已添加，跳过)" ;;
+                *) _sm_bad=$((_sm_bad + 1)); echo "[=] sus_mount $path (失败)" ;;
+            esac
+        fi
     done < "$CONFIG/sus_mount.txt"
     if [ "$_sm_ok" = "0" ] && [ "$_sm_bad" -gt 0 ]; then
-        echo "[!] add_sus_mount 实测不可用，标记为不支持"
+        echo "[!] add_sus_mount 不可用（上游已 deprecated），标记为不支持"
         caps_downgrade sus_mount
+    fi
+fi
+
+# 6b. sus_map（mmap 隐藏，/proc/susfs_map）
+if [ -f "$CONFIG/sus_map.txt" ]; then
+    if ! sus_map_supported; then
+        if [ -s "$CONFIG/sus_map.txt" ] && grep -qvE '^[[:space:]]*(#|$)' "$CONFIG/sus_map.txt"; then
+            echo "[i] 内核未提供 /proc/susfs_map（需 r18.5+），跳过 sus_map"
+        fi
+    else
+        _map_n=0; _map_ok=0; _map_bad=0
+        while IFS= read -r _line || [ -n "$_line" ]; do
+            path=$(clean_entry "$_line")
+            [ -n "$path" ] || continue
+            case "$path" in
+                /*) ;;
+                *) echo "[!] sus_map 忽略非绝对路径: $path"; continue ;;
+            esac
+            _map_n=$((_map_n + 1))
+            if [ ! -e "$path" ]; then
+                echo "[!] sus_map 路径不存在，跳过: $path"
+                continue
+            fi
+            sus_map_add_once "$path"
+            case $? in
+                0) _map_ok=$((_map_ok + 1)); echo "[+] sus_map $path" ;;
+                2) echo "[=] sus_map $path (本次开机已添加，跳过)" ;;
+                *) _map_bad=$((_map_bad + 1)); echo "[=] sus_map $path (失败)" ;;
+            esac
+
+        done < "$CONFIG/sus_map.txt"
+        [ "$_map_n" = "0" ] && echo "[i] sus_map.txt 为空，跳过"
+        [ "$_map_ok" -gt 60 ] && echo "[!] sus_map 规则数 $_map_ok 接近上限 64"
+        [ "$_map_ok" = "0" ] && [ "$_map_bad" -gt 0 ] && echo "[!] /proc/susfs_map 写入失败，请确认内核支持"
     fi
 fi
 
@@ -429,26 +477,37 @@ if [ "$hide_gapps" = "1" ]; then
 fi
 
 if [ "$hide_dex2oat" = "1" ]; then
-    if ! cap_ok sus_mount; then
-        echo "[i] 本内核未实现挂载命令（add_sus_mount 不可用），跳过 DEX2OAT 隐藏"
-    else
-    _n=0; _ok=0; _bad=0
-    for _m in $(grep -E " (/(system|apex|product)/[^ ]*/oat|/data/dalvik-cache)" /proc/mounts 2>/dev/null | cut -d" " -f2 | sort -u); do
-        [ -d "$_m" ] || continue
-        _n=$((_n + 1))
-        sus_mount_add_once "$_m"
-        case $? in
-            0) _ok=$((_ok + 1)); echo "[+] sus_mount $_m (dex2oat)" ;;
-            2) echo "[=] sus_mount $_m (本次开机已添加，跳过)" ;;
-            *) _bad=$((_bad + 1)); echo "[=] sus_mount $_m (失败)" ;;
-        esac
-    done
+    if hide_mounts_supported || cap_ok sus_mount; then
+        _n=0; _ok=0; _bad=0
+        for _m in $(grep -E " (/(system|apex|product)/[^ ]*/oat|/data/dalvik-cache)" /proc/mounts 2>/dev/null | cut -d" " -f2 | sort -u); do
+            [ -d "$_m" ] || continue
+            _n=$((_n + 1))
+            # 优先前缀表；旧内核回退 add_sus_mount
+            if hide_mounts_has "$_m"; then
+                echo "[=] hide_mounts $_m (已在表中，跳过)"
+            elif hide_mounts_add "$_m"; then
+                _ok=$((_ok + 1))
+                record_own_hide_mount "$_m"
+                echo "[+] hide_mounts $_m (dex2oat)"
+            else
+                sus_mount_add_once "$_m"
+                case $? in
+                    0) _ok=$((_ok + 1)); echo "[+] sus_mount $_m (dex2oat)" ;;
+                    2) echo "[=] sus_mount $_m (本次开机已添加，跳过)" ;;
+                    *) _bad=$((_bad + 1)); echo "[=] sus_mount $_m (失败)" ;;
+                esac
+            fi
+        done
         [ "$_n" = "0" ] && echo "[i] 未发现 dex2oat 挂载，跳过"
+        # 前缀表上限 64（r18.5+）；超过就只能靠 sus_path 覆盖，写日志提醒
+        [ "$_ok" -gt 60 ] && echo "[!] dex2oat 前缀数 $_ok 接近/超过 hide_mounts 上限 64，部分可能未生效"
         # 全部失败说明命令实际不可用（特性位谎报），降级后不再尝试
         if [ "$_ok" = "0" ] && [ "$_bad" -gt 0 ]; then
             echo "[!] add_sus_mount 实测不可用，标记为不支持"
             caps_downgrade sus_mount
         fi
+    else
+        echo "[i] 本内核未实现挂载命令（无 hide_mounts 节点且 add_sus_mount 不可用），跳过 DEX2OAT 隐藏"
     fi
 fi
 
@@ -517,7 +576,11 @@ if [ "$auto_try_umount" = "1" ]; then
             echo "[!] try_umount 实际不可用（全部失败），标记为不支持"
             caps_downgrade try_umount
         fi
-        [ "$_n" = "0" ] && echo "[i] 未发现模块挂载，跳过自动 try_umount"
+        if [ ! -r /proc/1/mountinfo ]; then
+            echo "[!] 读不到 /proc/1/mountinfo，无法判断模块挂载"
+        elif [ "$_n" = "0" ]; then
+            echo "[i] 未发现模块挂载，跳过自动 try_umount"
+        fi
     fi
 fi
 

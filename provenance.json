@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/inforcqb/susfs4ksu-lkm",
-  "tag": "v2.3.0-r18.4",
+  "tag": "v2.3.0-r18.6",
   "architecture": "arm64",
   "supported_kmis": [
     "android12-5.10",
@@ -13,15 +13,15 @@
     "android17-6.18"
   ],
   "assets_sha256": {
-    "susfs_guard_lkm-android12-5.10.ko": "5c7954d2a21762705612df1800f120094b7292bb9dd6bac49463c9ab6d30bd92",
-    "susfs_guard_lkm-android13-5.10.ko": "e5563e8b66891da93a7d90aa8370a951ea767adc1fef62cbd0d9e5eabe785906",
-    "susfs_guard_lkm-android13-5.15.ko": "e4a6f83be42d9854c778225c44577a6210ce62b71a364919bacd1369bdbf272a",
-    "susfs_guard_lkm-android14-5.15.ko": "475108f31690c93552b4e8d56ed5f287095daaebc7efa4490b8d21374d1e3cec",
-    "susfs_guard_lkm-android14-6.1.ko": "510525f244bfc9ef9d661a33a06f36409719388000dfd4116070d6662cf2417c",
-    "susfs_guard_lkm-android15-6.6.ko": "84bfe5d4b9b8989a4413061c95d92aa157e4851df0492a70d2e458397dc55e90",
-    "susfs_guard_lkm-android16-6.12.ko": "49e06572a503d64d40ee562fd2929b21efeba65fd430a9cc2f9c30c09f9646c9",
-    "susfs_guard_lkm-android17-6.18.ko": "b2ba301ee7b385e21c24c1eb058987e3992191ec3c189afe398898802ace85c1",
-    "susfs_insmod": "16a722d2158ff629e9e3d6d056e8333f15971410965ce5894216ed80dbfa44a4"
+    "susfs_guard_lkm-android12-5.10.ko": "cdc58bfc8d318631a12a0bbfdff037c59c9d886601ba8871d3508f8b9f16173b",
+    "susfs_guard_lkm-android13-5.10.ko": "e4ccffe265c56599688dff6c5cbfa76c699956e84cd4f5878549ebe3ec33f7c9",
+    "susfs_guard_lkm-android13-5.15.ko": "ec1fc4d10989c29507cc4ff78faa6c89c587a5f342afafc6d0cd511490a49d7e",
+    "susfs_guard_lkm-android14-5.15.ko": "43fd141ccba6c99285533d1924d031e0ead3b68be02e5f3ad2538f9fa033c2bd",
+    "susfs_guard_lkm-android14-6.1.ko": "8646f4c372c18a790be85d688d5827024dd8721aed3ec44fe86885a284fe35cf",
+    "susfs_guard_lkm-android15-6.6.ko": "f3c6a83cda1fc439614b02775347ad71285a4a87e87ecaf160cc3d88dbbefbde",
+    "susfs_guard_lkm-android16-6.12.ko": "83711e8eb4d072e2dc3eae671bae4d6dd4271007ba5d68783244ff35412d2897",
+    "susfs_guard_lkm-android17-6.18.ko": "5833fb63a193a9ffabbdd4c68ad6823d370f913094272729e0e4f34d15f523fd",
+    "susfs_insmod": "0dbd44178aee66128ffdd33e30c91bc0ffdce01397def8f993aa6075d4adc316"
   },
   "license": "GPL-2.0",
   "components": [
@@ -33,11 +33,11 @@
       ],
       "author": "inforcqb",
       "repository": "https://github.com/inforcqb/susfs4ksu-lkm",
-      "tag": "v2.3.0-r18.4",
+      "tag": "v2.3.0-r18.6",
       "license": "GPL-2.0",
       "license_file": "LICENSE",
       "modified": false,
-      "source_offer": "https://github.com/inforcqb/susfs4ksu-lkm/tree/v2.3.0-r18.4",
+      "source_offer": "https://github.com/inforcqb/susfs4ksu-lkm/tree/v2.3.0-r18.6",
       "original_author": "simonpunk (SUSFS / susfs4ksu, GPL-2.0); LKM port by inforcqb"
     },
     {

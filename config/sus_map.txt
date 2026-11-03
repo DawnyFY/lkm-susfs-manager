@@ -1,0 +1,4 @@
+# 每行一个文件路径，写入 /proc/susfs_map（需 LKM r18.5+）
+# 作用：隐藏进程 maps / smaps / map_files / pagemap 里的真实文件路径
+# 典型用途：藏 LSPosed / Zygisk 注入的 so
+# 当前设备没有需要隐藏的映射，留空即可

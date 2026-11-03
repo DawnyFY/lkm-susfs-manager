@@ -90,6 +90,8 @@ status() {
     if cap_ok try_umount; then printf 'try_umount=ok\n'; else printf 'try_umount=unsupported\n'; fi
     printf 'bootloader=%s\n' "$(bootloader_state)"
     printf 'force_bl_unlocked=%s\n' "$(cfg_force_bl)"
+    [ -f "$STATE/.cache.idx" ] || _cf_run >/dev/null 2>&1 || true
+    printf 'integrity=%s\n' "$(_cf_state)"
 }
 
 # 校验 config 文件：只允许注释、空行与 KEY=VALUE；值必须是紧凑 token。
@@ -278,7 +280,7 @@ case "$1" in
         ;;
     get_file)
         case "$2" in
-            sus_path|sus_mount|try_umount|hide_modules|skip_hide)
+            sus_path|sus_mount|try_umount|hide_modules|skip_hide|sus_map)
                 cat "$CONFIG/$2.txt" 2>/dev/null
                 ;;
             *)
@@ -301,7 +303,7 @@ case "$1" in
         ;;
     set_file)
         case "$2" in
-            sus_path|sus_mount|try_umount|hide_modules|skip_hide)
+            sus_path|sus_mount|try_umount|hide_modules|skip_hide|sus_map)
                 ;;
             *)
                 echo "unknown file"
@@ -322,22 +324,22 @@ case "$1" in
         echo "saved"
         ;;
     set_bundle)
-        # 一次写入 config + 5 个规则文件：WebUI 保存从 6 次调用降到 1 次，
+        # 一次写入 config + 6 个规则文件：WebUI 保存从 7 次调用降到 1 次，
         # 避免开机 apply 读到「新配置 + 旧规则文件」的中间状态。
-        # 参数：base64( "b64(config)|b64(sus_path)|b64(hide_modules)|b64(skip_hide)|b64(sus_mount)|b64(try_umount)" )
+        # 参数：base64( "b64(config)|b64(sus_path)|b64(hide_modules)|b64(skip_hide)|b64(sus_mount)|b64(try_umount)|b64(sus_map)" ) —— 共 7 段
         [ -n "$2" ] || { echo "empty bundle"; exit 1; }
         valid_b64 "$2" || { echo "invalid base64"; exit 1; }
         _raw=$(printf '%s' "$2" | base64 -d 2>/dev/null) || { echo "decode failed"; exit 1; }
         # 必须恰好 6 段：段数不对就把规则文件写空，不能接受
         _nsep=$(printf '%s' "$_raw" | tr -cd '|' | wc -c | tr -d ' ')
-        if [ "$_nsep" != "5" ]; then
-            echo "rejected: expect 6 segments, got $((_nsep + 1))"
+        if [ "$_nsep" != "6" ]; then
+            echo "rejected: expect 7 segments, got $((_nsep + 1))"
             exit 1
         fi
         _dir="$CONFIG/.bundle.$$"
         rm -rf "$_dir"
         mkdir -p "$_dir" || { echo "tmp dir failed"; exit 1; }
-        _names="config.ini sus_path.txt hide_modules.txt skip_hide.txt sus_mount.txt try_umount.txt"
+        _names="config.ini sus_path.txt hide_modules.txt skip_hide.txt sus_mount.txt try_umount.txt sus_map.txt"
         _bad=""
         _idx=1
         for _n in $_names; do
@@ -430,6 +432,8 @@ case "$1" in
         echo "imported"
         ;;
     reset_defaults)
+        printf '# 每行一个文件路径\n' > "$CONFIG/sus_map.txt" 2>/dev/null
+        printf '# 每行一个包名子串\n' > "$CONFIG/skip_hide.txt" 2>/dev/null
         cat > "$CONFIG/config.ini" <<'EOF'
 # SUSFS 管理器配置
 auto_load=1

@@ -6,6 +6,9 @@ MODDIR=/data/adb/modules/susfs_allinone
 
 boot_gate_ok || exit 0
 
+# 加载前校验：文件被改过就不注入内核
+_cf_gate || { echo "=== post-fs-data: 文件被修改，跳过加载 ===" >> "$MODDIR/load.log" 2>/dev/null; exit 0; }
+
 cfg_ensure
 cfg_load
 # 配置不能改变模块路径与状态目录

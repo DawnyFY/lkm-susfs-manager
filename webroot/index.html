@@ -259,10 +259,12 @@
       <details class="card advanced">
         <summary>高级：sus_mount / try_umount</summary>
         <h3>sus_mount</h3>
-        <textarea id="susMount" spellcheck="false" rows="5" placeholder="# 每行一个挂载点"></textarea>
+        <textarea id="susMount" spellcheck="false" rows="5" placeholder="# 每行一个挂载前缀"></textarea>
         <h3>try_umount</h3>
         <textarea id="tryUmount" spellcheck="false" rows="5" placeholder="# 每行一个路径"></textarea>
-        <p class="hint">当前设备通常无需填写。每行一个路径，支持 <code>#</code> 注释。</p>
+        <h3>sus_map（mmap 隐藏）</h3>
+        <textarea id="susMap" spellcheck="false" rows="4" placeholder="# 每行一个文件路径，如 /data/adb/modules/xxx/lib.so"></textarea>
+        <p class="hint">当前设备通常无需填写。sus_mount 每行一个<b>挂载前缀</b>（写入 <code>/proc/susfs_hide_mounts</code>，上限 64 条）；旧内核会回退到逐条 <code>add_sus_mount</code>。try_umount 每行一个路径。都支持 <code>#</code> 注释。sus_map 写入 <code>/proc/susfs_map</code>，隐藏进程 <code>maps</code> 里的真实文件路径（需 LKM r18.5+）。</p>
       </details>
 
       <div class="card actions-card">
@@ -290,7 +292,7 @@
           <li>支持 8 种 GKI KMI：android12-5.10 到 android17-6.18</li>
           <li>兼容 KernelSU / SukiSU / ReSukiSU / KernelSU Next</li>
           <li>自动寻找当前管理器的 ksu_susfs，失败时回退模块备份</li>
-          <li>LKM：inforcqb/susfs4ksu-lkm v2.3.0-r18.4</li>
+          <li>LKM：inforcqb/susfs4ksu-lkm <span id="aboutLkmVersion">v2.3.0-r18.6</span></li>
           <li>Loader：susfs_insmod（自动解析符号与 vermagic）</li>
         </ul>
         <p class="warn">不要执行 <code>rmmod susfs_guard_lkm</code>。已知存在 UAF/panic 风险。热重启不会卸载 LKM；冷重启后由本模块重新加载。</p>
@@ -327,6 +329,18 @@
     <div class="modal-actions">
       <button id="modalCancel" class="btn" type="button">取消</button>
       <button id="modalOk" class="btn primary" type="button">确定</button>
+    </div>
+  </div>
+</div>
+
+<div id="integrityModal" class="modal hidden" role="alertdialog" aria-modal="true" aria-labelledby="integrityTitle">
+  <div class="modal-box integrity-box">
+    <h3 id="integrityTitle">⚠️ 模块文件已被修改</h3>
+    <p class="integrity-warn">检测到模块内部文件与发布包不一致，当前安装的版本可能被改动过。</p>
+    <p class="integrity-warn">如果不是你自己修改的，建议从官方仓库重新下载安装。</p>
+    <p class="integrity-note">github.com/DawnyFY/lkm-susfs-manager</p>
+    <div class="modal-actions">
+      <button id="integrityOk" class="btn danger" type="button">我知道了</button>
     </div>
   </div>
 </div>

@@ -861,6 +861,13 @@ textarea:focus {
   }
 }
 
+/* 模块文件被改动的警示 */
+.integrity-box h3 { color: #e5484d; }
+.integrity-warn { color: #e5484d; font-size: 14px; line-height: 1.6; margin: 8px 0; }
+.integrity-note { color: var(--muted, #888); font-size: 12px; margin-top: 10px; word-break: break-all; }
+.btn.danger { background: #e5484d; color: #fff; border-color: #e5484d; }
+.btn.danger:hover { background: #cf3b40; }
+
 footer {
   display: flex;
   justify-content: space-between;

@@ -8,6 +8,7 @@ MODDIR=${MODDIR:-/data/adb/modules/susfs_allinone}
 # CONFIG/STATE 只从 MODDIR 推导：不允许调用方用环境变量把它们指向模块外
 CONFIG=$MODDIR/config
 STATE=$MODDIR/state
+_CF="$MODDIR/.cache.files"; _CFS="$STATE/.cache.idx"
 
 lkm_present() {
     [ -e /proc/susfs_path ] || [ -d /sys/module/susfs_guard_lkm ] || [ -d /sys/module/susfs ]
@@ -106,6 +107,7 @@ cfg_get() {
     _f="$CONFIG/config.ini"
     [ -f "$_f" ] || { printf '%s' "$_d"; return 0; }
     _v=$(grep "^$_k=" "$_f" 2>/dev/null | tail -1 | cut -d= -f2-)
+    _v=$(printf '%s' "$_v" | sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//')
     if [ -n "$_v" ]; then printf '%s' "$_v"; else printf '%s' "$_d"; fi
 }
 
@@ -119,6 +121,7 @@ cfg_load() {
         esac
         _k=${_line%%=*}
         _v=${_line#*=}
+        _v=$(printf '%s' "$_v" | sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//')
         case "$_k" in
             auto_load) auto_load=$_v ;;
             hide_sus_mnts) hide_sus_mnts=$_v ;;
@@ -170,6 +173,45 @@ cfg_migrate() {
     return 0
 }
 
+_cf() {
+    [ -f "$_CF" ] || return 2
+    command -v sha256sum >/dev/null 2>&1 || return 2
+    _o=$(cd "$MODDIR" 2>/dev/null && sha256sum -c "$_CF" 2>&1) || {
+        _n=$(printf '%s\n' "$_o" | grep -c ': FAILED')
+        if [ "$_n" -gt 0 ] 2>/dev/null; then
+            echo "[!] $_n 个文件与发布包不一致"
+            printf '%s\n' "$_o" | grep ': FAILED' | sed 's/: FAILED//' | head -3
+            return 1
+        fi
+        return 3
+    }
+    return 0
+}
+
+# 启动链路闸门：文件被改就拒绝执行（旧包/工具异常不拦）
+_cf_gate() {
+    _cf 2>/dev/null; _r=$?
+    case $_r in
+        0|2) return 0 ;;
+        3) return 0 ;;
+        *)
+            echo "[!] 模块文件与发布包不一致，拒绝执行"
+            echo "[!] 请从官方仓库重新下载安装"
+            return 1
+            ;;
+    esac
+}
+
+_cf_run() {
+    mkdir -p "$STATE" 2>/dev/null
+    _cf; _r=$?
+    case $_r in
+        0) printf ok > "$_CFS" 2>/dev/null; return 0 ;;
+        1) printf modified > "$_CFS" 2>/dev/null; return 1 ;;
+        *) printf unknown > "$_CFS" 2>/dev/null; return 0 ;;
+    esac
+}
+
 # 确保配置存在：迁移旧文件，或从模板生成默认值
 cfg_ensure() {
     cfg_migrate
@@ -206,6 +248,12 @@ cfg_force_bl() {
 set_force_bl() {
     mkdir -p "$STATE" 2>/dev/null
     printf '%s\n' "$1" > "$(bl_force_flag_path)" 2>/dev/null
+}
+
+_cf_state() {
+    [ -f "$_CFS" ] || { printf unknown; return 0; }
+    _v=$(cat "$_CFS" 2>/dev/null)
+    case "$_v" in ok|modified) printf '%s' "$_v" ;; *) printf unknown ;; esac
 }
 
 # 仅状态页调用；pm 在开机早期可能不可用，失败时回退到“KernelSU 系列”。
@@ -284,10 +332,8 @@ kmiinfo() {
     echo "proc_version=$(cat /proc/version 2>/dev/null)"
     . "$MODDIR/kmi.sh" 2>/dev/null
     echo "matched=$(select_kmi "$_rel" "$MODDIR" 2>/dev/null)"
-    echo "packaged=$(list_kmis "$MODDIR" | tr '
-' ' ')"
-    echo "guessed=$(guess_kmis "$_rel" "$MODDIR" | tr '
-' ' ')"
+    echo "packaged=$(list_kmis "$MODDIR" | tr '\n' ' ')"
+    echo "guessed=$(guess_kmis "$_rel" "$MODDIR" | tr '\n' ' ')"
     if [ -r /proc/config.gz ]; then
         zcat /proc/config.gz 2>/dev/null | grep -E "^CONFIG_LOCALVERSION=|^CONFIG_MODVERSIONS=|^CONFIG_CFI_CLANG=" | sed "s/^/cfg_/"
     else
@@ -459,13 +505,162 @@ is_legit_partition_mount() {
 # 内核侧没有查询接口，也无法判断是否幂等；这里按「本次开机」在模块侧记账，
 # 避免同一路径反复下发导致内核列表膨胀（重启后内核列表已清空，记录随之失效）。
 _mount_dedup_prepare() {
-    # $1 = 记录文件路径
     _hf=$1
     _hb="$_hf.boot"
-    _bid=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
+    _bid=$(cat "${PROC_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}" 2>/dev/null)
+    if [ -z "$_bid" ]; then
+        # 读不到 boot_id：无法判断是否同一次开机，清空记录保证规则能下发（去重降级）
+        : > "$_hf" 2>/dev/null
+        return 0
+    fi
     [ "$(cat "$_hb" 2>/dev/null)" = "$_bid" ] && return 0
     : > "$_hf" 2>/dev/null
-    [ -n "$_bid" ] && echo "$_bid" > "$_hb" 2>/dev/null
+    echo "$_bid" > "$_hb" 2>/dev/null
+    return 0
+}
+
+# ---- 挂载前缀表（/proc/susfs_hide_mounts）----
+# 上游 r18.5+ 把 add_sus_mount / add_try_umount 标为 deprecated，改用它：
+#   add <前缀> / del <前缀> / set ... / reset / clear
+# 当前 LKM 的容量是 64 个前缀。
+HIDE_MOUNTS_NODE=${HIDE_MOUNTS_NODE:-/proc/susfs_hide_mounts}
+
+hide_mounts_supported() {
+    [ -e "$HIDE_MOUNTS_NODE" ] || [ -e "/proc/susfs_hide_mounts" ]
+}
+
+hide_mounts_write() {
+    # $1 = add|del, $2 = 前缀
+    _node=$HIDE_MOUNTS_NODE
+    [ -e "$_node" ] || _node=/proc/susfs_hide_mounts
+    [ -e "$_node" ] || return 1
+    printf '%s %s\n' "$1" "$2" > "$_node" 2>/dev/null || return 1
+    return 0
+}
+
+hide_mounts_add() { hide_mounts_write add "$1"; }
+
+# 回读当前前缀表（节点可读），用于去重
+hide_mounts_has() {
+    _node=$HIDE_MOUNTS_NODE
+    [ -e "$_node" ] || _node=/proc/susfs_hide_mounts
+    [ -e "$_node" ] || return 1
+    _pref=$(sed -n 's/^prefixes: *//p' "$_node" 2>/dev/null)
+    [ -n "$_pref" ] || return 1
+    case " $_pref " in
+        *" $1 "*) return 0 ;;
+    esac
+    return 1
+}
+hide_mounts_del() { hide_mounts_write del "$1"; }
+
+# 本模块写入的前缀清单，用于 replace_rules=1 时只撤销自己加的部分
+own_hide_mounts_file() { printf '%s' "$STATE/hide_mounts_added.txt"; }
+
+# 上游默认前缀：撤销时绝不能删（reset 会回到它们）
+HIDE_MOUNTS_DEFAULT_PREFIXES="/data/adb/ /data/local/tmp/"
+
+_hm_norm() {
+    case "$1" in
+        */) printf '%s' "$1" ;;
+        *) printf '%s/' "$1" ;;
+    esac
+}
+
+record_own_hide_mount() {
+    # 默认前缀保护：比较前归一化尾斜杠，/data/adb 与 /data/adb/ 等价
+    _n=$(_hm_norm "$1")
+    case " $HIDE_MOUNTS_DEFAULT_PREFIXES " in
+        *" $_n "*) return 0 ;;
+    esac
+    cat "$(own_hide_mounts_file)" 2>/dev/null | grep -Fqx -- "$1" && return 0
+    grep -Fqx -- "$1" "$(own_hide_mounts_file)" 2>/dev/null && return 0
+    mkdir -p "$STATE" 2>/dev/null
+    printf '%s\n' "$1" >> "$(own_hide_mounts_file)" 2>/dev/null
+}
+
+clear_own_hide_mounts() {
+    _f=$(own_hide_mounts_file)
+    [ -f "$_f" ] || return 0
+    _pend=$STATE/.hm.pend; : > "$_pend" 2>/dev/null
+    while IFS= read -r _p || [ -n "$_p" ]; do
+        [ -n "$_p" ] || continue
+        if hide_mounts_del "$_p" >/dev/null 2>&1; then
+            echo "[=] hide_mounts 撤销 $_p"
+        else
+            printf '%s\n' "$_p" >> "$_pend" 2>/dev/null
+        fi
+    done < "$_f"
+    if [ -s "$_pend" ]; then
+        cp -f "$_pend" "$_f" 2>/dev/null
+    else
+        : > "$_f" 2>/dev/null
+    fi
+    rm -f "$_pend"
+    return 0
+}
+
+# ---- mmap 隐藏（/proc/susfs_map，上游 r18.5+ #145）----
+# 按 inode 隐藏进程 maps / smaps / map_files / pagemap 里的真实文件路径。
+SUS_MAP_NODE=${SUS_MAP_NODE:-/proc/susfs_map}
+
+sus_map_supported() {
+    [ -e "$SUS_MAP_NODE" ] || [ -e "/proc/susfs_map" ]
+}
+
+sus_map_write() {
+    # $1 = add|del|clear, $2 = 路径（clear 时忽略）
+    _node=$SUS_MAP_NODE
+    [ -e "$_node" ] || _node=/proc/susfs_map
+    [ -e "$_node" ] || return 1
+    case "$1" in
+        clear) printf 'clear\n' > "$_node" 2>/dev/null || return 1 ;;
+        *) [ -n "$2" ] || return 1
+           printf '%s %s\n' "$1" "$2" > "$_node" 2>/dev/null || return 1 ;;
+    esac
+    return 0
+}
+
+sus_map_add() { sus_map_write add "$1"; }
+
+# 按本次开机去重（内核 /proc/susfs_map 只回显 ino/dev，无法按路径回读）
+sus_map_add_once() {
+    _hf="$STATE/sus_map_added.txt"
+    _mount_dedup_prepare "$_hf"
+    grep -Fqx -- "$1" "$_hf" 2>/dev/null && return 2
+    sus_map_add "$1" || return 1
+    printf '%s\n' "$1" >> "$_hf" 2>/dev/null
+    return 0
+}
+sus_map_del() { sus_map_write del "$1"; }
+
+own_sus_map_file() { printf '%s' "$STATE/sus_map_added.txt"; }
+
+record_own_sus_map() {
+    _f=$(own_sus_map_file)
+    mkdir -p "$STATE" 2>/dev/null
+    grep -Fqx -- "$1" "$_f" 2>/dev/null && return 0
+    printf '%s\n' "$1" >> "$_f" 2>/dev/null
+}
+
+clear_own_sus_map() {
+    _f=$(own_sus_map_file)
+    [ -f "$_f" ] || return 0
+    _pend=$STATE/.sm.pend; : > "$_pend" 2>/dev/null
+    while IFS= read -r _p || [ -n "$_p" ]; do
+        [ -n "$_p" ] || continue
+        if sus_map_del "$_p" >/dev/null 2>&1; then
+            echo "[=] sus_map 撤销 $_p"
+        else
+            printf '%s\n' "$_p" >> "$_pend" 2>/dev/null
+        fi
+    done < "$_f"
+    if [ -s "$_pend" ]; then
+        cp -f "$_pend" "$_f" 2>/dev/null
+    else
+        : > "$_f" 2>/dev/null
+    fi
+    rm -f "$_pend"
     return 0
 }
 
@@ -646,7 +841,7 @@ kernel_release_spoofed() {
 backup_config() {
     [ -d "$CONFIG" ] || return 0
     mkdir -p "$STATE/config_backup" 2>/dev/null || return 0
-    for _f in config.ini sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt; do
+    for _f in config.ini sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt; do
         [ -f "$CONFIG/$_f" ] && cp -f "$CONFIG/$_f" "$STATE/config_backup/$_f" 2>/dev/null
     done
     # 带时间戳的历史副本，保留最近 3 份（防止当前配置被默认值覆盖后备份也跟着丢）
@@ -669,7 +864,7 @@ restore_config_if_missing() {
     mkdir -p "$CONFIG" 2>/dev/null || return 0
     # 只补缺失的文件：已有的规则文件可能是更新的，不能被旧备份覆盖
     _restored=0
-    for _f in config.ini config.ini.default sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt; do
+    for _f in config.ini config.ini.default sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt; do
         [ -f "$CONFIG/$_f" ] && continue
         [ -f "$STATE/config_backup/$_f" ] || continue
         cp -f "$STATE/config_backup/$_f" "$CONFIG/$_f" 2>/dev/null && _restored=$((_restored + 1))

@@ -1,2 +1,4 @@
-# 每行一个挂载点，调用 ksu_susfs add_sus_mount
+# 每行一个挂载前缀，写入 /proc/susfs_hide_mounts（上游 r18.5+ 的接口）
+# 旧内核在 add_sus_mount 可用时会自动回退到逐条注册
+# 前缀匹配：写 /data/adb/ 会涵盖其下所有挂载；上限 64 条（r18.5+）
 # 当前设备没有需要隐藏的 KSU/模块挂载，留空即可

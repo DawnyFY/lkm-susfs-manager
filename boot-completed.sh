@@ -6,6 +6,9 @@ MODDIR=/data/adb/modules/susfs_allinone
 
 boot_gate_ok || exit 0
 
+# 应用规则前校验：文件被改过就不下发规则
+_cf_gate || { echo "=== boot-completed: 文件被修改，跳过应用 ===" >> "$MODDIR/apply.log" 2>/dev/null; exit 0; }
+
 cfg_ensure
 cfg_load
 # 配置不能改变模块路径与状态目录

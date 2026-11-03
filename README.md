@@ -100,7 +100,7 @@ fastboot 注入 ABL cmdline 漏洞 → 系统以 SELinux permissive 启动 → S
 | `android16-6.12` | 6.12 | 打包，未实机验证 |
 | `android17-6.18` | 6.18 | 打包，未实机验证 |
 
-`.ko` 来自上游 `inforcqb/susfs4ksu-lkm` `v2.3.0-r18.4`，未做修改（哈希见 `provenance.json`）。
+`.ko` 来自上游 `inforcqb/susfs4ksu-lkm` `v2.3.0-r18.6`，未做修改（哈希见 `provenance.json`）。
 
 ## 要求
 
@@ -130,6 +130,7 @@ replace_rules=0    # 0=只追加；1=只清理本模块上次写入的；2=整�
 ```
 
 - `config/config.ini`：纯 `KEY=VALUE` 配置（不会被 shell 执行；旧版 `config.sh` 会自动迁移为 `config.sh.bak`）。
+- `config/sus_map.txt`：每行一个文件路径，写入 `/proc/susfs_map`（需 LKM r18.5+），隐藏进程 `maps`/`smaps` 里的真实文件路径。
 - `config/sus_path.txt`：每行一个路径，`#` 开头为注释。
 - `config/hide_modules.txt`：每行一个模块名，默认 `kernelsu`。
 - `config/sus_mount.txt` / `try_umount.txt`：挂载相关规则，默认空。
@@ -260,13 +261,13 @@ late-load 模式下内核 `post-fs-data` 会被跳过，本模块已改为在 `b
 
 | 上游 | 仓库 | 版本 | 本项目使用方式 |
 |---|---|---|---|
-| inforcqb / susfs4ksu-lkm | https://github.com/inforcqb/susfs4ksu-lkm | `v2.3.0-r18.4` | `lib/susfs_guard_lkm-*.ko`(8)、`bin/susfs_insmod`，**原样使用，哈希一致** |
+| inforcqb / susfs4ksu-lkm | https://github.com/inforcqb/susfs4ksu-lkm | `v2.3.0-r18.6` | `lib/susfs_guard_lkm-*.ko`(8)、`bin/susfs_insmod`，**原样使用，哈希一致** |
 | sidex15 / ksu_module_susfs | https://github.com/sidex15/ksu_module_susfs | `v1.5.2-R28` | `bin/ksu_susfs_good`（回退用），**原样使用** |
 | simonpunk / susfs4ksu | 原始 SUSFS 项目 | — | 经 inforcqb 移植，本项目不直接引用 |
 
 ### 上游自带的 loader 模块
 
-inforcqb 的 Release 里除了 `.ko`，还提供一个官方打包的模块 `susfs_guard_lkm-module-v2.3.0-r18.4-arm64.zip`。
+inforcqb 的 Release 里除了 `.ko`，还提供一个官方打包的模块 `susfs_guard_lkm-module-v2.3.0-r18.6-arm64.zip`。
 它的定位（上游 module.prop 原文）：
 
 ```
@@ -343,7 +344,7 @@ load.log / apply.log 内容（可附件）
 
 - 本项目的脚本、安装器与 WebUI：**GPL-2.0**（`LICENSE`）
 - 随附第三方二进制（详见 `NOTICE`、`provenance.json`）：
-  - `lib/susfs_guard_lkm-*.ko`、`bin/susfs_insmod` — inforcqb / `susfs4ksu-lkm` `v2.3.0-r18.4`，**GPL-2.0**，未修改
+  - `lib/susfs_guard_lkm-*.ko`、`bin/susfs_insmod` — inforcqb / `susfs4ksu-lkm` `v2.3.0-r18.6`，**GPL-2.0**，未修改
   - `bin/ksu_susfs_good` — sidex15 & simonpunk / `ksu_module_susfs` `v1.5.2-R28`，**AGPL-3.0**（`LICENSE-AGPL-3.0`），未修改
 - 本仓库为上述组件的**聚合分发**，各组件版权与许可证归原作者所有
 - 对应源码见 `NOTICE`；若无法获取，可向发布者索取（自发布之日起 3 年有效）

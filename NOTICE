@@ -10,11 +10,11 @@ LKM SUSFS管理器（susfs_allinone）— 第三方组件声明 / Third-Party No
    文件   : lib/susfs_guard_lkm-<kmi>.ko（8 个）、bin/susfs_insmod
    作者   : inforcqb（SUSFS 原始项目作者：simonpunk，本 LKM 为其 LKM 移植版）
    仓库   : https://github.com/inforcqb/susfs4ksu-lkm
-   Tag    : v2.3.0-r18.4
+   Tag    : v2.3.0-r18.6
    许可证 : GNU General Public License v2.0（全文见 LICENSE）
    修改   : 无。与上游 Release 资产 sha256 完全一致（见 provenance.json）
    SUSFS  : 原始项目 susfs4ksu 由 simonpunk 开发（GPL-2.0）；LKM 移植与维护 inforcqb
-   源码   : https://github.com/inforcqb/susfs4ksu-lkm/tree/v2.3.0-r18.4
+   源码   : https://github.com/inforcqb/susfs4ksu-lkm/tree/v2.3.0-r18.6
             （上游 Release 同时提供 source tarball）
 
 --------------------------------------------------------------------------
