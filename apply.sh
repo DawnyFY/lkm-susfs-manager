@@ -513,10 +513,14 @@ fi
 
 # 5e. Scene 痕迹（/dev 下随机命名的目录，内含 scene_mode_category）
 if [ "$hide_scene" = "1" ]; then
-    # Scene 的目录名每次开机都变，创建时机也可能晚于本脚本，所以分几轮扫描
+    # Scene 的目录名每次开机都变，创建时机也可能晚于本脚本。
+    # 只有开机自动应用才值得等（最多 2 轮 5 秒）；WebUI 手动保存时扫一次就走，
+    # 否则每次「保存并应用」都要干等 10 秒，而目录往往根本不存在。
     _tries=0
     _n=0
-    while [ "$_tries" -lt 3 ]; do
+    _max=1
+    [ "${AUTOLOAD:-0}" = "1" ] && _max=3
+    while [ "$_tries" -lt "$_max" ]; do
         for _f in /dev/*/scene_mode_category; do
             [ -e "$_f" ] || continue
             _d=${_f%/scene_mode_category}
@@ -526,7 +530,7 @@ if [ "$hide_scene" = "1" ]; then
         done
         [ "$_n" -gt 0 ] && break
         _tries=$((_tries + 1))
-        [ "$_tries" -lt 3 ] && sleep 5
+        [ "$_tries" -lt "$_max" ] && sleep 5
     done
     if [ "$_n" = "0" ]; then
         echo "[i] 未发现 scene 痕迹，跳过（可稍后在 WebUI 点「重扫 Scene」）"
