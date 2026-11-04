@@ -90,7 +90,13 @@ status() {
     if cap_ok try_umount; then printf 'try_umount=ok\n'; else printf 'try_umount=unsupported\n'; fi
     printf 'bootloader=%s\n' "$(bootloader_state)"
     printf 'force_bl_unlocked=%s\n' "$(cfg_force_bl)"
-    [ -f "$STATE/.cache.idx" ] || _cf_run >/dev/null 2>&1 || true
+    # 校验结果超过 60 秒视为陈旧，重算一次（只写本地状态文件）
+    _age=999
+    if [ -f "$STATE/.cache.idx" ]; then
+        _now=$(date +%s 2>/dev/null); _mt=$(stat -c %Y "$STATE/.cache.idx" 2>/dev/null)
+        case "$_now$_mt" in *[!0-9]*) _age=999 ;; *) [ -n "$_now" ] && [ -n "$_mt" ] && _age=$((_now - _mt)) ;; esac
+    fi
+    [ "$_age" -gt 60 ] && _cf_run >/dev/null 2>&1 || true
     printf 'integrity=%s\n' "$(_cf_state)"
 }
 
@@ -317,9 +323,9 @@ case "$1" in
             exit 1
         fi
         if [ -n "$b64" ]; then
-            printf '%s' "$b64" | base64 -d > "$CONFIG/$2.txt.tmp" || { echo "decode failed"; exit 1; }
+            printf '%s' "$b64" | base64 -d > "$CONFIG/$2.txt.tmp" || { rm -f "$CONFIG/$2.txt.tmp"; echo "decode failed"; exit 1; }
         else
-            : > "$CONFIG/$2.txt.tmp" || { echo "write failed"; exit 1; }
+            : > "$CONFIG/$2.txt.tmp" || { rm -f "$CONFIG/$2.txt.tmp"; echo "write failed"; exit 1; }
         fi
         mv -f "$CONFIG/$2.txt.tmp" "$CONFIG/$2.txt"
         echo "saved"

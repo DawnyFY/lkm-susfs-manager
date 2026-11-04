@@ -188,7 +188,12 @@ _cf() {
         # toybox 对打不开的文件只打 perror，输出里没有 FAILED 行，改按 OK 行数比对
         _ok_n=$(printf '%s\n' "$_o" | awk '/: OK/{n++} END{print n+0}')
         _all_n=$(grep -c . "$_CF" 2>/dev/null)
-        if [ -n "$_all_n" ] && [ "$_all_n" -gt 0 ] && [ "$_ok_n" -lt "$_all_n" ]; then
+        # empty manifest is abnormal: treat as modified (old package without manifest returns 2)
+        if [ -z "$_all_n" ] || [ "$_all_n" -eq 0 ] 2>/dev/null; then
+            echo "[!] manifest empty"
+            return 1
+        fi
+        if [ "$_ok_n" -lt "$_all_n" ]; then
             echo "[!] $((_all_n - _ok_n)) 个文件与发布包不一致"
             printf '%s\n' "$_o" | grep -v ': OK' | head -3
             return 1
@@ -699,8 +704,15 @@ try_umount_add_once() {
 lock_acquire() {
     _lk=$1; _ttl=${2:-900}
     mkdir -p "$STATE" 2>/dev/null
+    _bid=$(cat "${PROC_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}" 2>/dev/null)
     # 锁目录里记录持有者 PID：过期被接管后，旧持有者退出时不能删掉新锁
-    mkdir "$_lk" 2>/dev/null && { echo $$ > "$_lk/pid" 2>/dev/null; return 0; }
+    mkdir "$_lk" 2>/dev/null && { echo "$$ $_bid" > "$_lk/pid" 2>/dev/null; return 0; }
+    # 上一次开机留下的锁：boot_id 不同，直接接管（不再等 TTL）
+    _lk_bid=$(cut -d" " -f2 "$_lk/pid" 2>/dev/null)
+    if [ -n "$_lk_bid" ] && [ -n "$_bid" ] && [ "$_lk_bid" != "$_bid" ]; then
+        rm -rf "$_lk" 2>/dev/null
+        mkdir "$_lk" 2>/dev/null && { echo "$$ $_bid" > "$_lk/pid" 2>/dev/null; return 0; }
+    fi
     _now=$(date +%s 2>/dev/null)
     _mt=$(stat -c %Y "$_lk" 2>/dev/null)
     [ -n "$_now" ] && [ -n "$_mt" ] || return 1
@@ -719,7 +731,7 @@ lock_acquire() {
 
 lock_release() {
     # 只释放自己持有的锁
-    if [ -f "$1/pid" ] && [ "$(cat "$1/pid" 2>/dev/null)" != "$$" ]; then
+    if [ -f "$1/pid" ] && [ "$(cut -d" " -f1 "$1/pid" 2>/dev/null)" != "$$" ]; then
         return 0
     fi
     rm -rf "$1" 2>/dev/null
