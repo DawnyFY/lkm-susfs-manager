@@ -857,6 +857,7 @@ function setupReveal() {
 
 async function init() {
   initTabs();
+  bindLanguageButtons();
   setupReveal();
   attachRowHints();
   bind();
@@ -876,4 +877,18 @@ async function init() {
   }
 }
 
+
+// 语言切换（i18n.js 提供 window.i18n）
+function bindLanguageButtons() {
+  const zh = $("langZh"), en = $("langEn");
+  if (!window.i18n || !zh || !en) return;
+  const mark = () => {
+    const cur = window.i18n.lang;
+    zh.classList.toggle("primary", cur === "zh");
+    en.classList.toggle("primary", cur === "en");
+  };
+  zh.addEventListener("click", () => { window.i18n.apply("zh"); mark(); });
+  en.addEventListener("click", () => { window.i18n.apply("en"); mark(); });
+  mark();
+}
 document.addEventListener("DOMContentLoaded", init);
