@@ -23,11 +23,11 @@ chk "正常配置已落盘" "$(grep -c "^auto_load=1$" "$MOD/config/config.ini")
 # 值内空白 / 命令 / 引号：source 时会被拆成"赋值 + 命令"
 chk "拒绝值内命令（空格）" "$(run_cfg "$(printf "spoof_uname_version=ok touch /tmp/PWNED\n")")" "rejected: line 1: whitespace in value"
 chk "拒绝行内多命令" "$(run_cfg "$(printf "auto_load=1 STATE=/tmp/x export STATE\n")")" "rejected: line 1: whitespace in value"
-chk "拒绝值内引号" "$(run_cfg "$(printf "manager_name=x\x27;id;\x27\n")")" "rejected: line 1: quote or backslash in value"
+chk "拒绝值内引号" "$(run_cfg "$(printf "manager_name=x\x27;id;\x27\n")")" "rejected: line 1: shell metacharacter in value"
 chk "注入未执行" "$(ls "$TMP/PWNED" 2>/dev/null | wc -l | tr -d " ")" "0"
 
 # shell 元字符
-chk "拒绝 & 注入" "$(run_cfg "$(printf "fake_cmdline_value=x&touch %s/PWNED\n" "$TMP")")" "rejected: line 1: whitespace in value"
+chk "拒绝 & 注入" "$(run_cfg "$(printf "fake_cmdline_value=x&touch %s/PWNED\n" "$TMP")")" "rejected: line 1: shell metacharacter in value"
 chk "拒绝重定向" "$(run_cfg "$(printf "manager_name=y>%s/REDIR\n" "$TMP")")" "rejected: line 1: shell metacharacter in value"
 chk "拒绝管道" "$(run_cfg "$(printf "auto_load=1|id\n")")" "rejected: line 1: shell metacharacter in value"
 chk "重定向未执行" "$(ls "$TMP/REDIR" 2>/dev/null | wc -l | tr -d " ")" "0"

@@ -130,9 +130,20 @@ validate_config_file() {
             PATH|LD_PRELOAD|LD_LIBRARY_PATH|IFS|ENV|BASH_ENV|PS4|SHELLOPTS|BASHOPTS|CDPATH|GLOBIGNORE|MODDIR|MODPATH|CONFIG|STATE|LOG|BIN|SUSFS_BIN|REL|KMI|FORCE_KMI|force_bl_unlocked)
                 _bad="line $_ln: reserved key $_key"; break ;;
         esac
-        case "$_val" in
-            *[[:space:]]*) _bad="line $_ln: whitespace in value"; break ;;
-            *\"*|*"'"*|*\\*) _bad="line $_ln: quote or backslash in value"; break ;;
+        case "$_key" in
+            # cmdline 值天然含空格；只放行空白与普通字符，元字符仍然拒绝
+            fake_cmdline_value)
+                case "$_val" in
+                    *[[:space:]]*) ;;
+                    *\"*|*'"'*|*\\*) _bad="line $_ln: quote or backslash in value"; break ;;
+                esac
+                ;;
+            *)
+                case "$_val" in
+                    *[[:space:]]*) _bad="line $_ln: whitespace in value"; break ;;
+                    *\"*|*'"'*|*\\*) _bad="line $_ln: quote or backslash in value"; break ;;
+                esac
+                ;;
         esac
         case "$_val" in
             *[\`\$\;\&\|\<\>\(\)\#\{\}\!\?\~\*]*|*\[*|*\]*)
