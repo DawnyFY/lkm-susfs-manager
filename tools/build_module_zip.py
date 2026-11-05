@@ -35,7 +35,6 @@ EXEC_NAMES = {
     "ctl.sh",
     "post-fs-data.sh",
     "boot-completed.sh",
-    "service.sh",
     "customize.sh",
     "bin/susfs_insmod",
     "bin/ksu_susfs_good",
