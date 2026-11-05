@@ -139,7 +139,7 @@ function ask(message) {
     const onKey = (event) => {
       if (event.key === "Escape") close(false);
     };
-    text.textContent = message;
+    text.textContent = tr(message);
     lockBackground();
     modal.classList.remove("hidden");
     ok.addEventListener("click", onOk);
@@ -167,28 +167,28 @@ function confirmDanger(title, message, seconds) {
       ok.removeEventListener("click", onOk);
       cancel.removeEventListener("click", onCancel);
       ok.disabled = false;
-      ok.textContent = "确定";
-      heading.textContent = "确认操作";
+      ok.textContent = tr("确定");
+      heading.textContent = tr("确认操作");
     };
     const close = (v) => { cleanup(); resolve(v); };
     const onOk = () => close(true);
     const onCancel = () => close(false);
-    heading.textContent = title;
-    text.textContent = message;
+    heading.textContent = tr(title);
+    text.textContent = tr(message);
     lockBackground();
     modal.classList.remove("hidden");
     let left = seconds;
     ok.disabled = true;
-    ok.textContent = "请等待 " + left + "s";
+    ok.textContent = tr("请等待 " + left + "s");
     timer = setInterval(() => {
       left -= 1;
       if (left <= 0) {
         clearInterval(timer);
         timer = null;
         ok.disabled = false;
-        ok.textContent = "我已了解风险，继续";
+        ok.textContent = tr("我已了解风险，继续");
       } else {
-        ok.textContent = "请等待 " + left + "s";
+        ok.textContent = tr("请等待 " + left + "s");
       }
     }, 1000);
     ok.addEventListener("click", onOk);
@@ -232,10 +232,15 @@ function setBusy(btn, on) {
   }
 }
 
+// 界面文案统一走 i18n（英文模式下翻译，中文模式下原样返回）
+function tr(text) {
+  return window.i18n ? window.i18n.tl(text) : text;
+}
+
 function showBanner(message, type = "ok", timeout = 0) {
   const el = $("banner");
   if (!el) return;
-  el.textContent = message;
+  el.textContent = tr(message);
   el.className = `banner ${type}`;
   if (showBanner.timer) clearTimeout(showBanner.timer);
   if (timeout) showBanner.timer = setTimeout(() => el.classList.add("hidden"), timeout);
@@ -243,7 +248,7 @@ function showBanner(message, type = "ok", timeout = 0) {
 
 function setText(id, value) {
   const el = $(id);
-  if (el) el.textContent = value === undefined || value === null || value === "" ? "—" : String(value);
+  if (el) el.textContent = value === undefined || value === null || value === "" ? "—" : tr(String(value));
 }
 
 function setState(id, ok) {
@@ -409,7 +414,7 @@ async function loadConfig() {
 
 async function refreshLog() {
   const out = await exec(`${CTL} log`);
-  $("log").textContent = out && out.trim() ? out : "暂无日志。";
+  $("log").textContent = out && out.trim() ? out : tr("暂无日志。");
 }
 
 function modalAlert(title, message) {
@@ -424,8 +429,8 @@ function modalAlert(title, message) {
     const cancel = $("modalCancel");
     const text = $("modalText");
     const titleEl = $("modalTitle");
-    if (titleEl) titleEl.textContent = title;
-    text.textContent = message;
+    if (titleEl) titleEl.textContent = tr(title);
+    text.textContent = tr(message);
     text.style.whiteSpace = "pre-wrap";
     if (cancel) cancel.style.display = "none";
     const close = () => {
@@ -863,7 +868,7 @@ async function init() {
   bind();
   if (!(await waitForKsu())) {
     showBanner("请在 SukiSU 的 WebUI 中打开本页面。", "error");
-    $("log").textContent = "无法连接 root 通道。";
+    $("log").textContent = tr("无法连接 root 通道。");
     return;
   }
   try {
@@ -879,16 +884,18 @@ async function init() {
 
 
 // 语言切换（i18n.js 提供 window.i18n）
+// 语言切换写 localStorage 后重载页面，静态与动态文案都由页面重新渲染，避免中英混排。
 function bindLanguageButtons() {
   const zh = $("langZh"), en = $("langEn");
   if (!window.i18n || !zh || !en) return;
-  const mark = () => {
-    const cur = window.i18n.lang;
-    zh.classList.toggle("primary", cur === "zh");
-    en.classList.toggle("primary", cur === "en");
+  const cur = window.i18n.lang;
+  zh.classList.toggle("primary", cur === "zh");
+  en.classList.toggle("primary", cur === "en");
+  const pick = (lang) => {
+    try { localStorage.setItem("lang", lang); } catch (e) {}
+    location.reload();
   };
-  zh.addEventListener("click", () => { window.i18n.apply("zh"); mark(); });
-  en.addEventListener("click", () => { window.i18n.apply("en"); mark(); });
-  mark();
+  zh.addEventListener("click", () => pick("zh"));
+  en.addEventListener("click", () => pick("en"));
 }
 document.addEventListener("DOMContentLoaded", init);

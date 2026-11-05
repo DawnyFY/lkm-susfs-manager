@@ -1,15 +1,19 @@
 #!/system/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
-# KernelSU 系列安装脚本（官方版 / SukiSU / ReSukiSU / KernelSU Next）
-if [ "$KSU" = true ] || [ -n "$KSU_VER" ] || [ -n "$KSU_KERNEL_VER_CODE" ] || [ -d /data/adb/ksu ]; then
+# 安装脚本：KernelSU 系列（官方版 / SukiSU / ReSukiSU / KernelSU Next）或 Magisk。
+# Magisk 走 post-fs-data + service，KernelSU 系走 post-fs-data + boot-completed。
+if [ "$KSU" = true ] || [ -n "$KSU_VER" ] || [ -n "$KSU_KERNEL_VER_CODE" ] || [ -d /data/adb/ksu ] \
+    || [ -n "$MAGISK_VER_CODE" ] || [ -n "$MAGISK_VER" ] || [ -d /data/adb/magisk ]; then
     :
 else
-    abort "- 需要 KernelSU / SukiSU / ReSukiSU / KernelSU Next 管理器"
+    abort "- 需要 KernelSU / SukiSU / ReSukiSU / KernelSU Next / Magisk 管理器"
 fi
 [ "$ARCH" = arm64 ] || abort "- 仅支持 arm64"
 
 if [ -n "$KSU_VER" ]; then
     ui_print "- 管理器: $KSU_VER"
+elif [ -n "$MAGISK_VER" ]; then
+    ui_print "- 管理器: Magisk $MAGISK_VER"
 fi
 
 # 升级时保留用户配置与规则清单：安装包里的 config 只是默认值，不能覆盖已改过的配置
@@ -103,7 +107,7 @@ fi
 set_perm_recursive "$MODPATH" 0 0 0755 0644
 set_perm "$MODPATH/bin/susfs_insmod" 0 0 0755
 set_perm "$MODPATH/bin/ksu_susfs_good" 0 0 0755
-for script in action.sh load.sh apply.sh ctl.sh post-fs-data.sh boot-completed.sh; do
+for script in action.sh load.sh apply.sh ctl.sh post-fs-data.sh boot-completed.sh service.sh; do
     set_perm "$MODPATH/$script" 0 0 0755
 done
 touch "$MODPATH/skip_mount"

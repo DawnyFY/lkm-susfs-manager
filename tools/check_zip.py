@@ -36,7 +36,7 @@ REQUIRED = {
     "webroot/app.js",
     "webroot/style.css",
 }
-EXEC_REQUIRED = {"load.sh", "apply.sh", "ctl.sh", "action.sh", "customize.sh"}
+EXEC_REQUIRED = {"load.sh", "apply.sh", "ctl.sh", "action.sh", "customize.sh", "service.sh"}
 
 
 def fail(message: str) -> None:

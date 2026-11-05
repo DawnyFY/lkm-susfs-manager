@@ -290,9 +290,9 @@
         <p>把 LKM 自动匹配、加载、规则配置和 WebUI 收进同一个模块。</p>
         <ul>
           <li>支持 8 种 GKI KMI：android12-5.10 到 android17-6.18</li>
-          <li>兼容 KernelSU / SukiSU / ReSukiSU / KernelSU Next</li>
+          <li>兼容 KernelSU / SukiSU / ReSukiSU / KernelSU Next / Magisk</li>
           <li>自动寻找当前管理器的 ksu_susfs，失败时回退模块备份</li>
-          <li>LKM：inforcqb/susfs4ksu-lkm <span id="aboutLkmVersion">v2.3.0-r18.6</span></li>
+          <li>LKM：inforcqb/susfs4ksu-lkm <span id="aboutLkmVersion">v2.3.0-r18.8</span></li>
           <li>Loader：susfs_insmod（自动解析符号与 vermagic）</li>
         </ul>
         <p class="warn">不要执行 <code>rmmod susfs_guard_lkm</code>。已知存在 UAF/panic 风险。热重启不会卸载 LKM；冷重启后由本模块重新加载。</p>
