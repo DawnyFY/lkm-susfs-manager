@@ -1,17 +1,26 @@
 #!/system/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
-# 安装脚本：KernelSU 系列（官方版 / SukiSU / ReSukiSU / KernelSU Next）或 Magisk。
-# Magisk 走 post-fs-data + service，KernelSU 系走 post-fs-data + boot-completed。
-if [ "$KSU" = true ] || [ -n "$KSU_VER" ] || [ -n "$KSU_KERNEL_VER_CODE" ] || [ -d /data/adb/ksu ] \
+# 安装脚本：KernelSU 系列（官方版 / SukiSU / ReSukiSU / KernelSU Next）、Magisk、APatch。
+# 开机阶段：KernelSU 系列与 APatch 都有 boot-completed，Magisk 只有 service（late_start）。
+# 注意：APatch 会把 MAGISK_VER_CODE 设成 27000，所以必须先认 APatch，否则会被误标成 Magisk。
+IS_APATCH=0
+if [ "$APATCH" = true ] || [ "$KERNELPATCH" = true ] || [ -n "$APATCH_VER" ] || [ -d /data/adb/ap ]; then
+    IS_APATCH=1
+fi
+
+if [ "$IS_APATCH" = "1" ] || [ "$KSU" = true ] || [ -n "$KSU_VER" ] || [ -n "$KSU_KERNEL_VER_CODE" ] || [ -d /data/adb/ksu ] \
     || [ -n "$MAGISK_VER_CODE" ] || [ -n "$MAGISK_VER" ] || [ -d /data/adb/magisk ]; then
     :
 else
-    abort "- 需要 KernelSU / SukiSU / ReSukiSU / KernelSU Next / Magisk 管理器"
+    abort "- 需要 KernelSU / SukiSU / ReSukiSU / KernelSU Next / Magisk / APatch 管理器"
 fi
 [ "$ARCH" = arm64 ] || abort "- 仅支持 arm64"
 
-if [ -n "$KSU_VER" ]; then
-    ui_print "- 管理器: $KSU_VER"
+if [ "$IS_APATCH" = "1" ]; then
+    ui_print "- 管理器: APatch ${APATCH_VER:-unknown}"
+    ui_print "- APatch 未实机验证：本模块需要加载 SUSFS LKM，内核拒绝时会写进 load.log 并改写模块描述"
+elif [ "$KSU" = true ] || [ -n "$KSU_VER" ] || [ -n "$KSU_KERNEL_VER_CODE" ]; then
+    ui_print "- 管理器: ${KSU_VER:-KernelSU}"
 elif [ -n "$MAGISK_VER" ]; then
     ui_print "- 管理器: Magisk $MAGISK_VER"
 fi

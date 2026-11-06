@@ -92,7 +92,7 @@ fi
 if lkm_present; then
     rm -f "$STATE/loading"
     echo "[i] susfs 已存在，跳过加载"
-    BIN=$(select_susfs_bin) || fail "ksu_susfs 缺失且没有备份"
+    BIN=$(select_susfs_bin) || fail "$(susfs_hint missing)（模块内也没有备份）"
     echo "[i] 使用: $BIN"
     VERSION=$("$BIN" show version 2>/dev/null)
     if [ -z "$VERSION" ]; then
@@ -110,7 +110,7 @@ if lkm_present; then
     if [ -z "$VERSION" ]; then
         # LKM 已加载但工具通信失败：属环境/版本问题，不当作加载失败
         echo "[!] ksu_susfs 无法通信（可能与内核 ABI 不匹配），规则由 apply 用备份尝试"
-        set_description "⚠️ LKM 已加载，但 ksu_susfs 无法通信"
+        set_description "⚠️ LKM 已加载，但 $(susfs_hint comm)"
         echo 0 > "$STATE/fail_count"
         echo "=== load skip-tooling ==="
         exit 0
@@ -195,10 +195,10 @@ if [ "$rc" != "0" ]; then
             echo "[i] 若 modules_disabled=1，LKM 路线不可行，需要改用内核内置 SUSFS 的版本"
             ;;
     esac
-    fail "susfs_insmod 失败 (rc=$rc)"
+    fail "$(susfs_hint insmod) (rc=$rc)"
 fi
 
-BIN=$(select_susfs_bin) || fail "ksu_susfs 缺失且没有备份"
+BIN=$(select_susfs_bin) || fail "$(susfs_hint missing)（模块内也没有备份）"
 echo "[i] 使用: $BIN"
 VARIANT=$("$BIN" show variant 2>/dev/null)
 if [ -z "$VARIANT" ] && [ -x "$MODDIR/bin/ksu_susfs_good" ] && [ "$BIN" != "$MODDIR/bin/ksu_susfs_good" ]; then
@@ -206,7 +206,7 @@ if [ -z "$VARIANT" ] && [ -x "$MODDIR/bin/ksu_susfs_good" ] && [ "$BIN" != "$MOD
     BIN="$MODDIR/bin/ksu_susfs_good"
     VARIANT=$("$BIN" show variant 2>/dev/null)
 fi
-[ -n "$VARIANT" ] || fail "LKM 已加载但 ksu_susfs 无法通信"
+[ -n "$VARIANT" ] || fail "$(susfs_hint comm)"
 VERSION=$("$BIN" show version 2>/dev/null)
 echo "[i] variant: $VARIANT"
 echo "[i] version: $VERSION"

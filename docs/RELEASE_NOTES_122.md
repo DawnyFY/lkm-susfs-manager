@@ -28,6 +28,18 @@
 
 **说明**：我没有 Magisk 真机，Magisk 这条路径属于新增实现、未在真机实测（KernelSU / SukiSU 路径的回归测试通过）。安装与开机应用按 Magisk 生命周期实现（`post-fs-data` + `service`），遇到问题请反馈日志。
 
+## APatch 识别（未实机验证）
+
+1.2.2 加了一层 APatch 适配，但**不宣称兼容**：
+
+- 安装脚本先认 APatch：`APATCH` / `KERNELPATCH` / `/data/adb/ap`（APatch 会把 `MAGISK_VER_CODE` 设成 27000，不先判断就会被误标成 Magisk），并打印真实管理器名
+- 安装时提示「APatch 未实机验证：本模块需要加载 SUSFS LKM」
+- 运行期失败描述按管理器区分：APatch 下缺接口写 `❌ APatch: 未找到 SUSFS 接口（内核需集成 SUSFS 或允许加载 SUSFS LKM）`，而不是笼统的「ksu_susfs 缺失」
+- 关于页标注：APatch 需要内核已集成 SUSFS 或允许加载 SUSFS LKM；WebUI 需第三方宿主（如 KsuWebUI）
+- 开机阶段：APatch 与 KernelSU 系列一样走 `post-fs-data → boot-completed`（APatch 官方文档确认支持 `boot-completed.sh`）
+
+**仍未验证的部分**：APatch 内核上 SUSFS LKM 能否加载（KernelPatch 会占用内核 hook 空间）。本机 BL 锁 + 临时 root 无法刷 APatch，KernelPatch 的 LKM 交付路径又被符号/模块签名保护拦住，所以这一项要等真机。
+
 ## 关于页重写
 
 原来的「关于」只写了 KernelSU 系列，1.2.2 起同时支持 Magisk，所以整页重写：
@@ -47,6 +59,6 @@
 管理器里覆盖安装即可，配置与规则文件全部保留。KernelSU 系安装到 `modules_update`，**需要重启一次生效**；重启后 LKM 会重新加载，规则重新应用。
 
 - 文件：`susfs_allinone-1.2.2.zip`
-- 大小：11054427 字节
-- SHA256：`82f7696b5d9e59e1d06d2d6aa3ddc3579250726168871e979ce8c2345958ad0c`
+- 大小：11055361 字节
+- SHA256：`dffcce10f7c60a298288084930a5baeffc2d38e33f3484767ed7ea89478988fb`
 - 离线测试：18 项全绿

@@ -147,8 +147,9 @@
     "把 LKM 自动匹配、加载、规则配置和 WebUI 收进同一个模块。": "Auto KMI matching, LKM loading, rule config and the WebUI in a single module.",
     "支持 8 种 GKI KMI：android12-5.10 到 android17-6.18": "8 GKI KMIs supported: android12-5.10 through android17-6.18",
     "兼容 KernelSU / SukiSU / ReSukiSU / KernelSU Next / Magisk": "Works with KernelSU / SukiSU / ReSukiSU / KernelSU Next / Magisk",
-    "兼容管理器：KernelSU 官方版、SukiSU、ReSukiSU、KernelSU Next，以及 Magisk": "Managers: KernelSU, SukiSU, ReSukiSU, KernelSU Next and Magisk",
-    "自动识别当前管理器，按它的生命周期执行：KernelSU 系列走 post-fs-data → boot-completed，Magisk 走 post-fs-data → service（late_start）": "Detects the current manager and follows its lifecycle: KernelSU series run post-fs-data → boot-completed, Magisk runs post-fs-data → service (late_start)",
+    "兼容管理器：KernelSU 官方版、SukiSU、ReSukiSU、KernelSU Next、Magisk；APatch 已做安装识别与阶段适配，未实机验证": "Managers: KernelSU, SukiSU, ReSukiSU, KernelSU Next, Magisk; APatch is recognized and wired for its boot stages, but not yet verified on a real device",
+    "按管理器选择开机阶段：KernelSU 系列与 APatch 走 post-fs-data → boot-completed，Magisk 走 post-fs-data → service（late_start）": "Boot stages follow the manager: KernelSU series and APatch run post-fs-data → boot-completed, Magisk runs post-fs-data → service (late_start)",
+    "APatch：需要内核已集成 SUSFS 或允许加载 SUSFS LKM；WebUI 需第三方宿主（如 KsuWebUI）": "APatch: requires a kernel with SUSFS built in or able to load the SUSFS LKM; the WebUI needs a third-party host (e.g. KsuWebUI)",
     "WebUI 支持中文 / English": "WebUI in Chinese / English",
     "开机时 post-fs-data 先取真实内核版本（优先 /proc/version，回退 state/real_uname.txt），从模块自带的 8 个 KMI 中选出匹配的 LKM 并加载；随后按管理器应用规则：KernelSU 系列在 boot-completed 阶段，Magisk 在 service（late_start）阶段设置 sdcard 根路径并应用规则。热重启不会卸载 LKM，冷重启后会自动重新加载。": "On boot, post-fs-data reads the real kernel version first (prefers /proc/version, falls back to state/real_uname.txt), then picks and loads the matching LKM from the 8 bundled KMIs. Rules are then applied per manager: KernelSU series on boot-completed, Magisk on service (late_start), which also sets the sdcard root. A hot reboot keeps the LKM loaded; after a cold reboot it reloads automatically.",
     "自动寻找当前管理器的 ksu_susfs，失败时回退模块备份": "Finds the current manager's ksu_susfs automatically, falling back to the bundled copy",
@@ -253,6 +254,10 @@
     "✅ LKM 已加载 | %s | 等待应用规则": "✅ LKM loaded | %s | waiting to apply rules",
     "⚠️ 未匹配内核 | %s | 请在 WebUI 指定 KMI": "⚠️ No kernel match | %s | set the KMI in the WebUI",
     "✅ LKM 已加载 | %s | %s": "✅ LKM loaded | %s | %s",
+    "❌ APatch: 未找到 SUSFS 接口（内核需集成 SUSFS 或允许加载 SUSFS LKM）": "❌ APatch: SUSFS interface not found (kernel must include SUSFS or allow loading the SUSFS LKM)",
+    "❌ APatch: SUSFS 接口无响应（内核 SUSFS 版本可能不匹配）": "❌ APatch: SUSFS interface not responding (kernel SUSFS version may mismatch)",
+    "❌ APatch: LKM 加载失败（内核可能禁止 insmod 或符号不匹配）": "❌ APatch: LKM failed to load (kernel may reject insmod or symbols mismatch)",
+    "⚠️ LKM 已加载，但 APatch: SUSFS 接口无响应（内核 SUSFS 版本可能不匹配）": "⚠️ LKM loaded but APatch: SUSFS interface not responding (kernel SUSFS version may mismatch)",
 
     /* ---------- 占位符 / 无障碍 ---------- */
     "页面导航": "Page navigation",

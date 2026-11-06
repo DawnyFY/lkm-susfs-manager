@@ -111,13 +111,13 @@ if ! lkm_present; then
     rc=$?
     if [ "$rc" != "0" ]; then
         echo "[!] 加载失败，无法应用规则"
-        set_description "❌ LKM 加载失败，请查看日志"
+        set_description "❌ $(susfs_hint insmod)"
         exit 1
     fi
 fi
 
 # 2. 选择可用的 ksu_susfs：优先当前管理器/分支自带，失败回退模块备份
-BIN=$(select_susfs_bin) || { echo "[!] 缺少 ksu_susfs"; set_description "❌ ksu_susfs 缺失"; exit 1; }
+BIN=$(select_susfs_bin) || { echo "[!] 缺少 ksu_susfs"; set_description "❌ $(susfs_hint missing)"; exit 1; }
 echo "[i] ksu_susfs: $BIN"
 VARIANT=$("$BIN" show variant 2>/dev/null)
 if [ -z "$VARIANT" ] && ! susfs_bin_runnable "$BIN"; then
@@ -129,7 +129,7 @@ if [ -z "$VARIANT" ] && [ -x "$MODDIR/bin/ksu_susfs_good" ] && [ "$BIN" != "$MOD
     BIN="$MODDIR/bin/ksu_susfs_good"
     VARIANT=$("$BIN" show variant 2>/dev/null)
 fi
-[ -n "$VARIANT" ] || { echo "[!] ksu_susfs 无法与内核通信"; set_description "❌ ksu_susfs 无法通信"; exit 1; }
+[ -n "$VARIANT" ] || { echo "[!] ksu_susfs 无法与内核通信"; set_description "❌ $(susfs_hint comm)"; exit 1; }
 VERSION=$("$BIN" show version 2>/dev/null)
 FEATURES=$("$BIN" show enabled_features 2>/dev/null)
 has_feature() { printf "%s\n" "$FEATURES" | grep -qx "$1"; }

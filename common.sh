@@ -97,6 +97,28 @@ root_family() {
     fi
 }
 
+# APatch 的 SUSFS 依赖内核侧支持，失败原因与 KSU / Magisk 不同：描述里直接写清楚
+susfs_hint() {
+    case "$(root_family)" in
+        APatch)
+            case "$1" in
+                missing) printf '%s' "APatch: 未找到 SUSFS 接口（内核需集成 SUSFS 或允许加载 SUSFS LKM）" ;;
+                comm) printf '%s' "APatch: SUSFS 接口无响应（内核 SUSFS 版本可能不匹配）" ;;
+                insmod) printf '%s' "APatch: LKM 加载失败（内核可能禁止 insmod 或符号不匹配）" ;;
+                *) printf '%s' "APatch: SUSFS 不可用" ;;
+            esac
+            ;;
+        *)
+            case "$1" in
+                missing) printf '%s' "ksu_susfs 缺失" ;;
+                comm) printf '%s' "ksu_susfs 无法通信" ;;
+                insmod) printf '%s' "LKM 加载失败，请查看日志" ;;
+                *) printf '%s' "SUSFS 不可用" ;;
+            esac
+            ;;
+    esac
+}
+
 # ---- 配置读取（config.ini，纯数据，不 source）----
 # 配置不再是 shell 脚本：只按 KEY=VALUE 解析，值永远不会被执行。
 CFG_KEYS="auto_load hide_sus_mnts avc_spoof replace_rules hide_ksu_loop hide_revanced hide_custom_rom hide_compat_matrix hide_gapps hide_dex2oat hide_scene auto_try_umount skip_legit_mounts skip_detection_paths fake_cmdline fake_cmdline_value force_kmi manager_name spoof_uname spoof_uname_release spoof_uname_version hide_vendor_sepolicy vold_isolation force_bl_unlocked"
