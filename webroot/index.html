@@ -100,7 +100,7 @@
 
       <div class="card note">
         <strong>工作方式</strong>
-        <p>开机时 <code>post-fs-data</code> 先取真实内核版本（优先 <code>/proc/version</code>，回退 <code>state/real_uname.txt</code>），从模块自带的 8 个 KMI 中选出匹配的 LKM 并加载；<code>boot-completed</code> 再设置 sdcard 根路径并应用规则。热重启不会卸载 LKM，冷重启后会自动重新加载。</p>
+        <p>开机时 post-fs-data 先取真实内核版本（优先 /proc/version，回退 state/real_uname.txt），从模块自带的 8 个 KMI 中选出匹配的 LKM 并加载；随后按管理器应用规则：KernelSU 系列在 boot-completed 阶段，Magisk 在 service（late_start）阶段设置 sdcard 根路径并应用规则。热重启不会卸载 LKM，冷重启后会自动重新加载。</p>
       </div>
     </section>
 
@@ -290,10 +290,12 @@
         <p>把 LKM 自动匹配、加载、规则配置和 WebUI 收进同一个模块。</p>
         <ul>
           <li>支持 8 种 GKI KMI：android12-5.10 到 android17-6.18</li>
-          <li>兼容 KernelSU / SukiSU / ReSukiSU / KernelSU Next / Magisk</li>
+          <li>兼容管理器：KernelSU 官方版、SukiSU、ReSukiSU、KernelSU Next，以及 Magisk</li>
+          <li>自动识别当前管理器，按它的生命周期执行：KernelSU 系列走 post-fs-data → boot-completed，Magisk 走 post-fs-data → service（late_start）</li>
           <li>自动寻找当前管理器的 ksu_susfs，失败时回退模块备份</li>
           <li>LKM：inforcqb/susfs4ksu-lkm <span id="aboutLkmVersion">v2.3.0-r18.8</span></li>
           <li>Loader：susfs_insmod（自动解析符号与 vermagic）</li>
+          <li>WebUI 支持中文 / English</li>
         </ul>
         <p class="warn">不要执行 <code>rmmod susfs_guard_lkm</code>。已知存在 UAF/panic 风险。热重启不会卸载 LKM；冷重启后由本模块重新加载。</p>
         <p class="hint">自动加载带 KMI 校验和失败日志。内核更新后如果 KMI 不在支持列表，模块会拒绝加载并给出提示，不会强行注入。</p>

@@ -28,6 +28,15 @@
 
 **说明**：我没有 Magisk 真机，Magisk 这条路径属于新增实现、未在真机实测（KernelSU / SukiSU 路径的回归测试通过）。安装与开机应用按 Magisk 生命周期实现（`post-fs-data` + `service`），遇到问题请反馈日志。
 
+## 关于页重写
+
+原来的「关于」只写了 KernelSU 系列，1.2.2 起同时支持 Magisk，所以整页重写：
+
+- 管理器清单：KernelSU 官方版、SukiSU、ReSukiSU、KernelSU Next、Magisk
+- 开机链路按管理器区分：KernelSU 系列 `post-fs-data` → `boot-completed`；Magisk `post-fs-data` → `service`（late_start）
+- 状态页「工作方式」同步更新，不再写成只有 `boot-completed`
+- 注明 WebUI 支持中文 / English
+
 ## 修的问题
 
 - 关于页里 LKM 版本号写死成 `v2.3.0-r18.6`，实际从 1.2.1 起就是 `v2.3.0-r18.8`，已改。
@@ -38,6 +47,6 @@
 管理器里覆盖安装即可，配置与规则文件全部保留。KernelSU 系安装到 `modules_update`，**需要重启一次生效**；重启后 LKM 会重新加载，规则重新应用。
 
 - 文件：`susfs_allinone-1.2.2.zip`
-- 大小：11053928 字节
-- SHA256：`21d11bef82c313db6b78a062e6710e7e453007c8ced4ebcaddb744362cfb3e49`
+- 大小：11054427 字节
+- SHA256：`82f7696b5d9e59e1d06d2d6aa3ddc3579250726168871e979ce8c2345958ad0c`
 - 离线测试：18 项全绿
