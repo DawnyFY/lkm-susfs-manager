@@ -91,9 +91,10 @@ status() {
     _AF=${_AF:-0}
     case "$_AF" in ''|*[!0-9]*) _AF=0 ;; esac
     printf 'apply_fails=%s\n' "$_AF"
-    _CO=$(cat "$STATE/coexist_mode" 2>/dev/null)
-    printf 'kernelpatch=%s\n' "$([ -n "$_CO" ] && echo 1 || echo 0)"
-    printf 'coexist_mode=%s\n' "${_CO:-none}"
+    if kernelpatch_present; then _KP=1; else _KP=0; fi
+    printf 'kernelpatch=%s\n' "$_KP"
+    printf 'coexist_mode=%s\n' "$([ "$_KP" = "1" ] && echo apatch || echo none)"
+    printf 'allow_lkm=%s\n' "$([ -f "$CONFIG/allow_lkm_on_kernelpatch" ] && echo 1 || echo 0)"
     printf 'lkm_size=%s\n' "$LSIZE"
     if autoload_paused; then printf 'autoload=paused\n'; else printf 'autoload=ok\n'; fi
     if cap_ok sus_mount; then printf 'sus_mount=ok\n'; else printf 'sus_mount=unsupported\n'; fi
@@ -312,16 +313,26 @@ case "$1" in
         _cf_gate || { echo "文件与发布包不一致，拒绝执行"; exit 1; }
         mkdir -p "$CONFIG" 2>/dev/null
         date '+%F %T' > "$CONFIG/allow_lkm_on_kernelpatch" 2>/dev/null
-        echo "allowed"
+        if [ -f "$CONFIG/allow_lkm_on_kernelpatch" ]; then
+            echo "allowed"
+        else
+            echo "failed"
+            exit 1
+        fi
         ;;
     disallow_lkm)
+        _cf_gate || { echo "文件与发布包不一致，拒绝执行"; exit 1; }
         rm -f "$CONFIG/allow_lkm_on_kernelpatch" 2>/dev/null
         echo "disallowed"
         ;;
+    crash_ack)
+        if pstore_crash_ack; then echo "acked"; else echo "failed"; exit 1; fi
+        ;;
     crash_report)
         if pstore_crash_suspect; then echo "crash_suspect=yes"; else echo "crash_suspect=no"; fi
-        _PCR="${PSTORE_DIR:-/sys/fs/pstore}"
+        _PCR=$(_pstore_dir)
         ls -l "$_PCR" 2>/dev/null | head -6
+        [ -f "$STATE/crash_ack" ] && echo "acked=1"
         ;;
     log)
         echo "===== load.log ====="

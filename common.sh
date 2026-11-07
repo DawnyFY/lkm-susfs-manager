@@ -137,9 +137,17 @@ root_family() {
 # KernelPatch/APatch 内核存在时，kpimg 已经接管 SELinux 审计/策略面
 # （avc_denied、slow_avc_audit、selinux_hide 等）。本模块与之语义重叠的功能
 # 在共存时关闭，避免两边互相抵消。
+#
+# 判定只用强特征：残留的 /data/adb/ap 目录在换过管理器的设备上很常见，不能单独作为依据。
 kernelpatch_present() {
-    [ -d "${KERNELPATCH_MARKER_DIR:-/data/adb/ap}" ] && return 0
-    [ "$(root_family)" = "APatch" ] && return 0
+    _kp_dir=/data/adb/ap
+    [ "${SUSFS_TEST_HOOK:-0}" = "1" ] && _kp_dir="${KERNELPATCH_MARKER_DIR:-/data/adb/ap}"
+    if command -v pidof >/dev/null 2>&1; then
+        pidof apd >/dev/null 2>&1 && return 0
+    fi
+    [ -x /data/adb/apd ] && return 0
+    [ -x "$_kp_dir/bin/apd" ] && return 0
+    [ -f "$_kp_dir/package_config" ] && return 0
     return 1
 }
 
@@ -154,17 +162,80 @@ apatch_lkm_allowed() {
     return 1
 }
 
-# 上次启动是否疑似因 SUSFS 崩溃：pstore/ramoops 里同时出现 panic/oops 与 susfs 字样
+# pstore/ramoops 目录（测试钩子只在 SUSFS_TEST_HOOK=1 时生效）
+_pstore_dir() {
+    if [ "${SUSFS_TEST_HOOK:-0}" = "1" ]; then
+        printf '%s' "${PSTORE_DIR:-/sys/fs/pstore}"
+    else
+        printf '%s' /sys/fs/pstore
+    fi
+}
+
+# pstore 内容指纹：文件名 + 大小 + mtime；用于"已确认"后避免重复告警
+_pstore_fingerprint() {
+    _pf_dir=$(_pstore_dir)
+    [ -d "$_pf_dir" ] || return 1
+    {
+        for _pf in "$_pf_dir"/*; do
+            [ -f "$_pf" ] || continue
+            printf '%s %s %s
+' "$_pf" "$(stat -c %s "$_pf" 2>/dev/null)" "$(stat -c %Y "$_pf" 2>/dev/null)"
+        done
+    } | sha256sum 2>/dev/null | cut -d' ' -f1
+}
+
+# 用户已确认当前 pstore 记录（resume_autoload / ctl crash_ack 调用）
+pstore_crash_ack() {
+    _pa_fp=$(_pstore_fingerprint 2>/dev/null)
+    [ -n "$_pa_fp" ] || return 1
+    mkdir -p "$STATE" 2>/dev/null
+    printf '%s
+' "$_pa_fp" > "$STATE/crash_ack" 2>/dev/null
+}
+
+# 上次启动是否疑似因本模块崩溃：同一 pstore 文件里同时有 panic/oops 与模块栈字样
 pstore_crash_suspect() {
-    _pc_dir="${PSTORE_DIR:-/sys/fs/pstore}"
+    _pc_dir=$(_pstore_dir)
     [ -d "$_pc_dir" ] || return 1
-    for _pc_f in "$_pc_dir"/*ramoops* "$_pc_dir"/*console*; do
+    _pc_fp=$(_pstore_fingerprint 2>/dev/null)
+    if [ -n "$_pc_fp" ] && [ "$(cat "$STATE/crash_ack" 2>/dev/null)" = "$_pc_fp" ]; then
+        return 1
+    fi
+    for _pc_f in "$_pc_dir"/*; do
         [ -f "$_pc_f" ] || continue
-        if grep -qi "susfs" "$_pc_f" 2>/dev/null && grep -qE "Kernel panic|Oops|Unable to handle kernel|BUG:|Internal error" "$_pc_f" 2>/dev/null; then
-            return 0
-        fi
+        grep -qiE "Kernel panic|Oops|Unable to handle kernel|BUG:|Internal error" "$_pc_f" 2>/dev/null || continue
+        grep -q "susfs_guard_lkm" "$_pc_f" 2>/dev/null && return 0
+        grep -q "susfs_allinone" "$_pc_f" 2>/dev/null && return 0
     done
     return 1
+}
+
+# insmod 前的内核限制预检：返回 0=可继续；否则把原因打到 stdout
+kernel_load_preflight() {
+    _klp_msd_file=/proc/sys/kernel/modules_disabled
+    _klp_gz=/proc/config.gz
+    if [ "${SUSFS_TEST_HOOK:-0}" = "1" ]; then
+        [ -n "${MODULES_DISABLED_FILE:-}" ] && _klp_msd_file="$MODULES_DISABLED_FILE"
+        [ -n "${CONFIG_GZ_FILE:-}" ] && _klp_gz="$CONFIG_GZ_FILE"
+    fi
+    _klp_msd=$(cat "$_klp_msd_file" 2>/dev/null)
+    if [ "$_klp_msd" = "1" ]; then
+        printf '%s' "内核已禁止模块加载（modules_disabled=1），请使用内置 SUSFS 的内核"
+        return 1
+    fi
+    if [ -r "$_klp_gz" ] && command -v zcat >/dev/null 2>&1; then
+        _klp_cfg=$(zcat "$_klp_gz" 2>/dev/null)
+        if [ -n "$_klp_cfg" ]; then
+            case "$_klp_cfg" in
+                *CONFIG_MODULES=y*) : ;;
+                *) printf '%s' "内核未编译 CONFIG_MODULES，无法加载 SUSFS LKM"; return 1 ;;
+            esac
+            case "$_klp_cfg" in
+                *CONFIG_MODULE_SIG_FORCE=y*) printf '%s' "内核强制模块签名（MODULE_SIG_FORCE），SUSFS LKM 会加载失败"; return 1 ;;
+            esac
+        fi
+    fi
+    return 0
 }
 
 # APatch 的 SUSFS 依赖内核侧支持，失败原因与 KSU / Magisk 不同：描述里直接写清楚
@@ -585,6 +656,10 @@ clear_boot_guard() {
 
 # 自动加载前的检查：返回 0 表示可以继续，1 表示应暂停自动加载
 boot_guard_should_pause() {
+    if [ -f "$STATE/autoload_paused" ]; then
+        echo "[!] 自动加载处于暂停状态（ctl.sh resume_autoload 恢复）"
+        return 1
+    fi
     [ -f "$(boot_guard_path)" ] || return 0
     mkdir -p "$STATE" 2>/dev/null
     date '+%F %T' > "$STATE/autoload_paused" 2>/dev/null
@@ -599,6 +674,7 @@ pause_autoload() {
 }
 
 resume_autoload() {
+    pstore_crash_ack 2>/dev/null || true
     clear_boot_guard
     rm -f "$STATE/fail_count" 2>/dev/null
     echo "[i] 已恢复自动加载（守卫标记已清除）"
@@ -1006,7 +1082,7 @@ kernel_release_spoofed() {
 backup_config() {
     [ -d "$CONFIG" ] || return 0
     mkdir -p "$STATE/config_backup" 2>/dev/null || return 0
-    for _f in config.ini sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt; do
+    for _f in config.ini sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt allow_lkm_on_kernelpatch; do
         [ -f "$CONFIG/$_f" ] && cp -f "$CONFIG/$_f" "$STATE/config_backup/$_f" 2>/dev/null
     done
     # 带时间戳的历史副本，保留最近 3 份（防止当前配置被默认值覆盖后备份也跟着丢）
@@ -1029,7 +1105,7 @@ restore_config_if_missing() {
     mkdir -p "$CONFIG" 2>/dev/null || return 0
     # 只补缺失的文件：已有的规则文件可能是更新的，不能被旧备份覆盖
     _restored=0
-    for _f in config.ini config.ini.default sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt; do
+    for _f in config.ini config.ini.default sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt allow_lkm_on_kernelpatch; do
         [ -f "$CONFIG/$_f" ] && continue
         [ -f "$STATE/config_backup/$_f" ] || continue
         cp -f "$STATE/config_backup/$_f" "$CONFIG/$_f" 2>/dev/null && _restored=$((_restored + 1))

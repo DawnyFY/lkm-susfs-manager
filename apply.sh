@@ -75,12 +75,22 @@ skip_legit_mounts=${skip_legit_mounts:-1}
 hide_vendor_sepolicy=${hide_vendor_sepolicy:-0}
 vold_isolation=${vold_isolation:-0}
 
+# 完整性校验先做：后面的早退不能绕过它
+_cf_run 2>&1 || { echo "[!] 文件被修改，拒绝应用规则"; exit 1; }
+
+# 自动路径：已处于暂停状态时直接跳过（保留守卫/暂停标记，避免被调用方误清）
+if [ "${AUTOLOAD:-0}" = "1" ] && [ -f "$STATE/autoload_paused" ]; then
+    echo "[!] 自动加载已暂停，跳过本次应用（ctl.sh resume_autoload 恢复）"
+    set_description "⚠️ 自动加载已暂停（ctl.sh resume_autoload 恢复）"
+    exit 3
+fi
+
 # APatch/KernelPatch 共存安全模式：
 # kpimg 已 hook SELinux 审计面（avc_denied/slow_avc_audit/selinux_hide），
 # avc_spoof 与它语义重叠，检测到 KernelPatch 时强制关闭。
 if kernelpatch_present; then
     echo apatch > "$STATE/coexist_mode" 2>/dev/null
-    if [ "$avc_spoof" = "1" ]; then
+    if [ "$avc_spoof" = "1" ] && coexist_disable_avc_spoof; then
         echo "[!] 检测到 APatch/KernelPatch 内核：avc_spoof 与 kpimg 的 SELinux hook 重叠，本次强制关闭"
         avc_spoof=0
     fi
@@ -88,26 +98,33 @@ else
     rm -f "$STATE/coexist_mode" 2>/dev/null
 fi
 
-# 崩溃防护：上次启动 ramoops 里出现 SUSFS 相关 panic/oops，自动暂停本次开机应用
+# 崩溃防护：上次启动 pstore 里出现本模块相关 panic/oops → 自动暂停本次开机应用
 if pstore_crash_suspect; then
     if [ "${AUTOLOAD:-0}" = "1" ]; then
         pause_autoload
-        echo "[!] 检测到上次启动疑似 SUSFS 崩溃（ramoops 同时含 panic/oops 与 susfs），已暂停自动加载"
-        echo "[i] 确认内核稳定后执行 ctl.sh resume_autoload 恢复"
+        echo "[!] 检测到上次启动疑似本模块崩溃（pstore 含 panic/oops 与 susfs 栈），已暂停自动加载"
+        echo "[i] 确认内核稳定后执行 ctl.sh resume_autoload（会记下已确认记录）"
         set_description "❌ 上次启动疑似 SUSFS 崩溃，已暂停自动加载（ctl.sh resume_autoload）"
-        exit 0
+        # 返回 3(跳过)：调用方不能把"没执行"当成成功而清掉守卫/暂停标记
+        exit 3
     else
-        echo "[!] 警告：ramoops 显示上次疑似 SUSFS 崩溃，仍按手动请求继续"
+        echo "[!] 警告：pstore 显示上次疑似本模块崩溃，仍按手动请求继续"
     fi
 fi
 
-# APatch/KernelPatch 共存防护：默认不自动外挂 SUSFS LKM
-if [ "${AUTOLOAD:-0}" = "1" ] && ! susfs_kernel_ready && kernelpatch_present && ! apatch_lkm_allowed; then
-    echo "[!] APatch/KernelPatch 内核：默认不自动加载 SUSFS LKM（与 kpimg 共存有崩溃风险）"
-    echo "[i] 内核已内置 SUSFS 则无需外挂；确实要试外挂，先执行 ctl.sh allow_lkm"
-    set_description "⚠️ APatch：默认不加载 SUSFS LKM（共存风险）；内置 SUSFS 或 ctl.sh allow_lkm"
-    exit 0
+# APatch/KernelPatch 共存防护：默认不外挂 SUSFS LKM（自动跳过、手动拒绝，需显式放行）
+if ! susfs_kernel_ready && kernelpatch_present && ! apatch_lkm_allowed; then
+    if [ "${AUTOLOAD:-0}" = "1" ]; then
+        echo "[!] APatch/KernelPatch 内核：默认不自动加载 SUSFS LKM（与 kpimg 共存有崩溃风险）"
+        echo "[i] 内核已内置 SUSFS 则无需外挂；确实要试外挂，先执行 ctl.sh allow_lkm"
+        set_description "⚠️ APatch：默认不加载 SUSFS LKM（共存风险）；内置 SUSFS 或 ctl.sh allow_lkm"
+        exit 0
+    fi
+    echo "[!] APatch/KernelPatch 内核：未放行外挂 LKM，手动操作已拒绝（先执行 ctl.sh allow_lkm）"
+    set_description "⚠️ APatch：手动外挂需先 ctl.sh allow_lkm"
+    exit 1
 fi
+
 # 只允许 KMI 名称字符，防止路径穿越
 case "$force_kmi" in *[!A-Za-z0-9._-]*) force_kmi="" ;; esac
 spoof_uname=${spoof_uname:-0}
@@ -120,7 +137,6 @@ for _j in /data/local/tmp/.susfs_probe_dir /data/local/tmp/.susfs_cap_probe /dat
     [ -e "$_j" ] && echo "[i] 发现旧版遗留目录，可手动删除：$_j"
 done
 
-_cf_run 2>&1 || { echo "[!] 文件被修改，拒绝应用规则"; exit 1; }
 _rule_fails=0
 
 # 1. 确保内核侧 SUSFS：LKM 已加载，或内核已内置（内置时无需也无法再加载）

@@ -61,7 +61,7 @@ fi
 INSTALLED=/data/adb/modules/susfs_allinone
 COPIED_CONFIG=0
 if [ -d "$INSTALLED/config" ]; then
-    for _f in config.ini sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt; do
+    for _f in config.ini sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt allow_lkm_on_kernelpatch; do
         if [ -f "$INSTALLED/config/$_f" ]; then
             cp -f "$INSTALLED/config/$_f" "$MODPATH/config/$_f" 2>/dev/null && COPIED_CONFIG=1 && ui_print "- 保留配置: $_f"
         fi
