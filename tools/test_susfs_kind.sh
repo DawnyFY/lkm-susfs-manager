@@ -55,6 +55,12 @@ kind_nonode() {
     susfs_kernel_kind )
 }
 chk "工具输出但无 /proc 节点 → 不判 builtin" "$(kind_nonode)" "none"
+# 工具 exit 0 但版本/特性输出为空 → 不判 builtin
+EMPTYTOOL="$TMP/empty_tool"; printf '#!/bin/sh\nexit 0\n' > "$EMPTYTOOL"; chmod +x "$EMPTYTOOL"
+chk "工具 exit 0 但无有效输出 → none" "$(kind 0 "$EMPTYTOOL" "")" "none"
+# 工具能输出 variant、但 version 查询失败 → 不判 builtin
+HALFTOOL="$TMP/half_tool"; printf '#!/bin/sh\n[ "$1" = show ] && [ "$2" = variant ] && { echo GKI; exit 0; }\nexit 1\n' > "$HALFTOOL"; chmod +x "$HALFTOOL"
+chk "variant 有但 version 失败 → none" "$(kind 0 "$HALFTOOL" "")" "none"
 chk "无标记、无工具 → none" "$(kind 0 "" "")" "none"
 chk "工具握手失败 → none" "$(kind 0 "$BAD" "")" "none"
 chk "LKM 标记优先于握手" "$(kind 1 "$GOOD" "")" "lkm"
