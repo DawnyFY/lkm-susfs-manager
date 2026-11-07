@@ -665,8 +665,10 @@ printf '%s\n' "${_rule_fails:-0}" > "$STATE/apply_fails" 2>/dev/null
 if [ "${_rule_fails:-0}" -gt 0 ] 2>/dev/null; then
     echo "[!] 本次有 $_rule_fails 条规则下发失败，详见 apply.log"
     set_description "⚠️ 运行中 | $RULES 条规则 | $KMI | $_rule_fails 条失败（见 apply.log）"
-else
-    set_description "✅ 运行中 | $RULES 条规则 | $KMI | ${VERSION:-unknown}"
+    echo "=== apply done with warnings ==="
+    # 5 = 已执行但部分规则失败：调用方可视为"本 boot 已完成"，不能当全部成功
+    exit 5
 fi
+set_description "✅ 运行中 | $RULES 条规则 | $KMI | ${VERSION:-unknown}"
 echo "=== apply ok ==="
 exit 0

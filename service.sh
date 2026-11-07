@@ -22,8 +22,10 @@ cfg_load
 # 少了这一步，Magisk 下守卫永远不会清除，下一次开机会误判为“上次没启动成功”。
 AUTOLOAD=1 sh "$MODDIR/apply.sh"
 rc=$?
-if [ "$rc" = "0" ]; then
-    clear_boot_guard
-fi
+case "$rc" in
+    0) clear_boot_guard ;;
+    5) echo "[!] 规则部分失败（rc=5），本 boot 已完成，详见 apply.log"
+       clear_boot_guard ;;
+esac
 
 exit "$rc"

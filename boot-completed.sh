@@ -21,8 +21,10 @@ STATE=$MODDIR/state
 # 开机早期尚不存在的应用数据目录不会重试，需要时在 WebUI 手动「加载并应用」补一次。
 AUTOLOAD=1 sh "$MODDIR/apply.sh"
 rc=$?
-if [ "$rc" = "0" ]; then
-    clear_boot_guard
-fi
+case "$rc" in
+    0) clear_boot_guard ;;
+    5) echo "[!] 规则部分失败（rc=5），本 boot 已完成，详见 apply.log"
+       clear_boot_guard ;;
+esac
 
 exit "$rc"

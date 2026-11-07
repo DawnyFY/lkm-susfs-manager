@@ -18,7 +18,7 @@ rc=$?
 BIN=$(select_susfs_bin)
 # 只有 apply 真正成功才算完成：apply 可能因锁忙/文件被改/loading 残留而跳过，
 # 这种情况下 LKM 虽然就绪，规则并没有下发，不能报成功、更不能清掉启动守卫。
-if [ "$rc" = "0" ] && susfs_kernel_ready; then
+if { [ "$rc" = "0" ] || [ "$rc" = "5" ]; } && susfs_kernel_ready; then
     echo "[OK] SUSFS 已就绪（$(susfs_kernel_kind)）"
     [ -n "$BIN" ] && "$BIN" show version
     printf "[i] 用户 sus_path 规则: "

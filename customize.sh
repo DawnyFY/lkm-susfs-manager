@@ -158,6 +158,9 @@ if [ "$KMI" = "unknown" ]; then
 else
     ui_print "- 已为 $KMI 安装 SUSFS LKM"
 fi
+if [ -e /proc/susfs_path ] || [ -e /proc/susfs_hide_mounts ]; then
+    ui_print "- 检测到内核已提供 SUSFS 接口（/proc/susfs_*）：将只管理规则，不依赖外挂 LKM"
+fi
 ui_print "- 自带 WebUI：状态 / 配置 / 日志"
 ui_print "- 重启后自动加载；也可在模块 Action 中手动加载"
 if [ "$COPIED_CONFIG" = "1" ]; then

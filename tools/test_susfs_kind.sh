@@ -6,8 +6,10 @@ TMP=$(mktemp -d)
 fail=0
 chk() { if [ "$2" = "$3" ]; then echo "PASS  $1"; else echo "FAIL  $1 expect=[$3] got=[$2]"; fail=1; fi; }
 MOD="$TMP/mod"; mkdir -p "$MOD"
+PROC="$TMP/proc"; mkdir -p "$PROC"
+: > "$PROC/susfs_path"
 GOOD="$TMP/ksu_susfs_good"; BAD="$TMP/ksu_susfs_bad"
-printf '#!/bin/sh\n[ "$1" = show ] && [ "$2" = version ] && { echo "v2.3.0"; exit 0; }\nexit 1\n' > "$GOOD"
+printf '#!/bin/sh\n[ "$1" = show ] && [ "$2" = version ] && { echo "v2.3.0"; exit 0; }\n[ "$1" = show ] && [ "$2" = variant ] && { echo "GKI"; exit 0; }\nexit 1\n' > "$GOOD"
 printf '#!/bin/sh\nexit 1\n' > "$BAD"
 chmod +x "$GOOD" "$BAD"
 
@@ -15,6 +17,8 @@ kind() {
   # 注意：替身函数里的 $1/$2 是替身自己的参数，必须先存到全局变量
   ( _SUSFS_KIND=""
     MODDIR="$MOD"
+    SUSFS_TEST_HOOK=1
+    SUSFS_PROC_DIR="$PROC"
     _k_lkm="$1"; _k_active="$2"; _k_backup="$3"
     . "$REPO/common.sh"
     if [ "$_k_lkm" = "1" ]; then lkm_present() { return 0; }; else lkm_present() { return 1; }; fi
@@ -25,6 +29,8 @@ kind() {
 ready() {
   ( _SUSFS_KIND=""
     MODDIR="$MOD"
+    SUSFS_TEST_HOOK=1
+    SUSFS_PROC_DIR="$PROC"
     _r_active="$1"
     . "$REPO/common.sh"
     lkm_present() { return 1; }
@@ -35,6 +41,20 @@ ready() {
 
 chk "LKM 标记存在 → lkm" "$(kind 1 "" "")" "lkm"
 chk "无标记但工具握手成功 → builtin" "$(kind 0 "$GOOD" "")" "builtin"
+# 无 /proc 节点时不能仅凭工具输出判定 builtin
+PROC2="$TMP/proc2"; mkdir -p "$PROC2"
+kind_nonode() {
+  ( _SUSFS_KIND=""
+    MODDIR="$MOD"
+        SUSFS_TEST_HOOK=1
+    SUSFS_PROC_DIR="$PROC2"
+    . "$REPO/common.sh"
+    lkm_present() { return 1; }
+    find_susfs_bin() { printf "%s" "$GOOD"; }
+    find_susfs_backup() { return 0; }
+    susfs_kernel_kind )
+}
+chk "工具输出但无 /proc 节点 → 不判 builtin" "$(kind_nonode)" "none"
 chk "无标记、无工具 → none" "$(kind 0 "" "")" "none"
 chk "工具握手失败 → none" "$(kind 0 "$BAD" "")" "none"
 chk "LKM 标记优先于握手" "$(kind 1 "$GOOD" "")" "lkm"

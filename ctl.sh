@@ -93,6 +93,9 @@ status() {
     printf 'apply_fails=%s\n' "$_AF"
     if kernelpatch_present; then _KP=1; else _KP=0; fi
     printf 'kernelpatch=%s\n' "$_KP"
+    printf 'apatch_userland=%s\n' "$_KP"
+    # kpimg 在内核里的存在无法从用户态可靠确认；只能报告"未知"，避免误称已验证
+    printf 'kernelpatch_kernel=unknown\n'
     printf 'coexist_mode=%s\n' "$([ "$_KP" = "1" ] && echo apatch || echo none)"
     printf 'allow_lkm=%s\n' "$([ -f "$CONFIG/allow_lkm_on_kernelpatch" ] && echo 1 || echo 0)"
     printf 'lkm_size=%s\n' "$LSIZE"
@@ -298,15 +301,17 @@ case "$1" in
         sh "$MODDIR/apply.sh"
         _arc=$?
         # 与 action.sh 一致：只有 apply 真正成功才清启动守卫，避免误清后不再提示
-        if [ "$_lrc" = "0" ] && [ "$_arc" = "0" ] && susfs_kernel_ready; then
-            clear_boot_guard
-        fi
+        case "$_arc" in
+            0|5) [ "$_lrc" = "0" ] && susfs_kernel_ready && clear_boot_guard ;;
+        esac
         exit "$_arc"
         ;;
     apply)
         sh "$MODDIR/apply.sh"
         _arc=$?
-        [ "$_arc" = "0" ] && susfs_kernel_ready && clear_boot_guard
+        case "$_arc" in
+            0|5) susfs_kernel_ready && clear_boot_guard ;;
+        esac
         exit "$_arc"
         ;;
     allow_lkm)

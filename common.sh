@@ -25,12 +25,22 @@ _susfs_detect() {
         _SUSFS_KIND=lkm
         return 0
     fi
+    _sd_proc_dir=/proc
+    [ "${SUSFS_TEST_HOOK:-0}" = "1" ] && [ -n "${SUSFS_PROC_DIR:-}" ] && _sd_proc_dir="$SUSFS_PROC_DIR"
     for _sd_b in "$(find_susfs_bin 2>/dev/null)" "$(find_susfs_backup 2>/dev/null)"; do
         [ -n "$_sd_b" ] && [ -x "$_sd_b" ] || continue
-        if "$_sd_b" show version >/dev/null 2>&1; then
-            _SUSFS_KIND=builtin
-            return 0
-        fi
+        # 仅"show version 成功"不足以证明是可用后端：要求有版本/特性输出，且内核确实暴露了接口节点
+        "$_sd_b" show version >/dev/null 2>&1 || continue
+        _sd_v=$("$_sd_b" show variant 2>/dev/null)
+        _sd_f=$("$_sd_b" show enabled_features 2>/dev/null)
+        [ -n "$_sd_v" ] || [ -n "$_sd_f" ] || continue
+        _sd_node=0
+        for _sd_p in "$_sd_proc_dir/susfs_path" "$_sd_proc_dir/susfs_hide_mounts" "$_sd_proc_dir/susfs_map" "$_sd_proc_dir/susfs_avc_spoof"; do
+            [ -e "$_sd_p" ] && { _sd_node=1; break; }
+        done
+        [ "$_sd_node" = "1" ] || continue
+        _SUSFS_KIND=builtin
+        return 0
     done
     _SUSFS_KIND=none
 }

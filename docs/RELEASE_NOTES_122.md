@@ -52,6 +52,13 @@
 - 过期锁接管补写 boot_id；`susfs_path_del` 改为回读确认；连续失败 3 次自动暂停自动加载
 - 安装时 KMI 未匹配会明确提示「未安装 LKM」
 
+## 外部 review 适配（第三轮：APatch 兼容性讨论）
+
+- **内置后端判定收紧**：不再只看 ksu_susfs show version，改为 握手成功 + 版本/特性输出非空 + 至少一个 /proc/susfs_* 节点；避免把不匹配的工具误判成内置 SUSFS
+- **部分成功可区分**：规则部分失败时 apply 返回 rc=5，boot-completed/service/ctl/action 将 0/5 都视为本 boot 已完成并提示失败条数；不再用单一 exit 0 表达验收
+- **状态语义分离**：status 增加 apatch_userland 与 kernelpatch_kernel=unknown，明确「用户态线索」不等于「内核已运行 KernelPatch」
+- **安装提示**：检测到内核已提供 /proc/susfs_* 时提示「只管理规则，不依赖外挂 LKM」
+- **Route A 澄清（文档）**：此前失败的是 kernelpatch.ko（框架 LKM），不是 susfs_guard_lkm；本机 susfs_guard_lkm 已在同厂商内核上成功加载，kpimg 补丁不触碰 ksymtab/vermagic → LKM 路线未被证伪，未知点在运行时共存
 ## 第二轮审计修复（blocker + major）
 
 - **blocker**：pstore 崩溃门禁原先 `exit 0` + `pause_autoload`，调用方会当成功清掉守卫/暂停标记，导致「崩一次、空跑一次」循环。改为 `exit 3`（跳过），并新增 `autoload_paused` 早退同样返回 3
@@ -133,8 +140,8 @@ SUSFS 不只有 LKM 一种形态：按上游补丁的 `CONFIG_KSU_SUSFS_*` 特�
 管理器里覆盖安装即可，配置与规则文件全部保留。KernelSU 系安装到 `modules_update`，**需要重启一次生效**；重启后 LKM 会重新加载，规则重新应用。
 
 - 文件：`susfs_allinone-1.2.2.zip`
-- 大小：11061861 字节
-- SHA256：`36ad2d9f0cd98fa97ff8bcbe3a68a28845a03420bda43e9504dd2f1576abd1f3`
+- 大小：11062449 字节
+- SHA256：`07901201402b2af6fd1d352cab93da8801ce4296bf283f309fe96c7d3c19114b`
 - 离线测试：18 项全绿
 
 ## 已知问题（外部反馈，未复现）
