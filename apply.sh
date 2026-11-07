@@ -26,8 +26,15 @@ set_description() {
     ' "$prop" > "$_tmp" 2>/dev/null && mv -f "$_tmp" "$prop" 2>/dev/null
 }
 
-[ -f "$MODDIR/disable" ] && { echo "模块已禁用"; exit 0; }
-[ -f "$MODDIR/remove" ] && { echo "模块待移除"; exit 0; }
+# apply_result: success / partial / skipped / failed（仅表示脚本执行结果，不等同于功能生效）
+_set_apply_result() {
+    mkdir -p "$STATE" 2>/dev/null
+    printf '%s\n' "$1" > "$STATE/apply_result" 2>/dev/null
+    printf '%s\n' "$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)" > "$STATE/apply_result_boot" 2>/dev/null
+}
+
+[ -f "$MODDIR/disable" ] && { echo "模块已禁用"; _set_apply_result skipped; exit 0; }
+[ -f "$MODDIR/remove" ] && { echo "模块待移除"; _set_apply_result skipped; exit 0; }
 if [ -f "$STATE/loading" ]; then
     # 残留超过 10 分钟视为上次异常退出，自动清理后继续，避免永久跳过
     if file_older_than "$STATE/loading" 600; then
@@ -35,6 +42,7 @@ if [ -f "$STATE/loading" ]; then
         echo "[!] 清理过期的 state/loading 残留（>10 分钟）"
     else
         echo "[!] 上次 LKM 加载未完成（state/loading 残留），跳过规则应用（稍后会重试）"
+        _set_apply_result skipped
         # 返回 3(跳过)：调用方不能把"没执行"当成成功而清掉启动守卫
         exit 3
     fi
@@ -43,6 +51,7 @@ fi
 # 互斥：开机脚本与 WebUI 可能同时触发 apply，重复执行会让 our_paths 清单错乱
 if ! lock_acquire "$STATE/apply.lock" 900; then
     echo "[!] 另一个 apply 正在运行，跳过本次"
+    _set_apply_result skipped
     # 返回非 0：调用方（boot-completed）不能把"没执行"当成成功
     exit 1
 fi
@@ -76,12 +85,13 @@ hide_vendor_sepolicy=${hide_vendor_sepolicy:-0}
 vold_isolation=${vold_isolation:-0}
 
 # 完整性校验先做：后面的早退不能绕过它
-_cf_run 2>&1 || { echo "[!] 文件被修改，拒绝应用规则"; exit 1; }
+_cf_run 2>&1 || { echo "[!] 文件被修改，拒绝应用规则"; _set_apply_result failed; exit 1; }
 
 # 自动路径：已处于暂停状态时直接跳过（保留守卫/暂停标记，避免被调用方误清）
 if [ "${AUTOLOAD:-0}" = "1" ] && [ -f "$STATE/autoload_paused" ]; then
     echo "[!] 自动加载已暂停，跳过本次应用（ctl.sh resume_autoload 恢复）"
     set_description "⚠️ 自动加载已暂停（ctl.sh resume_autoload 恢复）"
+    _set_apply_result skipped
     exit 3
 fi
 
@@ -105,6 +115,7 @@ if pstore_crash_suspect; then
         echo "[!] 检测到上次启动疑似本模块崩溃（pstore 含 panic/oops 与 susfs 栈），已暂停自动加载"
         echo "[i] 确认内核稳定后执行 ctl.sh resume_autoload（会记下已确认记录）"
         set_description "❌ 上次启动疑似 SUSFS 崩溃，已暂停自动加载（ctl.sh resume_autoload）"
+        _set_apply_result skipped
         # 返回 3(跳过)：调用方不能把"没执行"当成成功而清掉守卫/暂停标记
         exit 3
     else
@@ -118,10 +129,12 @@ if ! susfs_kernel_ready && kernelpatch_present && ! apatch_lkm_allowed; then
         echo "[!] APatch/KernelPatch 内核：默认不自动加载 SUSFS LKM（与 kpimg 共存有崩溃风险）"
         echo "[i] 内核已内置 SUSFS 则无需外挂；确实要试外挂，先执行 ctl.sh allow_lkm"
         set_description "⚠️ APatch：默认不加载 SUSFS LKM（共存风险）；内置 SUSFS 或 ctl.sh allow_lkm"
+        _set_apply_result skipped
         exit 0
     fi
     echo "[!] APatch/KernelPatch 内核：未放行外挂 LKM，手动操作已拒绝（先执行 ctl.sh allow_lkm）"
     set_description "⚠️ APatch：手动外挂需先 ctl.sh allow_lkm"
+    _set_apply_result skipped
     exit 1
 fi
 
@@ -164,11 +177,13 @@ if ! susfs_kernel_ready; then
     if [ "$rc" = "2" ]; then
         # load.sh 已判定"未匹配内核"并写好模块描述，不要覆盖成"LKM 加载失败"
         echo "[!] 未匹配内核/KMI，规则未应用（模块描述已更新）"
+        _set_apply_result failed
         exit 1
     fi
     if [ "$rc" != "0" ]; then
         echo "[!] 加载失败，无法应用规则"
         set_description "❌ $(susfs_hint insmod)"
+        _set_apply_result failed
         exit 1
     fi
     # 子进程加载成功后，本进程的探测缓存必须失效，否则后续 select 会走旧分支
@@ -179,13 +194,13 @@ fi
 # 意味着 uid/挂载判定可能走退化路径（本 LKM 移植版是可选的），非阻塞，只记录。
 if [ "$(susfs_kernel_kind)" = "builtin" ]; then
     _KCFG_KSU=$(kernel_config_get CONFIG_KSU)
-    if [ -n "$_KCFG_KSU" ] && [ "$_KCFG_KSU" != "y" ]; then
-        echo "[!] 内核内置 SUSFS 但 CONFIG_KSU 未启用：uid/挂载判定可能退化；若规则异常请记录该内核配置"
+    if [ "$_KCFG_KSU" = "n" ]; then
+        echo "[!] 内核内置 SUSFS 但 CONFIG_KSU 明确未启用：uid/挂载判定可能退化；若规则异常请记录该内核配置"
     fi
 fi
 
 # 2. 选择可用的 ksu_susfs：优先当前管理器/分支自带，失败回退模块备份
-BIN=$(select_susfs_bin) || { echo "[!] 缺少 ksu_susfs"; set_description "❌ $(susfs_hint missing)"; exit 1; }
+BIN=$(select_susfs_bin) || { echo "[!] 缺少 ksu_susfs"; set_description "❌ $(susfs_hint missing)"; _set_apply_result failed; exit 1; }
 echo "[i] ksu_susfs: $BIN"
 VARIANT=$("$BIN" show variant 2>/dev/null)
 if [ -z "$VARIANT" ] && ! susfs_bin_runnable "$BIN"; then
@@ -197,7 +212,7 @@ if [ -z "$VARIANT" ] && [ -x "$MODDIR/bin/ksu_susfs_good" ] && [ "$BIN" != "$MOD
     BIN="$MODDIR/bin/ksu_susfs_good"
     VARIANT=$("$BIN" show variant 2>/dev/null)
 fi
-[ -n "$VARIANT" ] || { echo "[!] ksu_susfs 无法与内核通信"; set_description "❌ $(susfs_hint comm)"; exit 1; }
+[ -n "$VARIANT" ] || { echo "[!] ksu_susfs 无法与内核通信"; set_description "❌ $(susfs_hint comm)"; _set_apply_result failed; exit 1; }
 VERSION=$("$BIN" show version 2>/dev/null)
 FEATURES=$("$BIN" show enabled_features 2>/dev/null)
 has_feature() { printf "%s\n" "$FEATURES" | grep -qx "$1"; }
@@ -675,9 +690,11 @@ if [ "${_rule_fails:-0}" -gt 0 ] 2>/dev/null; then
     echo "[!] 本次有 $_rule_fails 条规则下发失败，详见 apply.log"
     set_description "⚠️ 运行中 | $RULES 条规则 | $KMI | $_rule_fails 条失败（见 apply.log）"
     echo "=== apply done with warnings ==="
+    _set_apply_result partial
     # 5 = 已执行但部分规则失败：调用方可视为"本 boot 已完成"，不能当全部成功
     exit 5
 fi
 set_description "✅ 运行中 | $RULES 条规则 | $KMI | ${VERSION:-unknown}"
+_set_apply_result success
 echo "=== apply ok ==="
 exit 0

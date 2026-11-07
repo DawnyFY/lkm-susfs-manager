@@ -26,5 +26,8 @@ case "$rc" in
     5) echo "[!] 规则部分失败（rc=5），本 boot 已完成，详见 apply.log"
        clear_boot_guard ;;
 esac
+case "$rc" in
+    0|5) printf '%s %s\n' "$(date '+%F %T' 2>/dev/null)" "$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)" > "$STATE/boot_stage_completed" 2>/dev/null ;;
+esac
 
 exit "$rc"

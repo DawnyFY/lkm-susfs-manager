@@ -52,6 +52,14 @@
 - 过期锁接管补写 boot_id；`susfs_path_del` 改为回读确认；连续失败 3 次自动暂停自动加载
 - 安装时 KMI 未匹配会明确提示「未安装 LKM」
 
+## 状态模型与配置三态（外部 review 第二轮采纳）
+
+- `kernel_config_get` 改为三态：值 / n（明确 not set）/ absent（配置可读但无此键）/ unknown（配置不可读）；不再把空串当 n
+- `apply` 写出 `state/apply_result`（not_tested / success / partial / skipped / failed），与“功能是否生效”分离
+- `boot-completed` / `service` 在 rc=0/5 时写 `state/boot_stage_completed`（boot_id + 时间）
+- `ctl.sh status` / `backend_probe` 新增：backend_kind、backend_interface_detected、root_userland、kernelpatch_runtime=unknown、abi_match=unknown、effect_verified=not_tested、crash_evidence、tool_query、apply_result、boot_stage_completed
+- “builtin”表述收紧为“检测到管理接口”，不代表功能完整可用；ABI 与功效仍需目标环境验证
+- 降级说明：pstore not_observed ≠ 无崩溃；AVB 元数据保留 ≠ 签名验证通过
 ## 后端契约探测（内置 SUSFS / KSU 依赖）
 
 - 新增 `ctl.sh backend_probe`：一次性输出 内核/ KMI / 管理器 / CONFIG_MODULES/KALLSYMS_ALL/KSU/KSU_SUSFS/各 SUSFS 特性位 / susfs_kind / /proc 节点 / 工具 version+variant+features / ksyms 计数 / pstore 状态
@@ -147,8 +155,8 @@ SUSFS 不只有 LKM 一种形态：按上游补丁的 `CONFIG_KSU_SUSFS_*` 特�
 管理器里覆盖安装即可，配置与规则文件全部保留。KernelSU 系安装到 `modules_update`，**需要重启一次生效**；重启后 LKM 会重新加载，规则重新应用。
 
 - 文件：`susfs_allinone-1.2.2.zip`
-- 大小：11063401 字节
-- SHA256：`e48683f75c5c3d57fa535b16f60f41c2fc3f0429389bebc277add0cfc309e434`
+- 大小：11064151 字节
+- SHA256：`978d3424604238d64978af8ad28d56e6d0a288509e56b35e1d123120fad2b020`
 - 离线测试：18 项全绿
 
 ## 已知问题（外部反馈，未复现）

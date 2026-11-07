@@ -100,6 +100,29 @@ status() {
     printf 'allow_lkm=%s\n' "$([ -f "$CONFIG/allow_lkm_on_kernelpatch" ] && echo 1 || echo 0)"
     printf 'config_ksu=%s\n' "$(kernel_config_get CONFIG_KSU)"
     printf 'config_ksu_susfs=%s\n' "$(kernel_config_get CONFIG_KSU_SUSFS)"
+    _AR=$(cat "$STATE/apply_result" 2>/dev/null)
+    printf 'apply_result=%s\n' "${_AR:-not_tested}"
+    if [ -f "$STATE/boot_stage_completed" ]; then
+        printf 'boot_stage_completed=%s\n' "$(cat "$STATE/boot_stage_completed" 2>/dev/null)"
+    else
+        printf 'boot_stage_completed=no\n'
+    fi
+    printf 'backend_kind=%s\n' "$SUSFS_KIND"
+    if [ "$SUSFS_KIND" = "builtin" ]; then printf 'backend_interface_detected=1\n'; else printf 'backend_interface_detected=0\n'; fi
+    printf 'abi_match=unknown\n'
+    printf 'effect_verified=not_tested\n'
+    case "$KSSTAT" in
+        ok) printf 'tool_query=ok\n' ;;
+        incompatible) printf 'tool_query=incompatible\n' ;;
+        *) printf 'tool_query=missing\n' ;;
+    esac
+    if pstore_crash_suspect; then
+        printf 'crash_evidence=observed\n'
+    elif [ -d /sys/fs/pstore ]; then
+        printf 'crash_evidence=not_observed\n'
+    else
+        printf 'crash_evidence=unavailable\n'
+    fi
     printf 'lkm_size=%s\n' "$LSIZE"
     if autoload_paused; then printf 'autoload=paused\n'; else printf 'autoload=ok\n'; fi
     if cap_ok sus_mount; then printf 'sus_mount=ok\n'; else printf 'sus_mount=unsupported\n'; fi
@@ -371,9 +394,23 @@ case "$1" in
             echo "features:"
             "$_bp_bin" show enabled_features 2>/dev/null | sed 's/^/  /'
         fi
+        echo "root_userland=$(ksu_branch 2>/dev/null)"
+        echo "kernelpatch_runtime=unknown"
+        echo "backend_kind=$_SUSFS_KIND"
+        if [ "$_SUSFS_KIND" = "builtin" ]; then echo "backend_interface_detected=1"; else echo "backend_interface_detected=0"; fi
+        echo "abi_match=unknown"
+        echo "effect_verified=not_tested"
+        _bp_ar=$(cat "$STATE/apply_result" 2>/dev/null)
+        echo "apply_result=${_bp_ar:-not_tested}"
         echo "ksyms_ksu=$(awk '$3 ~ /^__?ksu_/ {c++} END{print c+0}' /proc/kallsyms 2>/dev/null)"
         echo "ksyms_susfs=$(awk '$3 ~ /^susfs_/ {c++} END{print c+0}' /proc/kallsyms 2>/dev/null)"
-        if pstore_crash_suspect; then echo "pstore_suspect=yes"; else echo "pstore_suspect=no"; fi
+        if pstore_crash_suspect; then
+            echo "crash_evidence=observed"
+        elif [ -d /sys/fs/pstore ]; then
+            echo "crash_evidence=not_observed"
+        else
+            echo "crash_evidence=unavailable"
+        fi
         ;;
     log)
         echo "===== load.log ====="

@@ -84,13 +84,16 @@ A="$TMP/a1"; build_apply "$A"; : > "$A/state/boot_guard"
 rc=$(run_apply "$A" 0 1 0 0 1); chk "pstore 命中时 auto apply 返回 3" "$rc" "3"
 chk "pstore 命中时保留 boot_guard" "$([ -f "$A/state/boot_guard" ] && echo yes || echo no)" "yes"
 chk "pstore 命中时写下暂停标记" "$([ -f "$A/state/autoload_paused" ] && echo yes || echo no)" "yes"
+chk "pstore 命中时 apply_result=skipped" "$(cat "$A/state/apply_result" 2>/dev/null)" "skipped"
 
 A="$TMP/a2"; build_apply "$A"
 rc=$(run_apply "$A" 1 0 0 0 1); chk "APatch 未放行 auto apply 退出 0（跳过）" "$rc" "0"
 chk "APatch auto 跳过写了警告描述" "$(grep -c "APatch：默认不加载" "$A/module.prop")" "1"
+chk "APatch auto 跳过 apply_result=skipped" "$(cat "$A/state/apply_result" 2>/dev/null)" "skipped"
 
 A="$TMP/a3"; build_apply "$A"
 rc=$(run_apply "$A" 1 0 0 0 0); chk "APatch 未放行手动 apply 被拒（rc=1）" "$rc" "1"
+chk "APatch 手动被拒 apply_result=skipped" "$(cat "$A/state/apply_result" 2>/dev/null)" "skipped"
 
 A="$TMP/a4"; build_apply "$A"
 rc=$(run_apply "$A" 0 0 0 0 1); chk "正常 auto apply 继续（不被门禁误拦）" "$rc" "1"

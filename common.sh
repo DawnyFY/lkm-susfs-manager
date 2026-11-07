@@ -242,7 +242,8 @@ kernel_config_get() {
             fi
         fi
     fi
-    [ -n "$_KC_FILE" ] && [ -r "$_KC_FILE" ] || return 0
+    # 三态：读不到配置 -> unknown；能读到但没这个键 -> absent；显式 not set -> n
+    [ -n "$_KC_FILE" ] && [ -r "$_KC_FILE" ] || { printf 'unknown'; return 0; }
     _kc_hit=$(grep -E "^$_kc_key=" "$_KC_FILE" 2>/dev/null | tail -1)
     if [ -n "$_kc_hit" ]; then
         printf '%s' "${_kc_hit#*=}"
@@ -250,7 +251,13 @@ kernel_config_get() {
     fi
     if grep -qE "^# $_kc_key is not set$" "$_KC_FILE" 2>/dev/null; then
         printf 'n'
+        return 0
     fi
+    if grep -qE "^# $_kc_key" "$_KC_FILE" 2>/dev/null; then
+        printf 'n'
+        return 0
+    fi
+    printf 'absent'
     return 0
 }
 
