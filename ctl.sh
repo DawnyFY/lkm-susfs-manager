@@ -91,6 +91,9 @@ status() {
     _AF=${_AF:-0}
     case "$_AF" in ''|*[!0-9]*) _AF=0 ;; esac
     printf 'apply_fails=%s\n' "$_AF"
+    _CO=$(cat "$STATE/coexist_mode" 2>/dev/null)
+    printf 'kernelpatch=%s\n' "$([ -n "$_CO" ] && echo 1 || echo 0)"
+    printf 'coexist_mode=%s\n' "${_CO:-none}"
     printf 'lkm_size=%s\n' "$LSIZE"
     if autoload_paused; then printf 'autoload=paused\n'; else printf 'autoload=ok\n'; fi
     if cap_ok sus_mount; then printf 'sus_mount=ok\n'; else printf 'sus_mount=unsupported\n'; fi

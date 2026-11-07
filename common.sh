@@ -134,6 +134,20 @@ root_family() {
     fi
 }
 
+# KernelPatch/APatch 内核存在时，kpimg 已经接管 SELinux 审计/策略面
+# （avc_denied、slow_avc_audit、selinux_hide 等）。本模块与之语义重叠的功能
+# 在共存时关闭，避免两边互相抵消。
+kernelpatch_present() {
+    [ -d "${KERNELPATCH_MARKER_DIR:-/data/adb/ap}" ] && return 0
+    [ "$(root_family)" = "APatch" ] && return 0
+    return 1
+}
+
+# 共存模式下禁用的功能：avc_spoof（与 kpimg 的 SELinux hook 重叠）
+coexist_disable_avc_spoof() {
+    kernelpatch_present
+}
+
 # APatch 的 SUSFS 依赖内核侧支持，失败原因与 KSU / Magisk 不同：描述里直接写清楚
 susfs_hint() {
     case "$(root_family)" in

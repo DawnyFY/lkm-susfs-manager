@@ -20,6 +20,15 @@ printf "#!/bin/sh\nexit 1\n" > "$FB/pidof"
 out=$( ( PATH="$FB:$PATH"; MODDIR="$M"; . "$REPO/common.sh"; root_family ) )
 chk "无进程时按目录判定（本机无 /data/adb → Unknown）" "$out" "Unknown"
 
+# kernelpatch_present：用 KERNELPATCH_MARKER_DIR 模拟 /data/adb/ap
+mkdir -p "$TMP/apmark"
+out=$( ( MODDIR="$M"; KERNELPATCH_MARKER_DIR="$TMP/apmark"; . "$REPO/common.sh"; kernelpatch_present && echo yes || echo no ) )
+chk "有 APatch 标记目录 → 进入共存模式" "$out" "yes"
+out=$( ( MODDIR="$M"; KERNELPATCH_MARKER_DIR="$TMP/nomark"; PATH="$FB:$PATH"; . "$REPO/common.sh"; kernelpatch_present && echo yes || echo no ) )
+chk "无标记且非 APatch → 非共存模式" "$out" "no"
+out=$( ( MODDIR="$M"; KERNELPATCH_MARKER_DIR="$TMP/apmark"; . "$REPO/common.sh"; coexist_disable_avc_spoof && echo disable || echo keep ) )
+chk "共存模式下禁用 avc_spoof" "$out" "disable"
+
 printf "test-boot\n" > "$TMP/bid"
 out=$( ( MODDIR="$M"; PROC_BOOT_ID_FILE="$TMP/bid"; . "$REPO/common.sh"; lock_acquire "$TMP/lk" 900; printf "999 old-boot\n" > "$TMP/lk/pid"; lock_acquire "$TMP/lk" 900; echo "second=$?"; cat "$TMP/lk/pid" ) )
 chk "跨 boot 旧锁可接管" "$(printf "%s\n" "$out" | sed -n "s/^second=//p")" "0"

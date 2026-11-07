@@ -293,6 +293,7 @@
           <li>兼容管理器：KernelSU 官方版、SukiSU、ReSukiSU、KernelSU Next、Magisk；APatch 已做安装识别与阶段适配，未实机验证</li>
           <li>按管理器选择开机阶段：KernelSU 系列与 APatch 走 post-fs-data → boot-completed，Magisk 走 post-fs-data → service（late_start）</li>
           <li>APatch：需要内核已集成 SUSFS 或允许加载 SUSFS LKM；WebUI 需第三方宿主（如 KsuWebUI）</li>
+          <li>APatch / KernelPatch 共存模式：检测到 kpimg 时自动关闭 avc_spoof（与它的 SELinux hook 重叠），路径/挂载隐藏不受影响</li>
           <li>自动寻找当前管理器的 ksu_susfs，失败时回退模块备份</li>
           <li>LKM：inforcqb/susfs4ksu-lkm <span id="aboutLkmVersion">v2.3.0-r18.8</span></li>
           <li>Loader：susfs_insmod（自动解析符号与 vermagic）</li>

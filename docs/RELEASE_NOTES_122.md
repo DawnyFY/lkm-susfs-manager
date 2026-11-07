@@ -52,6 +52,15 @@
 - 过期锁接管补写 boot_id；`susfs_path_del` 改为回读确认；连续失败 3 次自动暂停自动加载
 - 安装时 KMI 未匹配会明确提示「未安装 LKM」
 
+## APatch / KernelPatch 共存安全模式
+
+静态分析（WORKLOG §26/§27）确认：kpimg 会 hook SELinux 审计/策略面（`avc_denied`、`slow_avc_audit`、`avc_has_perm`、`selinux_hide` 等），与本模块的 `avc_spoof` 重叠。因此：
+
+- 检测到 APatch / KernelPatch（`/data/adb/ap` 或管理器是 APatch）时，**自动关闭 avc_spoof**，并在 apply.log 说明
+- 其余功能（sus_path / hide_mounts / sus_map / try_umount / uname / cmdline / 模块隐藏）保留
+- 状态页 API 新增 `kernelpatch=` / `coexist_mode=` 字段，便于排查
+- 无法运行时关闭的残留项：SUSFS LKM 内置 `hide_syms`（如 APatch 下 KPM 解析异常，先停本模块验证）
+
 ## 内核内置 SUSFS 适配（面向 APatch / 自编内核）
 
 SUSFS 不只有 LKM 一种形态：按上游补丁的 `CONFIG_KSU_SUSFS_*` 特性位，它也可以直接编进内核（`SUS_PATH` / `SUS_MOUNT` / `SUS_KSTAT` / `SPOOF_UNAME` / `SPOOF_CMDLINE_OR_BOOTCONFIG` / `OPEN_REDIRECT` / `SUS_MAP` / `HIDE_KSU_SUSFS_SYMBOLS` / `ENABLE_LOG` 等）。之前模块只认 LKM 的 `/proc` `/sys` 标记，内核内置 SUSFS 时会被误判成“未加载”，然后重复 insmod。
@@ -103,8 +112,8 @@ SUSFS 不只有 LKM 一种形态：按上游补丁的 `CONFIG_KSU_SUSFS_*` 特�
 管理器里覆盖安装即可，配置与规则文件全部保留。KernelSU 系安装到 `modules_update`，**需要重启一次生效**；重启后 LKM 会重新加载，规则重新应用。
 
 - 文件：`susfs_allinone-1.2.2.zip`
-- 大小：11058235 字节
-- SHA256：`465e086ec6cb76e109ac79c727069f6b8ee5f5a9a4861f326bb01c8012702ada`
+- 大小：11058978 字节
+- SHA256：`1069a1372058abbc9d391851234338028cebb39ae4959c403915d7efabb54f9d`
 - 离线测试：18 项全绿
 
 ## 已知问题（外部反馈，未复现）

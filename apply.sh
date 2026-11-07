@@ -74,6 +74,19 @@ skip_detection_paths=${skip_detection_paths:-1}
 skip_legit_mounts=${skip_legit_mounts:-1}
 hide_vendor_sepolicy=${hide_vendor_sepolicy:-0}
 vold_isolation=${vold_isolation:-0}
+
+# APatch/KernelPatch 共存安全模式：
+# kpimg 已 hook SELinux 审计面（avc_denied/slow_avc_audit/selinux_hide），
+# avc_spoof 与它语义重叠，检测到 KernelPatch 时强制关闭。
+if kernelpatch_present; then
+    echo apatch > "$STATE/coexist_mode" 2>/dev/null
+    if [ "$avc_spoof" = "1" ]; then
+        echo "[!] 检测到 APatch/KernelPatch 内核：avc_spoof 与 kpimg 的 SELinux hook 重叠，本次强制关闭"
+        avc_spoof=0
+    fi
+else
+    rm -f "$STATE/coexist_mode" 2>/dev/null
+fi
 # 只允许 KMI 名称字符，防止路径穿越
 case "$force_kmi" in *[!A-Za-z0-9._-]*) force_kmi="" ;; esac
 spoof_uname=${spoof_uname:-0}
