@@ -153,7 +153,11 @@ for script in action.sh load.sh apply.sh ctl.sh post-fs-data.sh boot-completed.s
 done
 touch "$MODPATH/skip_mount"
 
-ui_print "- 已为 $KMI 安装 SUSFS LKM"
+if [ "$KMI" = "unknown" ]; then
+    ui_print "- 内核未匹配：本次未安装 LKM，重启后在 WebUI 指定 KMI 再加载"
+else
+    ui_print "- 已为 $KMI 安装 SUSFS LKM"
+fi
 ui_print "- 自带 WebUI：状态 / 配置 / 日志"
 ui_print "- 重启后自动加载；也可在模块 Action 中手动加载"
 if [ "$COPIED_CONFIG" = "1" ]; then

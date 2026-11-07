@@ -27,6 +27,9 @@ if [ "$rc" = "0" ] && susfs_kernel_ready; then
     if grep -qw kernelsu /proc/susfs_hide_modules 2>/dev/null; then echo "是"; else echo "否"; fi
     echo "[i] ksu_susfs: ${BIN:-无}"
     echo "[i] 日志: $MODDIR/apply.log"
+    _af=$(cat "$MODDIR/state/apply_fails" 2>/dev/null)
+    case "$_af" in ''|*[!0-9]*) _af=0 ;; esac
+    [ "$_af" -gt 0 ] && echo "[!] 注意：本次有 $_af 条规则下发失败，详见 apply.log"
     clear_boot_guard
     echo "[i] 完成，不需要重启。"
 else

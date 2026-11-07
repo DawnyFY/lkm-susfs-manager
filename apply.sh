@@ -87,6 +87,7 @@ for _j in /data/local/tmp/.susfs_probe_dir /data/local/tmp/.susfs_cap_probe /dat
 done
 
 _cf_run 2>&1 || { echo "[!] 文件被修改，拒绝应用规则"; exit 1; }
+_rule_fails=0
 
 # 1. 确保内核侧 SUSFS：LKM 已加载，或内核已内置（内置时无需也无法再加载）
 if ! susfs_kernel_ready; then
@@ -120,6 +121,8 @@ if ! susfs_kernel_ready; then
         set_description "❌ $(susfs_hint insmod)"
         exit 1
     fi
+    # 子进程加载成功后，本进程的探测缓存必须失效，否则后续 select 会走旧分支
+    _SUSFS_KIND=""
 fi
 
 # 2. 选择可用的 ksu_susfs：优先当前管理器/分支自带，失败回退模块备份
@@ -205,10 +208,7 @@ fi
 # 读取配置文件的第一个字段，忽略注释和空行
 # 清洗单行：去 \r、去注释、去首尾空白
 clean_entry() {
-    _v=$(printf '%s' "$1" | tr -d '\r')
-    _v=${_v%%#*}
-    _v=$(printf '%s' "$_v" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    printf '%s' "$_v"
+    strip_comment "$1"
 }
 
 # 5. sus_path
@@ -225,7 +225,7 @@ case "$replace_rules" in
             clear_migrated_paths "$CONFIG/sus_path.txt"
         fi
         ;;
-    2) clear_all_paths && echo "[!] 已清空全部 sus_path 规则（replace_rules=2）" ;;
+    2) if clear_all_paths; then echo "[!] 已清空全部 sus_path 规则（replace_rules=2）"; else echo "[!] 清空 sus_path 失败（内核拒绝）"; _rule_fails=$((_rule_fails + 1)); fi ;;
 esac
 if [ -f "$CONFIG/sus_path.txt" ]; then
     while IFS= read -r _line || [ -n "$_line" ]; do
@@ -247,6 +247,7 @@ if [ -f "$CONFIG/sus_path.txt" ]; then
             echo "[+] sus_path $path"
         else
             echo "[=] sus_path $path (失败)"
+            _rule_fails=$((_rule_fails + 1))
         fi
     done < "$CONFIG/sus_path.txt"
 fi
@@ -262,6 +263,7 @@ add_sus_path_safe() {
         echo "[+] sus_path $_p"
     else
         echo "[=] sus_path $_p (失败)"
+        _rule_fails=$((_rule_fails + 1))
     fi
 }
 
@@ -319,6 +321,7 @@ if [ "$fake_cmdline" = "1" ] && [ -n "$fake_cmdline_value" ]; then
             echo "[i] cmdline 伪装已生效: $fake_cmdline_value"
         else
             echo "[!] cmdline 伪装设置失败（内核已启用该特性，请查内核日志）"
+            _rule_fails=$((_rule_fails + 1))
         fi
     else
         echo "[i] 内核未启用 SPOOF_CMDLINE_OR_BOOTCONFIG，跳过 cmdline 伪装"
@@ -351,6 +354,7 @@ if [ -f "$CONFIG/sus_mount.txt" ]; then
             esac
         fi
     done < "$CONFIG/sus_mount.txt"
+    _rule_fails=$((_rule_fails + _sm_bad))
     if [ "$_sm_ok" = "0" ] && [ "$_sm_bad" -gt 0 ]; then
         echo "[!] add_sus_mount 不可用（上游已 deprecated），标记为不支持"
         caps_downgrade sus_mount
@@ -385,6 +389,7 @@ if [ -f "$CONFIG/sus_map.txt" ]; then
             esac
 
         done < "$CONFIG/sus_map.txt"
+        _rule_fails=$((_rule_fails + _map_bad))
         [ "$_map_n" = "0" ] && echo "[i] sus_map.txt 为空，跳过"
         [ "$_map_ok" -gt 60 ] && echo "[!] sus_map 规则数 $_map_ok 接近上限 64"
         [ "$_map_ok" = "0" ] && [ "$_map_bad" -gt 0 ] && echo "[!] /proc/susfs_map 写入失败，请确认内核支持"
@@ -411,6 +416,7 @@ if [ -f "$CONFIG/try_umount.txt" ]; then
             *) _tu_bad=$((_tu_bad + 1)); echo "[=] try_umount $path (失败)" ;;
         esac
         done < "$CONFIG/try_umount.txt"
+        _rule_fails=$((_rule_fails + _tu_bad))
         if [ "$_tu_ok" = "0" ] && [ "$_tu_bad" -gt 0 ]; then
             echo "[!] add_try_umount 实测不可用，标记为不支持"
             caps_downgrade try_umount
@@ -432,6 +438,7 @@ if has_feature CONFIG_KSU_SUSFS_SPOOF_UNAME; then
             echo "[i] uname 伪装已生效: $_r / $_v"
         else
             echo "[!] uname 伪装设置失败"
+            _rule_fails=$((_rule_fails + 1))
         fi
     else
         if "$BIN" set_uname default default >/dev/null 2>&1; then
@@ -505,6 +512,7 @@ if [ "$hide_dex2oat" = "1" ]; then
                 esac
             fi
         done
+        _rule_fails=$((_rule_fails + _dex_bad))
         [ "$_dex_n" = "0" ] && echo "[i] 未发现 dex2oat 挂载，跳过"
         # 前缀表上限 64（r18.5+）；超过就只能靠 sus_path 覆盖，写日志提醒
         [ "$_dex_ok" -gt 60 ] && echo "[!] dex2oat 前缀数 $_dex_ok 接近/超过 hide_mounts 上限 64，部分可能未生效"
@@ -603,6 +611,12 @@ touch_marker
 RULES=$(grep '^path=' /proc/susfs_path 2>/dev/null | grep -v '\[ours:' | sed 's/^path=//' | awk '{print $1}' | sort -u | wc -l | tr -d ' ')
 RULES=${RULES:-0}
 echo "[i] 当前用户 sus_path 唯一规则数: $RULES"
-set_description "✅ 运行中 | $RULES 条规则 | $KMI | ${VERSION:-unknown}"
+printf '%s\n' "${_rule_fails:-0}" > "$STATE/apply_fails" 2>/dev/null
+if [ "${_rule_fails:-0}" -gt 0 ] 2>/dev/null; then
+    echo "[!] 本次有 $_rule_fails 条规则下发失败，详见 apply.log"
+    set_description "⚠️ 运行中 | $RULES 条规则 | $KMI | $_rule_fails 条失败（见 apply.log）"
+else
+    set_description "✅ 运行中 | $RULES 条规则 | $KMI | ${VERSION:-unknown}"
+fi
 echo "=== apply ok ==="
 exit 0

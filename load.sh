@@ -45,8 +45,16 @@ fail() {
     echo "[!] $1"
     set_description "❌ $1"
     note_fail
-    # 走到这里说明是确定性失败（KMI 不匹配 / 缺文件 / insmod 报错），
-    # 系统本身能正常开机，不应留下守卫把下次自动加载永久暂停
+    # 连续失败 3 次就暂停自动加载，避免每次开机都重试同一个确定性失败
+    _fc_n=$(cat "$STATE/fail_count" 2>/dev/null)
+    _fc_n=${_fc_n:-0}
+    case "$_fc_n" in ''|*[!0-9]*) _fc_n=0 ;; esac
+    if [ "$_fc_n" -ge 3 ]; then
+        pause_autoload
+        echo "[!] 已连续失败 $_fc_n 次，暂停自动加载；修复后点「加载并应用」或执行 ctl.sh resume_autoload"
+        set_description "❌ $1（连续失败 $_fc_n 次，已暂停自动加载）"
+    fi
+    # 系统本身能正常开机，不留守卫把下次自动加载永久暂停
     clear_boot_guard
     exit 1
 }

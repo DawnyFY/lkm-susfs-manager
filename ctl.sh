@@ -87,6 +87,10 @@ status() {
     printf 'ksu_bin_path=%s\n' "$BIN"
     printf 'selinux=%s\n' "$(getenforce 2>/dev/null)"
     printf 'fail_count=%s\n' "$FAILS"
+    _AF=$(cat "$STATE/apply_fails" 2>/dev/null)
+    _AF=${_AF:-0}
+    case "$_AF" in ''|*[!0-9]*) _AF=0 ;; esac
+    printf 'apply_fails=%s\n' "$_AF"
     printf 'lkm_size=%s\n' "$LSIZE"
     if autoload_paused; then printf 'autoload=paused\n'; else printf 'autoload=ok\n'; fi
     if cap_ok sus_mount; then printf 'sus_mount=ok\n'; else printf 'sus_mount=unsupported\n'; fi

@@ -118,6 +118,11 @@ select_susfs_bin() {
 }
 
 root_family() {
+    # 目录可能残留（换过管理器），优先用运行时证据：Magisk 的 magiskd 常驻进程
+    if command -v pidof >/dev/null 2>&1; then
+        pidof magiskd >/dev/null 2>&1 && { echo "Magisk"; return 0; }
+        pidof apd >/dev/null 2>&1 && { echo "APatch"; return 0; }
+    fi
     if [ -d /data/adb/ksu ]; then
         echo "KernelSU"
     elif [ -d /data/adb/ap ]; then
@@ -230,6 +235,10 @@ cfg_migrate() {
 _cf() {
     [ -f "$_CF" ] || return 2
     command -v sha256sum >/dev/null 2>&1 || return 2
+    # 同一进程树已完成校验：直接跳过，避免每个启动阶段重复哈希 37MB 的 .ko
+    if [ "${SUSFS_CF_OK:-0}" = "1" ]; then return 0; fi
+    # 同一 boot 内、清单与发布文件都没变时复用上次结果
+    if _cf_cache_ok; then return 0; fi
     # 清单与 meta 交叉校验：只换 .cache.files 不改 .cache.meta 会被发现
     if [ -f "$MODDIR/.cache.meta" ]; then
         _want=$(sed -n 's/^manifest_sha256=//p' "$MODDIR/.cache.meta" 2>/dev/null)
@@ -254,15 +263,51 @@ _cf() {
         fi
         return 3
     }
+    _cf_cache_write
+    return 0
+}
+
+# 校验缓存有效性：同一 boot + 清单 mtime 未变 + 清单内文件都比缓存旧
+_cf_cache_ok() {
+    _cok="$STATE/.cf.ok"
+    [ -f "$_cok" ] || return 1
+    _cok_bid=$(sed -n 's/^boot_id=//p' "$_cok" 2>/dev/null)
+    _cok_mf=$(sed -n 's/^manifest_mtime=//p' "$_cok" 2>/dev/null)
+    [ -n "$_cok_bid" ] && [ -n "$_cok_mf" ] || return 1
+    [ "$_cok_bid" = "$(cat "${PROC_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}" 2>/dev/null)" ] || return 1
+    _cok_now=$(stat -c %Y "$_CF" 2>/dev/null)
+    [ -n "$_cok_now" ] && [ "$_cok_mf" = "$_cok_now" ] || return 1
+    _cok_mt=$(stat -c %Y "$_cok" 2>/dev/null)
+    [ -n "$_cok_mt" ] || return 1
+    while IFS= read -r _cok_line || [ -n "$_cok_line" ]; do
+        [ -n "$_cok_line" ] || continue
+        _cok_p=$(printf '%s' "$_cok_line" | awk '{print $2}')
+        [ -n "$_cok_p" ] || return 1
+        _cok_fmt=$(stat -c %Y "$MODDIR/$_cok_p" 2>/dev/null)
+        [ -n "$_cok_fmt" ] || return 1
+        [ "$_cok_fmt" -lt "$_cok_mt" ] || return 1
+    done < "$_CF"
+    return 0
+}
+
+_cf_cache_write() {
+    mkdir -p "$STATE" 2>/dev/null
+    _cw_bid=$(cat "${PROC_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}" 2>/dev/null)
+    _cw_mf=$(stat -c %Y "$_CF" 2>/dev/null)
+    [ -n "$_cw_bid" ] && [ -n "$_cw_mf" ] || return 0
+    {
+        printf 'boot_id=%s\n' "$_cw_bid"
+        printf 'manifest_mtime=%s\n' "$_cw_mf"
+    } > "$STATE/.cf.ok.tmp" 2>/dev/null && mv -f "$STATE/.cf.ok.tmp" "$STATE/.cf.ok" 2>/dev/null
     return 0
 }
 
 # 启动链路闸门：文件被改就拒绝执行（旧包/工具异常不拦）
 _cf_gate() {
+    [ "${SUSFS_CF_OK:-0}" = "1" ] && return 0
     _cf 2>/dev/null; _r=$?
     case $_r in
-        0|2) return 0 ;;
-        3) return 0 ;;
+        0|2|3) return 0 ;;
         *)
             echo "[!] 模块文件与发布包不一致，拒绝执行"
             echo "[!] 请从官方仓库重新下载安装"
@@ -273,6 +318,7 @@ _cf_gate() {
 
 _cf_run() {
     mkdir -p "$STATE" 2>/dev/null
+    if [ "${SUSFS_CF_OK:-0}" = "1" ]; then printf ok > "$_CFS" 2>/dev/null; return 0; fi
     _cf; _r=$?
     case $_r in
         0) printf ok > "$_CFS" 2>/dev/null; return 0 ;;
@@ -777,7 +823,7 @@ lock_acquire() {
         _stale="$STATE/.lock.stale.$$"
         if mv "$_lk" "$_stale" 2>/dev/null; then
             rm -rf "$_stale" 2>/dev/null
-            mkdir "$_lk" 2>/dev/null && { echo $$ > "$_lk/pid" 2>/dev/null; return 0; }
+            mkdir "$_lk" 2>/dev/null && { echo "$$ $_bid" > "$_lk/pid" 2>/dev/null; return 0; }
         fi
     fi
     return 1
@@ -832,10 +878,12 @@ our_paths_file() { printf '%s' "$STATE/our_paths.txt"; }
 
 # 删除单条规则；返回非 0 表示节点不支持或该条不存在
 susfs_path_del() {
-    _p=$1
-    [ -n "$_p" ] || return 1
+    _sp_p=$1
+    [ -n "$_sp_p" ] || return 1
     [ -e "$SUSFS_PATH_NODE" ] || return 1
-    echo "del $_p" >> "$SUSFS_PATH_NODE" 2>/dev/null
+    echo "del $_sp_p" >> "$SUSFS_PATH_NODE" 2>/dev/null
+    # 内核可能对不存在的规则静默成功：回读确认这一行确实消失
+    ! grep -F -q "path=$_sp_p " "$SUSFS_PATH_NODE" 2>/dev/null
 }
 
 # 记录本模块成功写入的路径（去重）
@@ -879,6 +927,17 @@ clear_own_paths() {
     fi
 }
 
+# 去掉注释：只认行首或空白后的 #，路径里的 # 原样保留
+strip_comment() {
+    _sk_v=$(printf '%s' "$1" | tr -d '\r')
+    _sk_v=$(printf '%s' "$_sk_v" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    case "$_sk_v" in
+        '#'*) _sk_v="" ;;
+        *) _sk_v=$(printf '%s' "$_sk_v" | sed 's/[[:space:]]#.*$//'); _sk_v=$(printf '%s' "$_sk_v" | sed 's/[[:space:]]*$//') ;;
+    esac
+    printf '%s' "$_sk_v"
+}
+
 # 首次迁移：旧版本用整表 clear 写入规则，没有留下清单。
 # 以当前配置里声明的路径为候选逐条删除，只动配置内的路径。
 clear_migrated_paths() {
@@ -886,9 +945,7 @@ clear_migrated_paths() {
     [ -f "$_cmp_cfg" ] || return 0
     _cmp_n=0; _cmp_fail=0
     while IFS= read -r _cmp_line || [ -n "$_cmp_line" ]; do
-        _cmp_p=$(printf '%s' "$_cmp_line" | tr -d '\r')
-        _cmp_p=${_cmp_p%%#*}
-        _cmp_p=$(printf '%s' "$_cmp_p" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        _cmp_p=$(strip_comment "$_cmp_line")
         [ -n "$_cmp_p" ] || continue
         case "$_cmp_p" in /*) ;; *) continue ;; esac
         if susfs_path_del "$_cmp_p"; then _cmp_n=$((_cmp_n + 1)); else _cmp_fail=$((_cmp_fail + 1)); fi
@@ -1066,9 +1123,7 @@ is_detection_app_path() {
     _dia_f="$CONFIG/skip_hide.txt"
     [ -f "$_dia_f" ] || return 1
     while IFS= read -r _dia_pat || [ -n "$_dia_pat" ]; do
-        _dia_pat=$(printf '%s' "$_dia_pat" | tr -d '\r')
-        _dia_pat=${_dia_pat%%#*}
-        _dia_pat=$(printf '%s' "$_dia_pat" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        _dia_pat=$(strip_comment "$_dia_pat")
         [ -n "$_dia_pat" ] || continue
         case "$_dia_p" in *"$_dia_pat"*) return 0 ;; esac
     done < "$_dia_f"

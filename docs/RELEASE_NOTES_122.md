@@ -41,7 +41,16 @@
 - `load.sh` 返回 2（未匹配内核）时不再被 apply 覆盖成 "LKM 加载失败"
 - 去重账本清理从"内核已就绪"分支移到真实 insmod 成功路径
 
-回归测试：新增 `test_action_entry.sh`（9 断言）与 `test_helper_scope.sh`（5 断言），总计 **22 项离线测试全绿**。
+回归测试：新增 `test_action_entry.sh`（9 断言）与 `test_helper_scope.sh`（5 断言），总计 **24 项离线测试全绿**。
+
+## 审计 P2 修复
+
+- 规则失败统计：apply 结束时写 `state/apply_fails`，描述改为「⚠️ 运行中 … N 条失败」，Action 也会提示
+- 管理器判定改为进程优先（magiskd / apd），目录残留不再误判
+- 完整性校验新增 `.cf.ok` 缓存：同一 boot 只完整哈希一次，后续阶段复用；文件变动会自动失效
+- 注释只认行首或空白后的 `#`，路径里的 # 不再被截断
+- 过期锁接管补写 boot_id；`susfs_path_del` 改为回读确认；连续失败 3 次自动暂停自动加载
+- 安装时 KMI 未匹配会明确提示「未安装 LKM」
 
 ## 内核内置 SUSFS 适配（面向 APatch / 自编内核）
 
@@ -94,8 +103,8 @@ SUSFS 不只有 LKM 一种形态：按上游补丁的 `CONFIG_KSU_SUSFS_*` 特�
 管理器里覆盖安装即可，配置与规则文件全部保留。KernelSU 系安装到 `modules_update`，**需要重启一次生效**；重启后 LKM 会重新加载，规则重新应用。
 
 - 文件：`susfs_allinone-1.2.2.zip`
-- 大小：11057073 字节
-- SHA256：`74a595ba43c95011fae913ea55433fcd964c4cea463a440613fe55074b5a299c`
+- 大小：11058235 字节
+- SHA256：`465e086ec6cb76e109ac79c727069f6b8ee5f5a9a4861f326bb01c8012702ada`
 - 离线测试：18 项全绿
 
 ## 已知问题（外部反馈，未复现）
