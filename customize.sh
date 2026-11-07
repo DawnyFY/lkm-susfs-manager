@@ -16,6 +16,38 @@ else
 fi
 [ "$ARCH" = arm64 ] || abort "- 仅支持 arm64"
 
+# 内核预检（只提示不阻断）：LKM 路线需要 CONFIG_MODULES/KALLSYMS；
+# 内核直接编入 SUSFS 时不需要这些，模块只负责管理规则。
+_cfg=""
+if command -v zcat >/dev/null 2>&1 && [ -r /proc/config.gz ]; then
+    _cfg=$(zcat /proc/config.gz 2>/dev/null)
+fi
+if [ -z "$_cfg" ] && [ -r /proc/config.gz ]; then
+    for _bz in /data/adb/ksu/bin/busybox /data/adb/ap/bin/busybox /data/adb/magisk/busybox; do
+        if [ -x "$_bz" ]; then
+            _cfg=$("$_bz" zcat /proc/config.gz 2>/dev/null)
+            [ -n "$_cfg" ] && break
+        fi
+    done
+fi
+if [ -n "$_cfg" ]; then
+    case "$_cfg" in
+        *CONFIG_MODULES=y*) : ;;
+        *) ui_print "- 注意：内核未开 CONFIG_MODULES，无法加载 SUSFS LKM；若内核已内置 SUSFS，本模块只管理规则" ;;
+    esac
+    case "$_cfg" in
+        *CONFIG_MODULE_SIG_FORCE=y*) ui_print "- 注意：内核强制模块签名，自编译的 SUSFS LKM 可能被拒绝加载" ;;
+    esac
+    case "$_cfg" in
+        *CONFIG_KALLSYMS=y*) : ;;
+        *) ui_print "- 注意：内核缺少 CONFIG_KALLSYMS，SUSFS LKM 大概率加载失败" ;;
+    esac
+    case "$_cfg" in
+        *CONFIG_KPROBES=y*) : ;;
+        *) ui_print "- 注意：内核缺少 CONFIG_KPROBES，SUSFS LKM 的符号解析与隐藏能力会受限" ;;
+    esac
+fi
+
 if [ "$IS_APATCH" = "1" ]; then
     ui_print "- 管理器: APatch ${APATCH_VER:-unknown}"
     ui_print "- APatch 未实机验证：本模块需要加载 SUSFS LKM，内核拒绝时会写进 load.log 并改写模块描述"

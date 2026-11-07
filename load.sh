@@ -88,10 +88,10 @@ if autoload_paused && [ "$1" != "manual" ]; then
     exit 0
 fi
 
-# 已经加载过就不再叠加
-if lkm_present; then
+# 内核侧已有 SUSFS（LKM 已加载，或内核内置）就不再叠加
+if susfs_kernel_ready; then
     rm -f "$STATE/loading"
-    echo "[i] susfs 已存在，跳过加载"
+    echo "[i] 内核侧 SUSFS 已就绪（$(susfs_kernel_kind)），跳过 LKM 加载"
     BIN=$(select_susfs_bin) || fail "$(susfs_hint missing)（模块内也没有备份）"
     echo "[i] 使用: $BIN"
     VERSION=$("$BIN" show version 2>/dev/null)

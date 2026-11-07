@@ -27,8 +27,10 @@ status() {
         KMI=$(select_kmi "$REL" "$MODDIR" 2>/dev/null) || KMI=unknown
     fi
 
+    _susfs_detect
+    SUSFS_KIND=$_SUSFS_KIND
     PRESENT=0
-    lkm_present && PRESENT=1
+    [ "$SUSFS_KIND" != "none" ] && PRESENT=1
     BIN=$(select_susfs_bin 2>/dev/null)
 
     VARIANT=""
@@ -73,6 +75,7 @@ status() {
     printf 'kernel=%s\n' "$REL"
     printf 'kmi=%s\n' "$KMI"
     printf 'lkm_present=%s\n' "$PRESENT"
+    printf 'susfs_kernel=%s\n' "$SUSFS_KIND"
     printf 'lkm_variant=%s\n' "$VARIANT"
     printf 'lkm_version=%s\n' "$VERSION"
     printf 'rules=%s\n' "$RULES"
@@ -258,8 +261,9 @@ case "$1" in
     loadstatus)
         _rel=$(cat /proc/sys/kernel/osrelease 2>/dev/null)
         echo "osrelease=$_rel"
-        if lkm_present; then
+        if susfs_kernel_ready; then
             echo "lkm=1"
+            echo "kernel=$(susfs_kernel_kind)"
             echo "result=ok"
         else
             echo "lkm=0"

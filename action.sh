@@ -15,8 +15,8 @@ sh "$MODDIR/apply.sh"
 rc=$?
 
 BIN=$(select_susfs_bin)
-if lkm_present; then
-    echo "[OK] LKM 已加载"
+if susfs_kernel_ready; then
+    echo "[OK] SUSFS 已就绪（$(susfs_kernel_kind)）"
     [ -n "$BIN" ] && "$BIN" show version
     printf "[i] 用户 sus_path 规则: "
     grep '^path=' /proc/susfs_path 2>/dev/null | grep -v '\[ours:' | sed 's/^path=//' | awk '{print $1}' | sort -u | wc -l

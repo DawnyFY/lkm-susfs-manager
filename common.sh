@@ -14,6 +14,37 @@ lkm_present() {
     [ -e /proc/susfs_path ] || [ -d /sys/module/susfs_guard_lkm ] || [ -d /sys/module/susfs ]
 }
 
+# 内核侧 SUSFS 是否就绪：
+#   lkm     —— 我们加载的 susfs_guard_lkm（有 /proc 或 sysfs 标记）
+#   builtin —— 内核直接编入了 SUSFS（没有 LKM 标记，但 ksu_susfs 握手成功）
+#   none    —— 两者都没有
+# 结果缓存到 _SUSFS_KIND，避免重复执行二进制。
+_susfs_detect() {
+    [ -n "${_SUSFS_KIND:-}" ] && return 0
+    if lkm_present; then
+        _SUSFS_KIND=lkm
+        return 0
+    fi
+    for _sd_b in "$(find_susfs_bin 2>/dev/null)" "$(find_susfs_backup 2>/dev/null)"; do
+        [ -n "$_sd_b" ] && [ -x "$_sd_b" ] || continue
+        if "$_sd_b" show version >/dev/null 2>&1; then
+            _SUSFS_KIND=builtin
+            return 0
+        fi
+    done
+    _SUSFS_KIND=none
+}
+
+susfs_kernel_kind() {
+    _susfs_detect
+    printf '%s' "$_SUSFS_KIND"
+}
+
+susfs_kernel_ready() {
+    _susfs_detect
+    [ "$_SUSFS_KIND" != "none" ]
+}
+
 
 find_susfs_bin() {
     if [ -n "$SUSFS_BIN" ] && [ -x "$SUSFS_BIN" ]; then
@@ -67,7 +98,8 @@ susfs_bin_runnable() {
 select_susfs_bin() {
     _active=$(find_susfs_bin)
     _backup=$(find_susfs_backup)
-    if lkm_present; then
+    _susfs_detect
+    if [ "$_SUSFS_KIND" != "none" ]; then
         if [ -n "$_active" ] && "$_active" show version >/dev/null 2>&1; then
             echo "$_active"
             return 0
@@ -976,7 +1008,8 @@ diag_tooling() {
     echo "osrelease=$(cat /proc/sys/kernel/osrelease 2>/dev/null)"
     . "$MODDIR/kmi.sh" 2>/dev/null
     echo "kmi=$(select_kmi "$(cat /proc/sys/kernel/osrelease 2>/dev/null)" "$MODDIR" 2>/dev/null)"
-    if lkm_present; then echo "lkm_present=1"; else echo "lkm_present=0"; fi
+    echo "susfs_kernel=$(susfs_kernel_kind)"
+    if lkm_present; then echo "lkm_marker=1"; else echo "lkm_marker=0"; fi
     echo "proc_nodes=$(ls /proc/susfs_* 2>/dev/null | tr '\n' ' ')"
     if [ -d /sys/module/susfs_guard_lkm ]; then echo "module_sysfs=susfs_guard_lkm"; else echo "module_sysfs=none"; fi
     echo "module_in_proc_modules=$(grep -ic susfs /proc/modules 2>/dev/null)"

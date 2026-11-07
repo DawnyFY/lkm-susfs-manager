@@ -87,8 +87,8 @@ done
 
 _cf_run 2>&1 || { echo "[!] 文件被修改，拒绝应用规则"; exit 1; }
 
-# 1. 确保 LKM
-if ! lkm_present; then
+# 1. 确保内核侧 SUSFS：LKM 已加载，或内核已内置（内置时无需也无法再加载）
+if ! susfs_kernel_ready; then
     if [ "$AUTOLOAD" = "1" ]; then
         # 上次自动加载后没能完成启动（marker 还在），本次暂停
         if autoload_paused || [ -f "$(boot_guard_path)" ]; then
@@ -100,7 +100,7 @@ if ! lkm_present; then
             exit 1
         fi
     fi
-    echo "[i] LKM 未加载，先加载"
+    echo "[i] 内核侧未发现 SUSFS（LKM 未加载且无内置接口），先加载 LKM"
     if [ "$AUTOLOAD" = "1" ]; then
         # 自动路径：先落守卫标记，加载后若没能完成启动，下次会自动暂停
         mark_boot_guard "$(cat /proc/sys/kernel/osrelease 2>/dev/null)"

@@ -28,6 +28,26 @@
 
 **说明**：我没有 Magisk 真机，Magisk 这条路径属于新增实现、未在真机实测（KernelSU / SukiSU 路径的回归测试通过）。安装与开机应用按 Magisk 生命周期实现（`post-fs-data` + `service`），遇到问题请反馈日志。
 
+## 内核内置 SUSFS 适配（面向 APatch / 自编内核）
+
+SUSFS 不只有 LKM 一种形态：按上游补丁的 `CONFIG_KSU_SUSFS_*` 特性位，它也可以直接编进内核（`SUS_PATH` / `SUS_MOUNT` / `SUS_KSTAT` / `SPOOF_UNAME` / `SPOOF_CMDLINE_OR_BOOTCONFIG` / `OPEN_REDIRECT` / `SUS_MAP` / `HIDE_KSU_SUSFS_SYMBOLS` / `ENABLE_LOG` 等）。之前模块只认 LKM 的 `/proc` `/sys` 标记，内核内置 SUSFS 时会被误判成“未加载”，然后重复 insmod。
+
+现在改成三层判断（`common.sh` 的 `_susfs_detect`）：
+
+| 类型 | 判定 | 行为 |
+|---|---|---|
+| `lkm` | `/proc/susfs_path` 或 `/sys/module/susfs_guard_lkm` / `susfs` 存在 | 跳过加载，直接管理规则 |
+| `builtin` | 无 LKM 标记，但 `ksu_susfs show version` 握手成功（内置接口在） | 跳过加载，直接管理规则 |
+| `none` | 两者都没有 | 按原流程加载 LKM |
+
+配套改动：
+- `apply.sh` / `load.sh` / `action.sh` / `ctl.sh` 全部改用 `susfs_kernel_ready`，不再只看 LKM 标记
+- `ctl.sh status` 新增 `susfs_kernel=lkm|builtin|none`，`ctl.sh loadstatus` 新增 `kernel=` 字段，`ctl.sh diag` 输出 `susfs_kernel` 与 `lkm_marker`
+- 安装脚本增加内核预检（只提示不阻断）：内核没开 `CONFIG_MODULES` / 缺 `CONFIG_KALLSYMS` / 缺 `CONFIG_KPROBES` / 强制模块签名时给出明确提示
+- 新增离线测试 `test_susfs_kind.sh`：LKM 标记、内置握手、两者皆无、握手失败、标记优先 5 种情况
+
+这样在「内核编入 SUSFS（含与 KPM 共存的构建）」的设备上，模块不会再去撞 LKM，而是直接走规则管理——这也是 APatch 用户唯一现实的 SUSFS 用法。
+
 ## APatch 识别（未实机验证）
 
 1.2.2 加了一层 APatch 适配，但**不宣称兼容**：
@@ -59,6 +79,6 @@
 管理器里覆盖安装即可，配置与规则文件全部保留。KernelSU 系安装到 `modules_update`，**需要重启一次生效**；重启后 LKM 会重新加载，规则重新应用。
 
 - 文件：`susfs_allinone-1.2.2.zip`
-- 大小：11055361 字节
-- SHA256：`dffcce10f7c60a298288084930a5baeffc2d38e33f3484767ed7ea89478988fb`
+- 大小：11056242 字节
+- SHA256：`928c9cb02575ae291f2283e13950f2cf70068e39f21676ad0deb9a93ae9e5ad4`
 - 离线测试：18 项全绿
