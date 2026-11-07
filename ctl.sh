@@ -308,6 +308,21 @@ case "$1" in
         [ "$_arc" = "0" ] && susfs_kernel_ready && clear_boot_guard
         exit "$_arc"
         ;;
+    allow_lkm)
+        _cf_gate || { echo "文件与发布包不一致，拒绝执行"; exit 1; }
+        mkdir -p "$CONFIG" 2>/dev/null
+        date '+%F %T' > "$CONFIG/allow_lkm_on_kernelpatch" 2>/dev/null
+        echo "allowed"
+        ;;
+    disallow_lkm)
+        rm -f "$CONFIG/allow_lkm_on_kernelpatch" 2>/dev/null
+        echo "disallowed"
+        ;;
+    crash_report)
+        if pstore_crash_suspect; then echo "crash_suspect=yes"; else echo "crash_suspect=no"; fi
+        _PCR="${PSTORE_DIR:-/sys/fs/pstore}"
+        ls -l "$_PCR" 2>/dev/null | head -6
+        ;;
     log)
         echo "===== load.log ====="
         tail -n 80 "$MODDIR/load.log" 2>/dev/null

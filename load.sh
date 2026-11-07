@@ -68,6 +68,25 @@ fi
 [ "$(getprop persist.sys.safemode)" = "1" ] && { echo "safe mode"; exit 0; }
 [ "$(getprop ro.sys.safemode)" = "1" ] && { echo "safe mode"; exit 0; }
 
+# 崩溃防护 / APatch 共存防护：只拦自动路径，手动操作保留用户意图
+if [ "${1:-}" != "manual" ]; then
+    if pstore_crash_suspect; then
+        pause_autoload
+        echo "[!] 上次启动疑似 SUSFS 崩溃（ramoops 同时含 panic/oops 与 susfs），已暂停自动加载"
+        echo "[i] 确认内核稳定后执行 ctl.sh resume_autoload 恢复"
+        set_description "❌ 上次启动疑似 SUSFS 崩溃，已暂停自动加载（ctl.sh resume_autoload）"
+        exit 0
+    fi
+    if kernelpatch_present && ! apatch_lkm_allowed && ! susfs_kernel_ready; then
+        echo "[!] APatch/KernelPatch 内核：默认不自动加载 SUSFS LKM（与 kpimg 共存有崩溃风险）"
+        echo "[i] 内置 SUSFS 则无需加载；确实要试，先执行 ctl.sh allow_lkm"
+        set_description "⚠️ APatch：默认不加载 SUSFS LKM（共存风险）；内置 SUSFS 或 ctl.sh allow_lkm"
+        exit 0
+    fi
+else
+    pstore_crash_suspect && echo "[!] 警告：ramoops 显示上次疑似 SUSFS 崩溃，仍按手动请求继续"
+fi
+
 # 互斥：开机与手动可能同时触发 load
 if ! lock_acquire "$STATE/load.lock" 300; then
     echo "[!] 另一个 load 正在运行，跳过本次"
@@ -171,6 +190,22 @@ if [ -z "$KMI" ]; then
 fi
 KO="$MODDIR/lib/susfs_guard_lkm-$KMI.ko"
 [ -s "$KO" ] || fail "缺少 $KMI 的 LKM 文件"
+
+# 内核侧限制预检：明确不支持时直接给原因，避免反复重试或触发重启
+_MSD=$(cat /proc/sys/kernel/modules_disabled 2>/dev/null)
+if [ "$_MSD" = "1" ]; then
+    fail "内核已禁止模块加载（modules_disabled=1），APatch 请使用内置 SUSFS 的内核"
+fi
+if [ -r /proc/config.gz ] && command -v zcat >/dev/null 2>&1; then
+    _CFG=$(zcat /proc/config.gz 2>/dev/null)
+    case "$_CFG" in
+        *CONFIG_MODULES=y*) : ;;
+        *) fail "内核未编译 CONFIG_MODULES，无法加载 SUSFS LKM（APatch 请用内置 SUSFS）" ;;
+    esac
+    case "$_CFG" in
+        *CONFIG_MODULE_SIG_FORCE=y*) fail "内核强制模块签名（MODULE_SIG_FORCE），SUSFS LKM 会加载失败" ;;
+    esac
+fi
 echo "[i] 内核: $REL"
 echo "[i] 匹配: $KMI"
 echo "[i] 加载: $KO"

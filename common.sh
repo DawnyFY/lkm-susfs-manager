@@ -148,6 +148,25 @@ coexist_disable_avc_spoof() {
     kernelpatch_present
 }
 
+# APatch/KernelPatch 共存时是否允许外挂 SUSFS LKM（默认不允许，需显式放行）
+apatch_lkm_allowed() {
+    [ -f "$CONFIG/allow_lkm_on_kernelpatch" ] && return 0
+    return 1
+}
+
+# 上次启动是否疑似因 SUSFS 崩溃：pstore/ramoops 里同时出现 panic/oops 与 susfs 字样
+pstore_crash_suspect() {
+    _pc_dir="${PSTORE_DIR:-/sys/fs/pstore}"
+    [ -d "$_pc_dir" ] || return 1
+    for _pc_f in "$_pc_dir"/*ramoops* "$_pc_dir"/*console*; do
+        [ -f "$_pc_f" ] || continue
+        if grep -qi "susfs" "$_pc_f" 2>/dev/null && grep -qE "Kernel panic|Oops|Unable to handle kernel|BUG:|Internal error" "$_pc_f" 2>/dev/null; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 # APatch 的 SUSFS 依赖内核侧支持，失败原因与 KSU / Magisk 不同：描述里直接写清楚
 susfs_hint() {
     case "$(root_family)" in

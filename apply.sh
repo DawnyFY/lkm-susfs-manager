@@ -87,6 +87,27 @@ if kernelpatch_present; then
 else
     rm -f "$STATE/coexist_mode" 2>/dev/null
 fi
+
+# 崩溃防护：上次启动 ramoops 里出现 SUSFS 相关 panic/oops，自动暂停本次开机应用
+if pstore_crash_suspect; then
+    if [ "${AUTOLOAD:-0}" = "1" ]; then
+        pause_autoload
+        echo "[!] 检测到上次启动疑似 SUSFS 崩溃（ramoops 同时含 panic/oops 与 susfs），已暂停自动加载"
+        echo "[i] 确认内核稳定后执行 ctl.sh resume_autoload 恢复"
+        set_description "❌ 上次启动疑似 SUSFS 崩溃，已暂停自动加载（ctl.sh resume_autoload）"
+        exit 0
+    else
+        echo "[!] 警告：ramoops 显示上次疑似 SUSFS 崩溃，仍按手动请求继续"
+    fi
+fi
+
+# APatch/KernelPatch 共存防护：默认不自动外挂 SUSFS LKM
+if [ "${AUTOLOAD:-0}" = "1" ] && ! susfs_kernel_ready && kernelpatch_present && ! apatch_lkm_allowed; then
+    echo "[!] APatch/KernelPatch 内核：默认不自动加载 SUSFS LKM（与 kpimg 共存有崩溃风险）"
+    echo "[i] 内核已内置 SUSFS 则无需外挂；确实要试外挂，先执行 ctl.sh allow_lkm"
+    set_description "⚠️ APatch：默认不加载 SUSFS LKM（共存风险）；内置 SUSFS 或 ctl.sh allow_lkm"
+    exit 0
+fi
 # 只允许 KMI 名称字符，防止路径穿越
 case "$force_kmi" in *[!A-Za-z0-9._-]*) force_kmi="" ;; esac
 spoof_uname=${spoof_uname:-0}

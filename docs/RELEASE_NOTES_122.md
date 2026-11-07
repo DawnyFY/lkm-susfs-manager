@@ -41,7 +41,7 @@
 - `load.sh` 返回 2（未匹配内核）时不再被 apply 覆盖成 "LKM 加载失败"
 - 去重账本清理从"内核已就绪"分支移到真实 insmod 成功路径
 
-回归测试：新增 `test_action_entry.sh`（9 断言）与 `test_helper_scope.sh`（5 断言），总计 **24 项离线测试全绿**。
+回归测试：新增 `test_action_entry.sh`（9 断言）与 `test_helper_scope.sh`（5 断言），总计 **25 项离线测试全绿**。
 
 ## 审计 P2 修复
 
@@ -51,6 +51,17 @@
 - 注释只认行首或空白后的 `#`，路径里的 # 不再被截断
 - 过期锁接管补写 boot_id；`susfs_path_del` 改为回读确认；连续失败 3 次自动暂停自动加载
 - 安装时 KMI 未匹配会明确提示「未安装 LKM」
+
+## APatch 防护（默认不外挂 LKM + 崩溃自停）
+
+针对「在 APatch/KernelPatch 上外挂 SUSFS LKM 后崩溃/重启」的风险，增加四层保护：
+
+- **默认不外挂**：检测到 APatch/KernelPatch 且内核侧无 SUSFS 时，自动路径不加载 LKM；要尝试外挂需先 `ctl.sh allow_lkm`
+- **崩溃自停**：若上一次启动的 pstore/ramoops 中同时出现 panic/oops 与 susfs 字样，自动暂停自动加载，需 `ctl.sh resume_autoload` 恢复
+- **内核限制预检**：`modules_disabled=1`、未编译 `CONFIG_MODULES`、`MODULE_SIG_FORCE` 命中时直接给出原因，不再反复重试
+- **诊断**：`ctl.sh crash_report` 显示崩溃疑似状态与 pstore 文件；`ctl.sh allow_lkm` / `disallow_lkm` 控制放行
+
+KernelSU / Magisk 的正常使用路径不受影响。
 
 ## APatch / KernelPatch 共存安全模式
 
@@ -112,8 +123,8 @@ SUSFS 不只有 LKM 一种形态：按上游补丁的 `CONFIG_KSU_SUSFS_*` 特�
 管理器里覆盖安装即可，配置与规则文件全部保留。KernelSU 系安装到 `modules_update`，**需要重启一次生效**；重启后 LKM 会重新加载，规则重新应用。
 
 - 文件：`susfs_allinone-1.2.2.zip`
-- 大小：11058978 字节
-- SHA256：`1069a1372058abbc9d391851234338028cebb39ae4959c403915d7efabb54f9d`
+- 大小：11060505 字节
+- SHA256：`9a3cf6897d3761b44648af8dbad4acf28b5475b1fa06cdbce6f1a40cf2891ccd`
 - 离线测试：18 项全绿
 
 ## 已知问题（外部反馈，未复现）
