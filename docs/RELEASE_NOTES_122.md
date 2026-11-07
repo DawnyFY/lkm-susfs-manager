@@ -82,3 +82,16 @@ SUSFS 不只有 LKM 一种形态：按上游补丁的 `CONFIG_KSU_SUSFS_*` 特�
 - 大小：11056242 字节
 - SHA256：`928c9cb02575ae291f2283e13950f2cf70068e39f21676ad0deb9a93ae9e5ad4`
 - 离线测试：18 项全绿
+
+## 已知问题（外部反馈，未复现）
+
+**r18.8 + NeoZygisk 可能触发 zygote 循环重启**
+
+- 反馈来源：酷安 [feed/74905454](https://www.coolapk.com/feed/74905454)（OnePlus PKG110 / ColorOS 16 / 内核 6.1.141-android14-11 / KernelSU LKM / NeoZygisk v2.4 / SUSFS LKM Loader）
+- 现象：开机后所有 Zygisk 模块失效，NeoZygisk 报 `dlopen ... /data/adb/neozygisk/lib64/libzygisk.so not found`（文件实际存在），dmesg 里 zygote 被反复杀掉重启；回退 r18.6 正常
+- 推断：NeoZygisk 在 zygote 入口 ptrace 注入时 dlopen 被内核路径隐藏拦截；本模块默认隐藏 `/data/adb`，因此 **NeoZygisk 用户有风险**
+- 建议：
+  - 用 NeoZygisk 时不要隐藏 `/data/adb`（至少把 `/data/adb/neozygisk` 排除）
+  - 或改用 Zygisk Next
+  - 或临时回退上游 r18.6 的 `.ko`（升级前先备份当前 ko 与 `susfs_insmod`）
+- 我们的测试机使用 Zygisk Next，未复现；本条为外部单机反馈，供参考。
