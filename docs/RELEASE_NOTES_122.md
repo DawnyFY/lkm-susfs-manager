@@ -28,6 +28,21 @@
 
 **说明**：我没有 Magisk 真机，Magisk 这条路径属于新增实现、未在真机实测（KernelSU / SukiSU 路径的回归测试通过）。安装与开机应用按 Magisk 生命周期实现（`post-fs-data` + `service`），遇到问题请反馈日志。
 
+## 发布前审计修复（1.2.2）
+
+首轮只读审计发现并修复了两个高危问题：
+
+1. **Action 按钮假成功**：`action.sh` 之前只看"LKM 是否就绪"，apply 因锁忙/文件被改/loading 残留而跳过时仍打印 `[OK] 完成` 并清掉启动守卫。现在改为 **apply rc=0 且内核侧就绪** 才算成功；失败时打印两个 rc 并保留守卫。
+2. **helper 变量互相覆盖**：脚本为兼容老式 sh 没有用 `local`，`record_own_hide_mount` 写调用方的 `_n`、`record_our_path` 写调用方的 `_f`。后果：开启 `hide_dex2oat` 且命中 ≥2 条挂载时 apply 会被算术错误中途打断；Scene 第二条规则写错路径。现在 helper 内部变量全部改成独立名字，循环变量也改为 `_dex_*` / `_sc_*` / `_rs_*`。
+
+附带修复：
+- `ctl.sh load/apply` 手动路径成功后主动清启动守卫，与 Action 行为一致（之前成功也不清）
+- `apply.sh` 的 `state/loading` 残留改为返回 3（跳过），boot-completed 不会再把"没执行"当成功
+- `load.sh` 返回 2（未匹配内核）时不再被 apply 覆盖成 "LKM 加载失败"
+- 去重账本清理从"内核已就绪"分支移到真实 insmod 成功路径
+
+回归测试：新增 `test_action_entry.sh`（9 断言）与 `test_helper_scope.sh`（5 断言），总计 **22 项离线测试全绿**。
+
 ## 内核内置 SUSFS 适配（面向 APatch / 自编内核）
 
 SUSFS 不只有 LKM 一种形态：按上游补丁的 `CONFIG_KSU_SUSFS_*` 特性位，它也可以直接编进内核（`SUS_PATH` / `SUS_MOUNT` / `SUS_KSTAT` / `SPOOF_UNAME` / `SPOOF_CMDLINE_OR_BOOTCONFIG` / `OPEN_REDIRECT` / `SUS_MAP` / `HIDE_KSU_SUSFS_SYMBOLS` / `ENABLE_LOG` 等）。之前模块只认 LKM 的 `/proc` `/sys` 标记，内核内置 SUSFS 时会被误判成“未加载”，然后重复 insmod。
@@ -79,8 +94,8 @@ SUSFS 不只有 LKM 一种形态：按上游补丁的 `CONFIG_KSU_SUSFS_*` 特�
 管理器里覆盖安装即可，配置与规则文件全部保留。KernelSU 系安装到 `modules_update`，**需要重启一次生效**；重启后 LKM 会重新加载，规则重新应用。
 
 - 文件：`susfs_allinone-1.2.2.zip`
-- 大小：11056242 字节
-- SHA256：`928c9cb02575ae291f2283e13950f2cf70068e39f21676ad0deb9a93ae9e5ad4`
+- 大小：11057073 字节
+- SHA256：`74a595ba43c95011fae913ea55433fcd964c4cea463a440613fe55074b5a299c`
 - 离线测试：18 项全绿
 
 ## 已知问题（外部反馈，未复现）

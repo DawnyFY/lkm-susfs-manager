@@ -34,8 +34,9 @@ if [ -f "$STATE/loading" ]; then
         rm -f "$STATE/loading"
         echo "[!] 清理过期的 state/loading 残留（>10 分钟）"
     else
-        echo "[!] 上次 LKM 加载未完成（state/loading 残留），跳过规则应用"
-        exit 0
+        echo "[!] 上次 LKM 加载未完成（state/loading 残留），跳过规则应用（稍后会重试）"
+        # 返回 3(跳过)：调用方不能把"没执行"当成成功而清掉启动守卫
+        exit 3
     fi
 fi
 
@@ -109,6 +110,11 @@ if ! susfs_kernel_ready; then
         sh "$MODDIR/load.sh" manual
     fi
     rc=$?
+    if [ "$rc" = "2" ]; then
+        # load.sh 已判定"未匹配内核"并写好模块描述，不要覆盖成"LKM 加载失败"
+        echo "[!] 未匹配内核/KMI，规则未应用（模块描述已更新）"
+        exit 1
+    fi
     if [ "$rc" != "0" ]; then
         echo "[!] 加载失败，无法应用规则"
         set_description "❌ $(susfs_hint insmod)"
@@ -479,31 +485,31 @@ fi
 
 if [ "$hide_dex2oat" = "1" ]; then
     if hide_mounts_supported || cap_ok sus_mount; then
-        _n=0; _ok=0; _bad=0
-        for _m in $(grep -E " (/(system|apex|product)/[^ ]*/oat|/data/dalvik-cache)" /proc/mounts 2>/dev/null | cut -d" " -f2 | sort -u); do
-            [ -d "$_m" ] || continue
-            _n=$((_n + 1))
+        _dex_n=0; _dex_ok=0; _dex_bad=0
+        for _dex_m in $(grep -E " (/(system|apex|product)/[^ ]*/oat|/data/dalvik-cache)" /proc/mounts 2>/dev/null | cut -d" " -f2 | sort -u); do
+            [ -d "$_dex_m" ] || continue
+            _dex_n=$((_dex_n + 1))
             # 优先前缀表；旧内核回退 add_sus_mount
-            if hide_mounts_has "$_m"; then
-                echo "[=] hide_mounts $_m (已在表中，跳过)"
-            elif hide_mounts_add "$_m"; then
-                _ok=$((_ok + 1))
-                record_own_hide_mount "$_m"
-                echo "[+] hide_mounts $_m (dex2oat)"
+            if hide_mounts_has "$_dex_m"; then
+                echo "[=] hide_mounts $_dex_m (已在表中，跳过)"
+            elif hide_mounts_add "$_dex_m"; then
+                _dex_ok=$((_dex_ok + 1))
+                record_own_hide_mount "$_dex_m"
+                echo "[+] hide_mounts $_dex_m (dex2oat)"
             else
-                sus_mount_add_once "$_m"
+                sus_mount_add_once "$_dex_m"
                 case $? in
-                    0) _ok=$((_ok + 1)); echo "[+] sus_mount $_m (dex2oat)" ;;
-                    2) echo "[=] sus_mount $_m (本次开机已添加，跳过)" ;;
-                    *) _bad=$((_bad + 1)); echo "[=] sus_mount $_m (失败)" ;;
+                    0) _dex_ok=$((_dex_ok + 1)); echo "[+] sus_mount $_dex_m (dex2oat)" ;;
+                    2) echo "[=] sus_mount $_dex_m (本次开机已添加，跳过)" ;;
+                    *) _dex_bad=$((_dex_bad + 1)); echo "[=] sus_mount $_dex_m (失败)" ;;
                 esac
             fi
         done
-        [ "$_n" = "0" ] && echo "[i] 未发现 dex2oat 挂载，跳过"
+        [ "$_dex_n" = "0" ] && echo "[i] 未发现 dex2oat 挂载，跳过"
         # 前缀表上限 64（r18.5+）；超过就只能靠 sus_path 覆盖，写日志提醒
-        [ "$_ok" -gt 60 ] && echo "[!] dex2oat 前缀数 $_ok 接近/超过 hide_mounts 上限 64，部分可能未生效"
+        [ "$_dex_ok" -gt 60 ] && echo "[!] dex2oat 前缀数 $_dex_ok 接近/超过 hide_mounts 上限 64，部分可能未生效"
         # 全部失败说明命令实际不可用（特性位谎报），降级后不再尝试
-        if [ "$_ok" = "0" ] && [ "$_bad" -gt 0 ]; then
+        if [ "$_dex_ok" = "0" ] && [ "$_dex_bad" -gt 0 ]; then
             echo "[!] add_sus_mount 实测不可用，标记为不支持"
             caps_downgrade sus_mount
         fi
@@ -517,23 +523,23 @@ if [ "$hide_scene" = "1" ]; then
     # Scene 的目录名每次开机都变，创建时机也可能晚于本脚本。
     # 只有开机自动应用才值得等（最多 3 轮 5 秒）；WebUI 手动保存时扫一次就走，
     # 否则每次「保存并应用」都要干等 10 秒，而目录往往根本不存在。
-    _tries=0
-    _n=0
-    _max=1
-    [ "${AUTOLOAD:-0}" = "1" ] && _max=3
-    while [ "$_tries" -lt "$_max" ]; do
-        for _f in /dev/*/scene_mode_category; do
-            [ -e "$_f" ] || continue
-            _d=${_f%/scene_mode_category}
-            _n=$((_n + 1))
-            add_sus_path_safe "$_d"
-            add_sus_path_safe "$_f"
+    _sc_tries=0
+    _sc_n=0
+    _sc_max=1
+    [ "${AUTOLOAD:-0}" = "1" ] && _sc_max=3
+    while [ "$_sc_tries" -lt "$_sc_max" ]; do
+        for _sc_f in /dev/*/scene_mode_category; do
+            [ -e "$_sc_f" ] || continue
+            _sc_d=${_sc_f%/scene_mode_category}
+            _sc_n=$((_sc_n + 1))
+            add_sus_path_safe "$_sc_d"
+            add_sus_path_safe "$_sc_f"
         done
-        [ "$_n" -gt 0 ] && break
-        _tries=$((_tries + 1))
-        [ "$_tries" -lt "$_max" ] && sleep 5
+        [ "$_sc_n" -gt 0 ] && break
+        _sc_tries=$((_sc_tries + 1))
+        [ "$_sc_tries" -lt "$_sc_max" ] && sleep 5
     done
-    if [ "$_n" = "0" ]; then
+    if [ "$_sc_n" = "0" ]; then
         echo "[i] 未发现 scene 痕迹，跳过（可稍后在 WebUI 点「重扫 Scene」）"
     fi
 fi

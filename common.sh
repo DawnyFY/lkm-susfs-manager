@@ -611,12 +611,12 @@ hide_mounts_add() { hide_mounts_write add "$1"; }
 
 # 回读当前前缀表（节点可读），用于去重
 hide_mounts_has() {
-    _node=$HIDE_MOUNTS_NODE
-    [ -e "$_node" ] || _node=/proc/susfs_hide_mounts
-    [ -e "$_node" ] || return 1
-    _pref=$(sed -n 's/^#[[:space:]]*prefixes:[[:space:]]*//p; s/^prefixes:[[:space:]]*//p' "$_node" 2>/dev/null)
-    [ -n "$_pref" ] || return 1
-    case " $_pref " in
+    _hmh_node=$HIDE_MOUNTS_NODE
+    [ -e "$_hmh_node" ] || _hmh_node=/proc/susfs_hide_mounts
+    [ -e "$_hmh_node" ] || return 1
+    _hmh_pref=$(sed -n 's/^#[[:space:]]*prefixes:[[:space:]]*//p; s/^prefixes:[[:space:]]*//p' "$_hmh_node" 2>/dev/null)
+    [ -n "$_hmh_pref" ] || return 1
+    case " $_hmh_pref " in
         *" $1 "*) return 0 ;;
     esac
     return 1
@@ -638,9 +638,9 @@ _hm_norm() {
 
 record_own_hide_mount() {
     # 默认前缀保护：比较前归一化尾斜杠，/data/adb 与 /data/adb/ 等价
-    _n=$(_hm_norm "$1")
+    _hm_n=$(_hm_norm "$1")
     case " $HIDE_MOUNTS_DEFAULT_PREFIXES " in
-        *" $_n "*) return 0 ;;
+        *" $_hm_n "*) return 0 ;;
     esac
     grep -Fqx -- "$1" "$(own_hide_mounts_file)" 2>/dev/null && return 0
     mkdir -p "$STATE" 2>/dev/null
@@ -648,23 +648,23 @@ record_own_hide_mount() {
 }
 
 clear_own_hide_mounts() {
-    _f=$(own_hide_mounts_file)
-    [ -f "$_f" ] || return 0
-    _pend=$STATE/.hm.pend; : > "$_pend" 2>/dev/null
-    while IFS= read -r _p || [ -n "$_p" ]; do
-        [ -n "$_p" ] || continue
-        if hide_mounts_del "$_p" >/dev/null 2>&1; then
-            echo "[=] hide_mounts 撤销 $_p"
+    _hm_f=$(own_hide_mounts_file)
+    [ -f "$_hm_f" ] || return 0
+    _hm_pend=$STATE/.hm.pend; : > "$_hm_pend" 2>/dev/null
+    while IFS= read -r _hm_p || [ -n "$_hm_p" ]; do
+        [ -n "$_hm_p" ] || continue
+        if hide_mounts_del "$_hm_p" >/dev/null 2>&1; then
+            echo "[=] hide_mounts 撤销 $_hm_p"
         else
-            printf '%s\n' "$_p" >> "$_pend" 2>/dev/null
+            printf '%s\n' "$_hm_p" >> "$_hm_pend" 2>/dev/null
         fi
-    done < "$_f"
-    if [ -s "$_pend" ]; then
-        cp -f "$_pend" "$_f" 2>/dev/null
+    done < "$_hm_f"
+    if [ -s "$_hm_pend" ]; then
+        cp -f "$_hm_pend" "$_hm_f" 2>/dev/null
     else
-        : > "$_f" 2>/dev/null
+        : > "$_hm_f" 2>/dev/null
     fi
-    rm -f "$_pend"
+    rm -f "$_hm_pend"
     return 0
 }
 
@@ -693,11 +693,11 @@ sus_map_add() { sus_map_write add "$1"; }
 
 # 按本次开机去重（内核 /proc/susfs_map 只回显 ino/dev，无法按路径回读）
 sus_map_add_once() {
-    _hf="$STATE/sus_map_added.txt"
-    _mount_dedup_prepare "$_hf"
-    grep -Fqx -- "$1" "$_hf" 2>/dev/null && return 2
+    _smu_hf="$STATE/sus_map_added.txt"
+    _mount_dedup_prepare "$_smu_hf"
+    grep -Fqx -- "$1" "$_smu_hf" 2>/dev/null && return 2
     sus_map_add "$1" || return 1
-    printf '%s\n' "$1" >> "$_hf" 2>/dev/null
+    printf '%s\n' "$1" >> "$_smu_hf" 2>/dev/null
     return 0
 }
 sus_map_del() { sus_map_write del "$1"; }
@@ -705,51 +705,51 @@ sus_map_del() { sus_map_write del "$1"; }
 own_sus_map_file() { printf '%s' "$STATE/sus_map_added.txt"; }
 
 record_own_sus_map() {
-    _f=$(own_sus_map_file)
+    _sm_f=$(own_sus_map_file)
     mkdir -p "$STATE" 2>/dev/null
-    grep -Fqx -- "$1" "$_f" 2>/dev/null && return 0
-    printf '%s\n' "$1" >> "$_f" 2>/dev/null
+    grep -Fqx -- "$1" "$_sm_f" 2>/dev/null && return 0
+    printf '%s\n' "$1" >> "$_sm_f" 2>/dev/null
 }
 
 clear_own_sus_map() {
-    _f=$(own_sus_map_file)
-    [ -f "$_f" ] || return 0
-    _pend=$STATE/.sm.pend; : > "$_pend" 2>/dev/null
-    while IFS= read -r _p || [ -n "$_p" ]; do
-        [ -n "$_p" ] || continue
-        if sus_map_del "$_p" >/dev/null 2>&1; then
-            echo "[=] sus_map 撤销 $_p"
+    _sm_f=$(own_sus_map_file)
+    [ -f "$_sm_f" ] || return 0
+    _sm_pend=$STATE/.sm.pend; : > "$_sm_pend" 2>/dev/null
+    while IFS= read -r _sm_p || [ -n "$_sm_p" ]; do
+        [ -n "$_sm_p" ] || continue
+        if sus_map_del "$_sm_p" >/dev/null 2>&1; then
+            echo "[=] sus_map 撤销 $_sm_p"
         else
-            printf '%s\n' "$_p" >> "$_pend" 2>/dev/null
+            printf '%s\n' "$_sm_p" >> "$_sm_pend" 2>/dev/null
         fi
-    done < "$_f"
-    if [ -s "$_pend" ]; then
-        cp -f "$_pend" "$_f" 2>/dev/null
+    done < "$_sm_f"
+    if [ -s "$_sm_pend" ]; then
+        cp -f "$_sm_pend" "$_sm_f" 2>/dev/null
     else
-        : > "$_f" 2>/dev/null
+        : > "$_sm_f" 2>/dev/null
     fi
-    rm -f "$_pend"
+    rm -f "$_sm_pend"
     return 0
 }
 
 # 返回 0=本次已添加，2=之前已添加过（跳过），1=添加失败
 sus_mount_add_once() {
-    _p=$1
-    _hf="$STATE/sus_mount_added.txt"
-    _mount_dedup_prepare "$_hf"
-    grep -Fqx -- "$_p" "$_hf" 2>/dev/null && return 2
-    "$BIN" add_sus_mount "$_p" >/dev/null 2>&1 || return 1
-    printf '%s\n' "$_p" >> "$_hf" 2>/dev/null
+    _smo_p=$1
+    _smo_hf="$STATE/sus_mount_added.txt"
+    _mount_dedup_prepare "$_smo_hf"
+    grep -Fqx -- "$_smo_p" "$_smo_hf" 2>/dev/null && return 2
+    "$BIN" add_sus_mount "$_smo_p" >/dev/null 2>&1 || return 1
+    printf '%s\n' "$_smo_p" >> "$_smo_hf" 2>/dev/null
     return 0
 }
 
 try_umount_add_once() {
-    _p=$1
-    _hf="$STATE/try_umount_added.txt"
-    _mount_dedup_prepare "$_hf"
-    grep -Fqx -- "$_p" "$_hf" 2>/dev/null && return 2
-    "$BIN" add_try_umount "$_p" 1 >/dev/null 2>&1 || return 1
-    printf '%s\n' "$_p" >> "$_hf" 2>/dev/null
+    _tu_p=$1
+    _tu_hf="$STATE/try_umount_added.txt"
+    _mount_dedup_prepare "$_tu_hf"
+    grep -Fqx -- "$_tu_p" "$_tu_hf" 2>/dev/null && return 2
+    "$BIN" add_try_umount "$_tu_p" 1 >/dev/null 2>&1 || return 1
+    printf '%s\n' "$_tu_p" >> "$_tu_hf" 2>/dev/null
     return 0
 }
 
@@ -840,41 +840,41 @@ susfs_path_del() {
 
 # 记录本模块成功写入的路径（去重）
 record_our_path() {
-    _p=$1
-    [ -n "$_p" ] || return 0
-    _f=$(our_paths_file)
+    _rp_p=$1
+    [ -n "$_rp_p" ] || return 0
+    _rp_f=$(our_paths_file)
     mkdir -p "$STATE" 2>/dev/null
-    grep -Fqx -- "$_p" "$_f" 2>/dev/null || printf '%s\n' "$_p" >> "$_f"
+    grep -Fqx -- "$_rp_p" "$_rp_f" 2>/dev/null || printf '%s\n' "$_rp_p" >> "$_rp_f"
 }
 
 # replace_rules=1：只移除上一次记录的路径
 clear_own_paths() {
-    _f=$(our_paths_file)
-    if [ ! -s "$_f" ]; then
+    _op_f=$(our_paths_file)
+    if [ ! -s "$_op_f" ]; then
         echo "[i] 无历史规则清单，跳过清理（不触碰其他模块的规则）"
         return 0
     fi
-    _n=0; _fail=0
-    _pending="$STATE/our_paths.pending.txt"
-    : > "$_pending" 2>/dev/null
-    while IFS= read -r _p || [ -n "$_p" ]; do
-        [ -n "$_p" ] || continue
-        if susfs_path_del "$_p"; then
-            _n=$((_n + 1))
+    _op_n=0; _op_fail=0
+    _op_pending="$STATE/our_paths.pending.txt"
+    : > "$_op_pending" 2>/dev/null
+    while IFS= read -r _op_p || [ -n "$_op_p" ]; do
+        [ -n "$_op_p" ] || continue
+        if susfs_path_del "$_op_p"; then
+            _op_n=$((_op_n + 1))
         else
-            _fail=$((_fail + 1))
-            printf '%s\n' "$_p" >> "$_pending" 2>/dev/null
+            _op_fail=$((_op_fail + 1))
+            printf '%s\n' "$_op_p" >> "$_op_pending" 2>/dev/null
         fi
-    done < "$_f"
+    done < "$_op_f"
     # 删除失败的条目留在清单里，下次继续尝试，避免变成无法清理的孤儿规则
-    if [ -s "$_pending" ]; then
-        mv -f "$_pending" "$_f" 2>/dev/null
+    if [ -s "$_op_pending" ]; then
+        mv -f "$_op_pending" "$_op_f" 2>/dev/null
     else
-        : > "$_f"
-        rm -f "$_pending" 2>/dev/null
+        : > "$_op_f"
+        rm -f "$_op_pending" 2>/dev/null
     fi
-    echo "[i] 已移除本模块上次写入的规则: 成功 $_n 条，失败 $_fail 条"
-    if [ "$_n" = "0" ] && [ "$_fail" -gt 0 ]; then
+    echo "[i] 已移除本模块上次写入的规则: 成功 $_op_n 条，失败 $_op_fail 条"
+    if [ "$_op_n" = "0" ] && [ "$_op_fail" -gt 0 ]; then
         echo "[!] 当前内核不支持 del，旧规则无法逐条移除；如需整表清空请显式设置 replace_rules=2"
     fi
 }
@@ -882,19 +882,19 @@ clear_own_paths() {
 # 首次迁移：旧版本用整表 clear 写入规则，没有留下清单。
 # 以当前配置里声明的路径为候选逐条删除，只动配置内的路径。
 clear_migrated_paths() {
-    _cfg=$1
-    [ -f "$_cfg" ] || return 0
-    _n=0; _fail=0
-    while IFS= read -r _line || [ -n "$_line" ]; do
-        _p=$(printf '%s' "$_line" | tr -d '\r')
-        _p=${_p%%#*}
-        _p=$(printf '%s' "$_p" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-        [ -n "$_p" ] || continue
-        case "$_p" in /*) ;; *) continue ;; esac
-        if susfs_path_del "$_p"; then _n=$((_n + 1)); else _fail=$((_fail + 1)); fi
-    done < "$_cfg"
-    echo "[i] 首次迁移：按配置清理旧规则 成功 $_n 条，失败 $_fail 条"
-    [ "$_n" = "0" ] && [ "$_fail" -gt 0 ] && echo "[!] 内核不支持 del，旧规则无法逐条移除"
+    _cmp_cfg=$1
+    [ -f "$_cmp_cfg" ] || return 0
+    _cmp_n=0; _cmp_fail=0
+    while IFS= read -r _cmp_line || [ -n "$_cmp_line" ]; do
+        _cmp_p=$(printf '%s' "$_cmp_line" | tr -d '\r')
+        _cmp_p=${_cmp_p%%#*}
+        _cmp_p=$(printf '%s' "$_cmp_p" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        [ -n "$_cmp_p" ] || continue
+        case "$_cmp_p" in /*) ;; *) continue ;; esac
+        if susfs_path_del "$_cmp_p"; then _cmp_n=$((_cmp_n + 1)); else _cmp_fail=$((_cmp_fail + 1)); fi
+    done < "$_cmp_cfg"
+    echo "[i] 首次迁移：按配置清理旧规则 成功 $_cmp_n 条，失败 $_cmp_fail 条"
+    [ "$_cmp_n" = "0" ] && [ "$_cmp_fail" -gt 0 ] && echo "[!] 内核不支持 del，旧规则无法逐条移除"
     return 0
 }
 
@@ -953,31 +953,31 @@ CAPS_FILE_NAME="caps"
 
 # 判定内核是否声明了某个 SUSFS 特性（不调用会改状态的命令）
 susfs_feature_enabled() {
-    _feat=$1
-    [ -n "$_feat" ] || return 1
-    _b=$(select_susfs_bin 2>/dev/null) || return 1
-    "$_b" show enabled_features 2>/dev/null | grep -qx "$_feat"
+    _sfe_feat=$1
+    [ -n "$_sfe_feat" ] || return 1
+    _sfe_b=$(select_susfs_bin 2>/dev/null) || return 1
+    "$_sfe_b" show enabled_features 2>/dev/null | grep -qx "$_sfe_feat"
 }
 
 # 记录一次实测失败：把该能力标记为不可用，避免重复尝试
 caps_downgrade() {
-    _name=$1
-    _f="$STATE/$CAPS_FILE_NAME"
-    [ -f "$_f" ] || caps_refresh
-    [ -f "$_f" ] || return 0
+    _cd_name=$1
+    _cd_f="$STATE/$CAPS_FILE_NAME"
+    [ -f "$_cd_f" ] || caps_refresh
+    [ -f "$_cd_f" ] || return 0
     # 用 awk 重写，避免依赖 sed -i（部分机型/toybox 行为不一致）
-    awk -v n="$_name" '
+    awk -v n="$_cd_name" '
         BEGIN { done = 0; src = 0 }
         $0 ~ "^" n "=" { print n "=0"; done = 1; next }
         $0 ~ "^" n "_src=" { print n "_src=probe"; src = 1; next }
         { print }
         END { if (!done) print n "=0"; if (!src) print n "_src=probe" }
-    ' "$_f" > "$_f.tmp" 2>/dev/null && mv -f "$_f.tmp" "$_f" 2>/dev/null
+    ' "$_cd_f" > "$_cd_f.tmp" 2>/dev/null && mv -f "$_cd_f.tmp" "$_cd_f" 2>/dev/null
 }
 
 caps_refresh() {
     mkdir -p "$STATE" 2>/dev/null
-    _f="$STATE/$CAPS_FILE_NAME"
+    _cr_f="$STATE/$CAPS_FILE_NAME"
     # 只读判定：特性位可能谎报（上游 #122），实测失败时由 caps_downgrade 降级为 0
     {
         if susfs_feature_enabled CONFIG_KSU_SUSFS_SUS_MOUNT; then echo "sus_mount=1"; else echo "sus_mount=0"; fi
@@ -987,20 +987,20 @@ caps_refresh() {
         echo "lkm=$([ -d /sys/module/susfs_guard_lkm ] && echo 1 || echo 0)"
         echo "boot_id=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)"
         echo "checked_at=$(date '+%F %T' 2>/dev/null)"
-    } > "$_f" 2>/dev/null
+    } > "$_cr_f" 2>/dev/null
 }
 
 cap_ok() {
-    _f="$STATE/$CAPS_FILE_NAME"
-    _bid=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
-    _cached=$(grep '^boot_id=' "$_f" 2>/dev/null | tail -1 | cut -d= -f2-)
+    _cap_f="$STATE/$CAPS_FILE_NAME"
+    _cap_bid=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
+    _cap_cached=$(grep '^boot_id=' "$_cap_f" 2>/dev/null | tail -1 | cut -d= -f2-)
     # LKM 装载状态也要参与判定：未加载时判定出的 0 不能留到加载之后
-    _lk=$([ -d /sys/module/susfs_guard_lkm ] && echo 1 || echo 0)
-    _cached_lk=$(grep '^lkm=' "$_f" 2>/dev/null | tail -1 | cut -d= -f2-)
-    if [ ! -f "$_f" ] || { [ -n "$_bid" ] && [ "$_bid" != "$_cached" ]; } || [ "$_lk" != "$_cached_lk" ]; then
+    _cap_lk=$([ -d /sys/module/susfs_guard_lkm ] && echo 1 || echo 0)
+    _cap_cached_lk=$(grep '^lkm=' "$_cap_f" 2>/dev/null | tail -1 | cut -d= -f2-)
+    if [ ! -f "$_cap_f" ] || { [ -n "$_cap_bid" ] && [ "$_cap_bid" != "$_cap_cached" ]; } || [ "$_cap_lk" != "$_cap_cached_lk" ]; then
         caps_refresh
     fi
-    [ "$(grep "^$1=" "$_f" 2>/dev/null | tail -1 | cut -d= -f2)" = "1" ]
+    [ "$(grep "^$1=" "$_cap_f" 2>/dev/null | tail -1 | cut -d= -f2)" = "1" ]
 }
 # ---- 诊断：ksu_susfs 通信失败排查 ----
 # 输出两个二进制对同一内核的响应，便于判断是二进制 ABI 不匹配还是 LKM 问题。
@@ -1028,27 +1028,27 @@ diag_tooling() {
 # 读取 ELF 架构（判断 ksu_susfs 是否与本机匹配）
 # 返回 aarch64 / x86_64 / arm / x86 / not-elf / missing / machine=N
 elf_machine() {
-    _f=$1
-    [ -f "$_f" ] || { echo "missing"; return 0; }
-    _magic=$(od -An -tx1 -N4 "$_f" 2>/dev/null | tr -d " \n")
-    [ "$_magic" = "7f454c46" ] || { echo "not-elf"; return 0; }
-    _lo=$(od -An -tu1 -j18 -N1 "$_f" 2>/dev/null | tr -d " ")
-    _hi=$(od -An -tu1 -j19 -N1 "$_f" 2>/dev/null | tr -d " ")
-    _m=$(( ${_hi:-0} * 256 + ${_lo:-0} ))
-    case "$_m" in
+    _elf_f=$1
+    [ -f "$_elf_f" ] || { echo "missing"; return 0; }
+    _elf_magic=$(od -An -tx1 -N4 "$_elf_f" 2>/dev/null | tr -d " \n")
+    [ "$_elf_magic" = "7f454c46" ] || { echo "not-elf"; return 0; }
+    _elf_lo=$(od -An -tu1 -j18 -N1 "$_elf_f" 2>/dev/null | tr -d " ")
+    _elf_hi=$(od -An -tu1 -j19 -N1 "$_elf_f" 2>/dev/null | tr -d " ")
+    _elf_m=$(( ${_elf_hi:-0} * 256 + ${_elf_lo:-0} ))
+    case "$_elf_m" in
         183) echo "aarch64" ;;
         62)  echo "x86_64" ;;
         40)  echo "arm" ;;
         3)   echo "x86" ;;
-        *)   echo "machine=$_m" ;;
+        *)   echo "machine=$_elf_m" ;;
     esac
 }
 # 判断是否为「检测类应用自身的数据目录」：隐藏它们会让检测工具行为异常，
 # 反而更容易被判为异常环境，因此默认跳过。
 # 若 skip_hide.txt 缺失（例如升级时配置目录被跳过），按默认列表生成一份
 ensure_skip_hide_file() {
-    _f="$CONFIG/skip_hide.txt"
-    [ -f "$_f" ] && return 0
+    _esh_f="$CONFIG/skip_hide.txt"
+    [ -f "$_esh_f" ] && return 0
     mkdir -p "$CONFIG" 2>/dev/null
     {
         echo "# 不隐藏的包名/路径片段，每行一个（子串匹配，支持 # 注释）"
@@ -1056,22 +1056,22 @@ ensure_skip_hide_file() {
         echo "duckdetector"
         echo "appvisibility"
         echo "nativecheck"
-    } > "$_f" 2>/dev/null && echo "[i] 已生成默认 config/skip_hide.txt"
+    } > "$_esh_f" 2>/dev/null && echo "[i] 已生成默认 config/skip_hide.txt"
 }
 
 # 需要跳过隐藏的包名从 config/skip_hide.txt 读取（每行一个子串，支持 # 注释）
 is_detection_app_path() {
-    _p=$1
-    [ -n "$_p" ] || return 1
-    _f="$CONFIG/skip_hide.txt"
-    [ -f "$_f" ] || return 1
-    while IFS= read -r _pat || [ -n "$_pat" ]; do
-        _pat=$(printf '%s' "$_pat" | tr -d '\r')
-        _pat=${_pat%%#*}
-        _pat=$(printf '%s' "$_pat" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-        [ -n "$_pat" ] || continue
-        case "$_p" in *"$_pat"*) return 0 ;; esac
-    done < "$_f"
+    _dia_p=$1
+    [ -n "$_dia_p" ] || return 1
+    _dia_f="$CONFIG/skip_hide.txt"
+    [ -f "$_dia_f" ] || return 1
+    while IFS= read -r _dia_pat || [ -n "$_dia_pat" ]; do
+        _dia_pat=$(printf '%s' "$_dia_pat" | tr -d '\r')
+        _dia_pat=${_dia_pat%%#*}
+        _dia_pat=$(printf '%s' "$_dia_pat" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        [ -n "$_dia_pat" ] || continue
+        case "$_dia_p" in *"$_dia_pat"*) return 0 ;; esac
+    done < "$_dia_f"
     return 1
 }
 # ---- 兼容性检查 ----

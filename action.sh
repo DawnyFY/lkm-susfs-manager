@@ -11,11 +11,14 @@ echo "***************************************"
 echo "[i] 管理器: $(ksu_branch)"
 
 sh "$MODDIR/load.sh" manual
+load_rc=$?
 sh "$MODDIR/apply.sh"
 rc=$?
 
 BIN=$(select_susfs_bin)
-if susfs_kernel_ready; then
+# 只有 apply 真正成功才算完成：apply 可能因锁忙/文件被改/loading 残留而跳过，
+# 这种情况下 LKM 虽然就绪，规则并没有下发，不能报成功、更不能清掉启动守卫。
+if [ "$rc" = "0" ] && susfs_kernel_ready; then
     echo "[OK] SUSFS 已就绪（$(susfs_kernel_kind)）"
     [ -n "$BIN" ] && "$BIN" show version
     printf "[i] 用户 sus_path 规则: "
@@ -27,7 +30,9 @@ if susfs_kernel_ready; then
     clear_boot_guard
     echo "[i] 完成，不需要重启。"
 else
-    echo "[!] 加载失败 (rc=$rc)"
+    echo "[!] 应用未完成（load rc=$load_rc, apply rc=$rc），规则可能没有全部下发"
+    echo "----- apply.log 最后 20 行 -----"
+    tail -n 20 "$MODDIR/apply.log" 2>/dev/null
     echo "----- load.log 最后 20 行 -----"
     tail -n 20 "$MODDIR/load.log" 2>/dev/null
 fi

@@ -203,20 +203,20 @@ case "$1" in
         _cf_gate || { echo "文件与发布包不一致，拒绝执行"; exit 1; }
         # 立即重扫 /dev 下的 Scene 痕迹目录（名字随机，按内容特征识别）
         BIN=$(select_susfs_bin 2>/dev/null) || { echo "no ksu_susfs"; exit 1; }
-        _n=0
-        for _f in /dev/*/scene_mode_category; do
-            [ -e "$_f" ] || continue
-            _d=${_f%/scene_mode_category}
-            if "$BIN" add_sus_path "$_d" >/dev/null 2>&1; then
-                record_our_path "$_d"
-                echo "hidden $_d"
-                _n=$((_n + 1))
+        _rs_n=0
+        for _rs_f in /dev/*/scene_mode_category; do
+            [ -e "$_rs_f" ] || continue
+            _rs_d=${_rs_f%/scene_mode_category}
+            if "$BIN" add_sus_path "$_rs_d" >/dev/null 2>&1; then
+                record_our_path "$_rs_d"
+                echo "hidden $_rs_d"
+                _rs_n=$((_rs_n + 1))
             else
-                echo "exists $_d"
+                echo "exists $_rs_d"
             fi
-            "$BIN" add_sus_path "$_f" >/dev/null 2>&1 && record_our_path "$_f"
+            "$BIN" add_sus_path "$_rs_f" >/dev/null 2>&1 && record_our_path "$_rs_f"
         done
-        if [ "$_n" = "0" ]; then
+        if [ "$_rs_n" = "0" ]; then
             echo "none"
         fi
         exit 0
@@ -286,10 +286,20 @@ case "$1" in
         ;;
     load)
         sh "$MODDIR/load.sh" manual
+        _lrc=$?
         sh "$MODDIR/apply.sh"
+        _arc=$?
+        # 与 action.sh 一致：只有 apply 真正成功才清启动守卫，避免误清后不再提示
+        if [ "$_lrc" = "0" ] && [ "$_arc" = "0" ] && susfs_kernel_ready; then
+            clear_boot_guard
+        fi
+        exit "$_arc"
         ;;
     apply)
         sh "$MODDIR/apply.sh"
+        _arc=$?
+        [ "$_arc" = "0" ] && susfs_kernel_ready && clear_boot_guard
+        exit "$_arc"
         ;;
     log)
         echo "===== load.log ====="
