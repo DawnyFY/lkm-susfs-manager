@@ -98,6 +98,8 @@ status() {
     printf 'kernelpatch_kernel=unknown\n'
     printf 'coexist_mode=%s\n' "$([ "$_KP" = "1" ] && echo apatch || echo none)"
     printf 'allow_lkm=%s\n' "$([ -f "$CONFIG/allow_lkm_on_kernelpatch" ] && echo 1 || echo 0)"
+    printf 'config_ksu=%s\n' "$(kernel_config_get CONFIG_KSU)"
+    printf 'config_ksu_susfs=%s\n' "$(kernel_config_get CONFIG_KSU_SUSFS)"
     printf 'lkm_size=%s\n' "$LSIZE"
     if autoload_paused; then printf 'autoload=paused\n'; else printf 'autoload=ok\n'; fi
     if cap_ok sus_mount; then printf 'sus_mount=ok\n'; else printf 'sus_mount=unsupported\n'; fi
@@ -338,6 +340,40 @@ case "$1" in
         _PCR=$(_pstore_dir)
         ls -l "$_PCR" 2>/dev/null | head -6
         [ -f "$STATE/crash_ack" ] && echo "acked=1"
+        ;;
+    backend_probe)
+        _rel=$(cat /proc/sys/kernel/osrelease 2>/dev/null)
+        echo "kernel=$_rel"
+        if [ -f "$MODDIR/kmi.sh" ]; then
+            . "$MODDIR/kmi.sh"
+            echo "kmi=$(select_kmi "$_rel" "$MODDIR" 2>/dev/null)"
+        fi
+        echo "root_manager=$(ksu_branch 2>/dev/null)"
+        echo "config_modules=$(kernel_config_get CONFIG_MODULES)"
+        echo "config_kallsyms_all=$(kernel_config_get CONFIG_KALLSYMS_ALL)"
+        echo "config_ksu=$(kernel_config_get CONFIG_KSU)"
+        echo "config_ksu_susfs=$(kernel_config_get CONFIG_KSU_SUSFS)"
+        echo "config_sus_path=$(kernel_config_get CONFIG_KSU_SUSFS_SUS_PATH)"
+        echo "config_sus_mount=$(kernel_config_get CONFIG_KSU_SUSFS_SUS_MOUNT)"
+        echo "config_sus_kstat=$(kernel_config_get CONFIG_KSU_SUSFS_SUS_KSTAT)"
+        echo "config_open_redirect=$(kernel_config_get CONFIG_KSU_SUSFS_OPEN_REDIRECT)"
+        echo "config_sus_map=$(kernel_config_get CONFIG_KSU_SUSFS_SUS_MAP)"
+        if kernelpatch_present; then echo "apatch_userland=1"; else echo "apatch_userland=0"; fi
+        echo "kernelpatch_kernel=unknown"
+        _susfs_detect
+        echo "susfs_kind=$_SUSFS_KIND"
+        echo "proc_nodes=$(ls /proc/susfs_* 2>/dev/null | tr '\n' ' ')"
+        _bp_bin=$(select_susfs_bin 2>/dev/null)
+        echo "tool=${_bp_bin:-none}"
+        if [ -n "$_bp_bin" ]; then
+            echo "tool_version=$("$_bp_bin" show version 2>/dev/null)"
+            echo "tool_variant=$("$_bp_bin" show variant 2>/dev/null)"
+            echo "features:"
+            "$_bp_bin" show enabled_features 2>/dev/null | sed 's/^/  /'
+        fi
+        echo "ksyms_ksu=$(awk '$3 ~ /^__?ksu_/ {c++} END{print c+0}' /proc/kallsyms 2>/dev/null)"
+        echo "ksyms_susfs=$(awk '$3 ~ /^susfs_/ {c++} END{print c+0}' /proc/kallsyms 2>/dev/null)"
+        if pstore_crash_suspect; then echo "pstore_suspect=yes"; else echo "pstore_suspect=no"; fi
         ;;
     log)
         echo "===== load.log ====="

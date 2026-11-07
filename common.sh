@@ -220,6 +220,40 @@ pstore_crash_suspect() {
     return 1
 }
 
+# 读取内核配置项（/proc/config.gz；测试钩子 CONFIG_GZ_FILE 只在 SUSFS_TEST_HOOK=1 时生效）
+# 用法: kernel_config_get CONFIG_KSU  ->  y / n / 空（未知）
+kernel_config_get() {
+    _kc_key=$1
+    [ -n "$_kc_key" ] || return 1
+    if [ -z "${_KC_FILE+x}" ]; then
+        _kc_src=/proc/config.gz
+        if [ "${SUSFS_TEST_HOOK:-0}" = "1" ] && [ -n "${CONFIG_GZ_FILE:-}" ]; then
+            _kc_src="$CONFIG_GZ_FILE"
+        fi
+        _KC_FILE=""
+        if [ -r "$_kc_src" ] && command -v zcat >/dev/null 2>&1; then
+            mkdir -p "$STATE" 2>/dev/null
+            _kc_tmp="$STATE/.kernel_config.$$"
+            if zcat "$_kc_src" > "$_kc_tmp" 2>/dev/null && [ -s "$_kc_tmp" ]; then
+                mv -f "$_kc_tmp" "$STATE/.kernel_config" 2>/dev/null
+                _KC_FILE="$STATE/.kernel_config"
+            else
+                rm -f "$_kc_tmp" 2>/dev/null
+            fi
+        fi
+    fi
+    [ -n "$_KC_FILE" ] && [ -r "$_KC_FILE" ] || return 0
+    _kc_hit=$(grep -E "^$_kc_key=" "$_KC_FILE" 2>/dev/null | tail -1)
+    if [ -n "$_kc_hit" ]; then
+        printf '%s' "${_kc_hit#*=}"
+        return 0
+    fi
+    if grep -qE "^# $_kc_key is not set$" "$_KC_FILE" 2>/dev/null; then
+        printf 'n'
+    fi
+    return 0
+}
+
 # insmod 前的内核限制预检：返回 0=可继续；否则把原因打到 stdout
 kernel_load_preflight() {
     _klp_msd_file=/proc/sys/kernel/modules_disabled

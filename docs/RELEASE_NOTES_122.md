@@ -52,6 +52,13 @@
 - 过期锁接管补写 boot_id；`susfs_path_del` 改为回读确认；连续失败 3 次自动暂停自动加载
 - 安装时 KMI 未匹配会明确提示「未安装 LKM」
 
+## 后端契约探测（内置 SUSFS / KSU 依赖）
+
+- 新增 `ctl.sh backend_probe`：一次性输出 内核/ KMI / 管理器 / CONFIG_MODULES/KALLSYMS_ALL/KSU/KSU_SUSFS/各 SUSFS 特性位 / susfs_kind / /proc 节点 / 工具 version+variant+features / ksyms 计数 / pstore 状态
+- status 增加 `config_ksu=`、`config_ksu_susfs=`
+- 内置 SUSFS 且 CONFIG_KSU 明确未启用时，apply 打印「uid/挂载判定可能退化」警告（非阻塞）
+- 说明：上游 susfs4ksu 补丁基于 KernelSU 内核树；LKM 移植版通过可选 kallsyms 解析 KSU 判定函数证明可解耦，KSU 集成是增强而非必需
+- 注意：SUSFS hide_syms 开启时 /proc/kallsyms 里的 susfs_/ksu_ 符号可能被隐藏，ksyms 计数不能单独作为后端判据
 ## 外部 review 适配（第三轮：APatch 兼容性讨论）
 
 - **内置后端判定收紧**：不再只看 ksu_susfs show version，改为 握手成功 + 版本/特性输出非空 + 至少一个 /proc/susfs_* 节点；避免把不匹配的工具误判成内置 SUSFS
@@ -140,8 +147,8 @@ SUSFS 不只有 LKM 一种形态：按上游补丁的 `CONFIG_KSU_SUSFS_*` 特�
 管理器里覆盖安装即可，配置与规则文件全部保留。KernelSU 系安装到 `modules_update`，**需要重启一次生效**；重启后 LKM 会重新加载，规则重新应用。
 
 - 文件：`susfs_allinone-1.2.2.zip`
-- 大小：11062449 字节
-- SHA256：`07901201402b2af6fd1d352cab93da8801ce4296bf283f309fe96c7d3c19114b`
+- 大小：11063401 字节
+- SHA256：`e48683f75c5c3d57fa535b16f60f41c2fc3f0429389bebc277add0cfc309e434`
 - 离线测试：18 项全绿
 
 ## 已知问题（外部反馈，未复现）

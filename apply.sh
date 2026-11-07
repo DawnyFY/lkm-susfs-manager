@@ -175,6 +175,15 @@ if ! susfs_kernel_ready; then
     _SUSFS_KIND=""
 fi
 
+# 内置 SUSFS 的 KSU 依赖提示：上游 susfs4ksu 补丁基于 KernelSU 内核树，内置但未启用 CONFIG_KSU
+# 意味着 uid/挂载判定可能走退化路径（本 LKM 移植版是可选的），非阻塞，只记录。
+if [ "$(susfs_kernel_kind)" = "builtin" ]; then
+    _KCFG_KSU=$(kernel_config_get CONFIG_KSU)
+    if [ -n "$_KCFG_KSU" ] && [ "$_KCFG_KSU" != "y" ]; then
+        echo "[!] 内核内置 SUSFS 但 CONFIG_KSU 未启用：uid/挂载判定可能退化；若规则异常请记录该内核配置"
+    fi
+fi
+
 # 2. 选择可用的 ksu_susfs：优先当前管理器/分支自带，失败回退模块备份
 BIN=$(select_susfs_bin) || { echo "[!] 缺少 ksu_susfs"; set_description "❌ $(susfs_hint missing)"; exit 1; }
 echo "[i] ksu_susfs: $BIN"
