@@ -1,0 +1,53 @@
+# 配置与 WebUI
+
+## 配置文件
+
+`config/config.ini`（纯 `KEY=VALUE`，不会被执行）：
+
+```ini
+auto_load=1        # 1=开机自动加载并应用规则；0=仅手动
+hide_sus_mnts=1    # 对非 root 进程隐藏 SUS 挂载点
+avc_spoof=0        # AVC 日志伪装（默认关闭；KernelPatch 共存时自动关闭）
+replace_rules=0    # 0=只追加；1=只清理本模块上次写入的；2=整表清空（慎用）
+```
+
+其他配置：
+
+- `config/config.ini`：模块通用开关；
+- `config/sus_path.txt`：每行一个路径，`#` 开头为注释；
+- `config/sus_mount.txt` / `try_umount.txt`：挂载规则；
+- `config/hide_modules.txt`：默认 `kernelsu`；
+- `config/sus_map.txt`：隐藏进程 maps 中的真实文件路径；
+- `config/allow_lkm_on_kernelpatch`：APatch 放行标记（独立文件，不在 config.ini）。
+
+## WebUI
+
+在管理器打开模块 WebUI：
+
+| 页面 | 内容 |
+|---|---|
+| 状态 | LKM 版本、KMI、规则数、SELinux、二进制路径、失败计数；APatch 环境额外显示 APatch 卡片 |
+| 配置 | 图形化编辑规则与开关；强制指定 KMI |
+| 日志 | `load.log` / `apply.log` 在线查看 |
+| 关于 | 版本、致谢、许可证摘要、语言切换 |
+
+APatch 卡片：
+
+- APatch 用户态；
+- KernelPatch 内核（有版本时显示，如 `已激活 (d09)`）；
+- 共存模式；
+- SUSFS LKM 放行状态；
+- 「放行 LKM / 取消放行」按钮（带风险确认）。
+
+KSU / Magisk 环境不显示该卡片。
+
+## 状态字段
+
+常用 `ctl.sh status` 字段：
+
+- `lkm_present` / `lkm_version` / `lkm_variant`
+- `rules` / `apply_result` / `apply_fails`
+- `integrity`
+- `kernelpatch` / `apatch_userland` / `kernelpatch_kernel` / `kernelpatch_version`
+- `coexist_mode` / `allow_lkm`
+- `root_manager` / `selinux` / `bootloader`
