@@ -1,6 +1,7 @@
 # LKM SUSFS管理器
 
 <p align="center">
+  <a href="README.en.md">English</a> · 中文<br>
   <b>KernelSU 系列 · Magisk · APatch（实验性）</b><br>
   <b>SUSFS LKM 自动匹配 / 加载 / 规则管理</b>
 </p>
