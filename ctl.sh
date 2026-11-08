@@ -94,8 +94,8 @@ status() {
     if kernelpatch_present; then _KP=1; else _KP=0; fi
     printf 'kernelpatch=%s\n' "$_KP"
     printf 'apatch_userland=%s\n' "$_KP"
-    # kpimg 在内核里的存在无法从用户态可靠确认；只能报告"未知"，避免误称已验证
-    printf 'kernelpatch_kernel=unknown\n'
+    printf 'kernelpatch_kernel=%s\n' "$(kernelpatch_kernel_state)"
+    printf 'kernelpatch_version=%s\n' "$(kernelpatch_kernel_version)"
     printf 'coexist_mode=%s\n' "$([ "$_KP" = "1" ] && echo apatch || echo none)"
     printf 'allow_lkm=%s\n' "$([ -f "$CONFIG/allow_lkm_on_kernelpatch" ] && echo 1 || echo 0)"
     printf 'config_ksu=%s\n' "$(kernel_config_get CONFIG_KSU)"
@@ -382,7 +382,8 @@ case "$1" in
         echo "config_open_redirect=$(kernel_config_get CONFIG_KSU_SUSFS_OPEN_REDIRECT)"
         echo "config_sus_map=$(kernel_config_get CONFIG_KSU_SUSFS_SUS_MAP)"
         if kernelpatch_present; then echo "apatch_userland=1"; else echo "apatch_userland=0"; fi
-        echo "kernelpatch_kernel=unknown"
+        echo "kernelpatch_kernel=$(kernelpatch_kernel_state)"
+        echo "kernelpatch_version=$(kernelpatch_kernel_version)"
         _susfs_detect
         echo "susfs_kind=$_SUSFS_KIND"
         echo "proc_nodes=$(ls /proc/susfs_* 2>/dev/null | tr '\n' ' ')"
@@ -395,7 +396,7 @@ case "$1" in
             "$_bp_bin" show enabled_features 2>/dev/null | sed 's/^/  /'
         fi
         echo "root_userland=$(ksu_branch 2>/dev/null)"
-        echo "kernelpatch_runtime=unknown"
+        echo "kernelpatch_runtime=$(kernelpatch_kernel_state)"
         echo "backend_kind=$_SUSFS_KIND"
         if [ "$_SUSFS_KIND" = "builtin" ]; then echo "backend_interface_detected=1"; else echo "backend_interface_detected=0"; fi
         echo "abi_match=unknown"

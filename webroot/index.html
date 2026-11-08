@@ -98,6 +98,18 @@
         <div class="row"><span>模块版本</span><span id="moduleVersion">—</span></div>
       </div>
 
+      <div class="card" id="apatchCard" style="display:none">
+        <div class="card-head"><h2>APatch / KernelPatch</h2></div>
+        <div class="rows">
+          <div class="row"><span>APatch 用户态</span><span id="apatchUserland">—</span></div>
+          <div class="row"><span>KernelPatch 内核</span><span id="kernelpatchKernel">—</span></div>
+          <div class="row"><span>共存模式</span><span id="coexistMode">—</span></div>
+          <div class="row"><span>SUSFS LKM 放行</span><span id="allowLkm">—</span></div>
+        </div>
+        <p class="row-hint">APatch/KernelPatch 下默认不自动外挂 SUSFS LKM；需要时手动放行。放行属于实验性共存，存在崩溃风险。</p>
+        <button id="btnAllowLkm" class="btn" type="button">放行 LKM</button>
+      </div>
+
       <div class="card note">
         <strong>工作方式</strong>
         <p>开机时 post-fs-data 先取真实内核版本（优先 /proc/version，回退 state/real_uname.txt），从模块自带的 8 个 KMI 中选出匹配的 LKM 并加载；随后按管理器应用规则：KernelSU 系列在 boot-completed 阶段，Magisk 在 service（late_start）阶段设置 sdcard 根路径并应用规则。热重启不会卸载 LKM，冷重启后会自动重新加载。</p>

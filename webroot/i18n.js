@@ -274,7 +274,24 @@
     "如 #1 SMP PREEMPT": "e.g. #1 SMP PREEMPT",
     "# 每行一个挂载前缀": "# one mount prefix per line",
     "# 每行一个路径": "# one path per line",
-    "# 每行一个文件路径，如 /data/adb/modules/xxx/lib.so": "# one file path per line, e.g. /data/adb/modules/xxx/lib.so"
+    "# 每行一个文件路径，如 /data/adb/modules/xxx/lib.so": "# one file path per line, e.g. /data/adb/modules/xxx/lib.so",
+    "APatch / KernelPatch": "APatch / KernelPatch",
+    "APatch 用户态": "APatch userspace",
+    "KernelPatch 内核": "KernelPatch kernel",
+    "共存模式": "Coexist mode",
+    "SUSFS LKM 放行": "SUSFS LKM opt-in",
+    "是": "Yes",
+    "否": "No",
+    "已激活": "Active",
+    "未知": "Unknown",
+    "已放行": "Opted in",
+    "未放行": "Not opted in",
+    "放行 LKM": "Allow LKM",
+    "取消放行": "Revoke opt-in",
+    "APatch/KernelPatch 下默认不自动外挂 SUSFS LKM；需要时手动放行。放行属于实验性共存，存在崩溃风险。": "Under APatch/KernelPatch the SUSFS LKM is not auto-loaded; opt in manually if needed. This experimental coexistence can crash boot.",
+    "放行后允许在 APatch/KernelPatch 内核上外挂 SUSFS LKM。这是实验性共存路径，可能与 kpimg 冲突导致启动异常；仅在明确知道风险时继续。": "This allows loading the SUSFS LKM on an APatch/KernelPatch kernel. This experimental coexistence may conflict with kpimg and break boot; continue only if you accept the risk.",
+    "已取消 LKM 放行。": "LKM opt-in revoked.",
+    "已放行 LKM；下次加载/应用会生效。": "LKM opt-in enabled; it takes effect on the next load/apply.",
   };
 
   var EXACT = {};

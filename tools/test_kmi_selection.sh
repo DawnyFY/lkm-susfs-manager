@@ -37,6 +37,18 @@ chk "伪装值会选错" "$(select_kmi 6.6.77-android15-8-gca30f3b4bef6-abogki44
 # 集成断言：load.sh 必须通过 real_kernel_release 取版本，而不是直接读 osrelease
 chk "load.sh 使用真实内核函数" "$(grep -c 'REL=$(real_kernel_release' "$REPO/load.sh")" "1"
 
+
+# tag-less 共享 5.15 + dirty 后缀：用 SDK 消歧；无 SDK 时保持拒绝
+getprop() { echo "${TEST_SDK:-}"; }
+TEST_SDK=33
+chk "dirty 5.15 SDK33" "$(select_kmi 5.15.197-g708015331567-dirty "$REPO")" "android13-5.15"
+TEST_SDK=34
+chk "dirty 5.15 SDK34" "$(select_kmi 5.15.197-g708015331567-dirty "$REPO")" "android14-5.15"
+TEST_SDK=
+chk "dirty 5.15 无 SDK 拒绝" "$(select_kmi 5.15.197-g708015331567-dirty "$REPO")" ""
+chk "dirty + android tag 直接匹配" "$(select_kmi 5.15.197-android13-13-gabc-dirty "$REPO")" "android13-5.15"
+chk "6.1 tag-less 唯一命中" "$(select_kmi 6.1.75-gabc-dirty "$REPO")" "android14-6.1"
+
 rm -rf "$TMP"
 [ "$fail" = 0 ] && echo "ALL PASS" || echo "HAS FAILURE"
 exit "$fail"

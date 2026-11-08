@@ -161,6 +161,35 @@ kernelpatch_present() {
     return 1
 }
 
+# KernelPatch kernel runtime probe: read the kpimg boot banner from dmesg
+# ("KernelPatch Version: d09"). The userspace marker only proves APatch exists,
+# not that kpimg is injected; unreadable dmesg returns unknown (not 0/1).
+kernelpatch_kernel_probe() {
+    if [ "${SUSFS_TEST_HOOK:-0}" = "1" ] && [ -n "${KERNELPATCH_DMESG_FILE:-}" ]; then
+        [ -r "$KERNELPATCH_DMESG_FILE" ] || return 2
+        _kp_log=$(cat "$KERNELPATCH_DMESG_FILE" 2>/dev/null) || return 2
+    else
+        _kp_log=$(dmesg 2>/dev/null) || return 2
+    fi
+    printf '%s\n' "$_kp_log" | grep -q 'KernelPatch' || return 1
+    printf '%s\n' "$_kp_log" | sed -n 's/.*KernelPatch Version: *\([0-9A-Fa-fx._-]*\).*/\1/p' | head -1
+    return 0
+}
+
+kernelpatch_kernel_state() {
+    _kp_v=$(kernelpatch_kernel_probe 2>/dev/null)
+    _kp_rc=$?
+    case "$_kp_rc" in
+        0) echo 1 ;;
+        1) echo 0 ;;
+        *) echo unknown ;;
+    esac
+}
+
+kernelpatch_kernel_version() {
+    kernelpatch_kernel_probe 2>/dev/null || true
+}
+
 # 共存模式下禁用的功能：avc_spoof（与 kpimg 的 SELinux hook 重叠）
 coexist_disable_avc_spoof() {
     kernelpatch_present

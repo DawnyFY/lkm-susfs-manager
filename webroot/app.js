@@ -299,6 +299,19 @@ function renderStatus() {
     sessionStorage.setItem("integrityWarned", "1");
     showIntegrityWarning();
   }
+  // APatch / KernelPatch 状态卡片（只在检测到 APatch/KernelPatch 时显示）
+  const kpActive = s.kernelpatch === "1" || s.apatch_userland === "1" || s.root_manager === "APatch";
+  const kpCard = $("apatchCard");
+  if (kpCard) kpCard.style.display = kpActive ? "" : "none";
+  if (kpActive) {
+    const allow = s.allow_lkm === "1";
+    setText("apatchUserland", s.apatch_userland === "1" ? "是" : "否");
+    setText("kernelpatchKernel", s.kernelpatch_kernel === "1" ? ("已激活" + (s.kernelpatch_version ? " (" + s.kernelpatch_version + ")" : "")) : (s.kernelpatch_kernel || "未知"));
+    setText("coexistMode", s.coexist_mode || "none");
+    setText("allowLkm", allow ? "已放行" : "未放行");
+    const btn = $("btnAllowLkm");
+    if (btn) btn.textContent = allow ? "取消放行" : "放行 LKM";
+  }
   setText("moduleVersion", s.module_version ? `v${s.module_version}` : "—");
   setText("footerVersion", s.module_version ? `模块 v${s.module_version}` : "模块版本未知");
   setText("footerKernel", s.kernel || "");
@@ -797,6 +810,18 @@ function bind() {
     await refreshStatus();
     showBanner("状态已刷新。", "ok", 3000);
   }));
+  const btnAllowLkm = $("btnAllowLkm");
+  if (btnAllowLkm) btnAllowLkm.addEventListener("click", (e) => withBusy(e.currentTarget, async () => {
+    const allow = statusData.allow_lkm === "1";
+    if (!allow) {
+      const ok = await ask("放行后允许在 APatch/KernelPatch 内核上外挂 SUSFS LKM。这是实验性共存路径，可能与 kpimg 冲突导致启动异常；仅在明确知道风险时继续。");
+      if (!ok) return;
+    }
+    await exec(CTL + " " + (allow ? "disallow_lkm" : "allow_lkm"));
+    await refreshStatus();
+    showBanner(allow ? "已取消 LKM 放行。" : "已放行 LKM；下次加载/应用会生效。", "ok", 5000);
+  }));
+
   $("btnSave").addEventListener("click", (e) => withBusy(e.currentTarget, saveConfig));
   $("btnPreset").addEventListener("click", (e) => withBusy(e.currentTarget, openPresetModal));
   $("btnRescanScene").addEventListener("click", (e) => withBusy(e.currentTarget, rescanScene));
