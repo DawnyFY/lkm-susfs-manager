@@ -27,7 +27,7 @@
 
 ## 离线
 
-- 28/28 测试通过；
+- 29/29 测试通过；
 - `check_zip` / `check_no_crlf` 通过。
 
 ## 未验证
@@ -44,5 +44,6 @@
 - **APatch 实验性**：真机未验收；APatch Manager 安装、真实 ABI/符号、WebUI 卡片交互未验证。
 - **Magisk**：代码适配，未做真机冷启动验证。
 - **dmesg 受限设备**：KernelPatch 探测可能显示 `unknown`，不影响加载策略。
+- **默认隐藏 /data/adb**：`config/sus_path.txt` 默认包含 `/data/adb`；NeoZygisk v2.4 + r18.8 有外部反馈的 zygote 循环重启风险，使用 NeoZygisk 时请删除该行或排除 `/data/adb/neozygisk`（本环境未复现）。
 - **用户态取 LKM 状态**依赖管理器 `ksu_susfs` 或模块回退二进制；都不可用时只能看日志。
 - 临时 root 每次重启都要重新注入，不是模块能修复的。

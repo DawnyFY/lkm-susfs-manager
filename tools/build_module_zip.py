@@ -51,7 +51,7 @@ SKIP_DIRS = {
     "preview", "research", "legacy", "handoff", "github",
 }
 SKIP_FILES = {
-    "README.md", "START_HERE.md", "RELEASE_NOTES.md", ".gitignore",
+    "README.md", "README.en.md", "START_HERE.md", "RELEASE_NOTES.md", ".gitignore",
     "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md", "CODE_OF_CONDUCT.md",
     "ISSUE_TEMPLATE", "PULL_REQUEST_TEMPLATE.md",
 }

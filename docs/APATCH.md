@@ -8,6 +8,10 @@
 - 内核没有内置 SUSFS，需要外挂 SUSFS LKM；
 - 你接受实验性共存风险，并有恢复手段。
 
+## 检测特征
+
+只认运行态或可执行体：`pidof apd`、`/data/adb/apd`、`/data/adb/ap/bin/apd`。只有残留的 `/data/adb/ap` 目录或 `package_config` 不会触发 APatch 保护，避免换过管理器的设备被误拦。
+
 ## 默认策略
 
 - APatch/KernelPatch 下**不自动加载** SUSFS LKM；

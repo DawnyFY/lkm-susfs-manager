@@ -14,7 +14,7 @@ out=$( ( MODDIR="$TMP/m"; CONFIG="$TMP/m/config"; SUSFS_TEST_HOOK=1; KERNELPATCH
 chk "只有残留目录 → 不算 APatch" "$out" "no"
 : > "$KP/package_config"
 out=$( ( MODDIR="$TMP/m"; CONFIG="$TMP/m/config"; SUSFS_TEST_HOOK=1; KERNELPATCH_MARKER_DIR="$KP"; . "$REPO/common.sh"; kernelpatch_present && echo yes || echo no ) )
-chk "有 package_config → APatch" "$out" "yes"
+chk "只有 package_config → 不算 APatch" "$out" "no"
 rm -f "$KP/package_config"; mkdir -p "$KP/bin"; printf "#!/bin/sh\n" > "$KP/bin/apd"; chmod +x "$KP/bin/apd"
 out=$( ( MODDIR="$TMP/m"; CONFIG="$TMP/m/config"; SUSFS_TEST_HOOK=1; KERNELPATCH_MARKER_DIR="$KP"; . "$REPO/common.sh"; kernelpatch_present && echo yes || echo no ) )
 chk "有 bin/apd → APatch" "$out" "yes"

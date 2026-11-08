@@ -135,10 +135,10 @@ root_family() {
     fi
     if [ -d /data/adb/ksu ]; then
         echo "KernelSU"
-    elif [ -d /data/adb/ap ]; then
-        echo "APatch"
     elif [ -d /data/adb/magisk ]; then
         echo "Magisk"
+    elif [ -x /data/adb/ap/bin/apd ] || [ -x /data/adb/apd ]; then
+        echo "APatch"
     else
         echo "Unknown"
     fi
@@ -157,7 +157,7 @@ kernelpatch_present() {
     fi
     [ -x /data/adb/apd ] && return 0
     [ -x "$_kp_dir/bin/apd" ] && return 0
-    [ -f "$_kp_dir/package_config" ] && return 0
+    # package_config 只是数据文件；换过管理器的设备可能残留，不能单独作为依据。
     return 1
 }
 
@@ -730,8 +730,15 @@ mark_boot_guard() {
     } > "$(boot_guard_path)" 2>/dev/null
 }
 
+# 只清启动守卫，不动 autoload_paused。用于「没有尝试加载/加载失败」的路径：
+# 失败后由 pause_autoload 决定是否暂停，不能在这里把刚写的暂停标记清掉。
+clear_boot_guard_keep_pause() {
+    rm -f "$(boot_guard_path)" 2>/dev/null
+}
+
 clear_boot_guard() {
-    rm -f "$(boot_guard_path)" "$STATE/autoload_paused" 2>/dev/null
+    clear_boot_guard_keep_pause
+    rm -f "$STATE/autoload_paused" 2>/dev/null
 }
 
 # 自动加载前的检查：返回 0 表示可以继续，1 表示应暂停自动加载

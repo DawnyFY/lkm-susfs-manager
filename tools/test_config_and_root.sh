@@ -23,10 +23,13 @@ out=$( ( PATH="$FB:$PATH"; MODDIR="$M"; . "$REPO/common.sh"; root_family ) )
 chk "无进程时按目录判定（本机无 /data/adb → Unknown）" "$out" "Unknown"
 
 # kernelpatch_present：用 KERNELPATCH_MARKER_DIR 模拟 /data/adb/ap
-mkdir -p "$TMP/apmark"
+mkdir -p "$TMP/apmark/bin"
 : > "$TMP/apmark/package_config"
 out=$( ( MODDIR="$M"; SUSFS_TEST_HOOK=1; KERNELPATCH_MARKER_DIR="$TMP/apmark"; . "$REPO/common.sh"; kernelpatch_present && echo yes || echo no ) )
-chk "有 APatch 标记目录 → 进入共存模式" "$out" "yes"
+chk "只有 package_config 残留 → 不进入共存模式" "$out" "no"
+printf "#!/bin/sh\n" > "$TMP/apmark/bin/apd"; chmod +x "$TMP/apmark/bin/apd"
+out=$( ( MODDIR="$M"; SUSFS_TEST_HOOK=1; KERNELPATCH_MARKER_DIR="$TMP/apmark"; . "$REPO/common.sh"; kernelpatch_present && echo yes || echo no ) )
+chk "有 bin/apd 强特征 → 进入共存模式" "$out" "yes"
 out=$( ( MODDIR="$M"; SUSFS_TEST_HOOK=1; KERNELPATCH_MARKER_DIR="$TMP/nomark"; PATH="$FB:$PATH"; . "$REPO/common.sh"; kernelpatch_present && echo yes || echo no ) )
 chk "无标记且非 APatch → 非共存模式" "$out" "no"
 out=$( ( MODDIR="$M"; SUSFS_TEST_HOOK=1; KERNELPATCH_MARKER_DIR="$TMP/apmark"; . "$REPO/common.sh"; coexist_disable_avc_spoof && echo disable || echo keep ) )

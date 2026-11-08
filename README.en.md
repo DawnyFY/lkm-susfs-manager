@@ -82,9 +82,10 @@ Full safety and disclaimer: [SAFETY.md](docs/SAFETY.md) (Chinese).
 
 - KSU family: 1.2.3 cold boot loads the LKM, rules and integrity are OK; hot reboot keeps the module healthy and restores LSPosed.
 - QEMU GKI: LKM load/hide/restore; module-level APatch path 14/14.
-- Offline: 28/28 tests pass.
+- Offline: 29/29 tests pass.
 - Not verified: Magisk real-device cold boot, APatch real-device full chain, the other 7 KMI targets.
 - Known gap: `sus_path` rules on deleted/recreated inodes stop hiding; the reattach prototype is not merged.
+- Default hiding of `/data/adb`: NeoZygisk users should remove that line or exclude `/data/adb/neozygisk` (externally reported zygote loop risk).
 
 See [VERIFICATION.md](docs/VERIFICATION.md) (Chinese).
 

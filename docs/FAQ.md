@@ -9,7 +9,7 @@
 <details>
 <summary><b>APatch 下状态页没有 APatch 卡片</b></summary>
 
-卡片只在检测到 APatch / KernelPatch 时显示。KSU / Magisk 下看不到是正常的。APatch 检测特征包括 `/data/adb/ap`、`apd`；布局不同请附 `ctl.sh status` 反馈。
+卡片只在检测到 APatch / KernelPatch 时显示。KSU / Magisk 下看不到是正常的。APatch 判定只认运行态/可执行体（`pidof apd`、`/data/adb/apd`、`ap/bin/apd`）；仅残留 `/data/adb/ap` 或 `package_config` 不会再触发 APatch 保护。布局不同请附 `ctl.sh status` 反馈。
 </details>
 
 <details>
@@ -28,6 +28,12 @@ Magisk 没有 `boot-completed`，规则在 `service`（late_start）阶段应用
 <summary><b>会不会覆盖管理器自带的 ksu_susfs</b></summary>
 
 不会。优先使用管理器自带二进制，仅在无法通信时回退到模块内置备份，且不覆盖原文件。
+</details>
+
+<details>
+<summary><b>用 NeoZygisk 时开机 zygote 循环 / 模块失效</b></summary>
+
+外部反馈：NeoZygisk v2.4 + r18.8 在默认隐藏 `/data/adb` 时，zygote 可能反复重启。请删除 `config/sus_path.txt` 中的 `/data/adb`，或至少排除 `/data/adb/neozygisk`，再重新应用规则。本环境使用 Zygisk Next，未复现；详见 `docs/RELEASE_NOTES_122.md`。
 </details>
 
 <details>

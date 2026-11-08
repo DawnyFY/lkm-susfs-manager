@@ -49,13 +49,14 @@ fail() {
     _fc_n=$(cat "$STATE/fail_count" 2>/dev/null)
     _fc_n=${_fc_n:-0}
     case "$_fc_n" in ''|*[!0-9]*) _fc_n=0 ;; esac
+    # 先清启动守卫（保留已有的暂停标记），再按失败次数决定是否暂停。
+    # 顺序反过来会被 clear_boot_guard 把刚写的 autoload_paused 清掉。
+    clear_boot_guard_keep_pause
     if [ "$_fc_n" -ge 3 ]; then
         pause_autoload
         echo "[!] 已连续失败 $_fc_n 次，暂停自动加载；修复后点「加载并应用」或执行 ctl.sh resume_autoload"
         set_description "❌ $1（连续失败 $_fc_n 次，已暂停自动加载）"
     fi
-    # 系统本身能正常开机，不留守卫把下次自动加载永久暂停
-    clear_boot_guard
     exit 1
 }
 
@@ -195,9 +196,9 @@ if [ -z "$KMI" ]; then
     echo "[i] 版本号疑似: $(guess_kmis "$REL" "$MODDIR" | tr '\n' ' ')"
     echo "[i] 可在 WebUI 配置页强制指定 KMI 后再次加载"
     set_description "⚠️ 未匹配内核 | $REL | 请在 WebUI 指定 KMI"
-    # 没有尝试加载，不属于"加载后未能启动"，不能留下守卫把下次自动加载暂停；
+    # 没有尝试加载，不属于"加载后未能启动"；只清守卫，保留已有的暂停状态。
     # 但也绝不能返回 0——否则 boot-completed 会把"没加载"当成"加载成功"。
-    clear_boot_guard
+    clear_boot_guard_keep_pause
     echo "=== load skip ==="
     exit 2
 fi

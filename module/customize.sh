@@ -4,7 +4,7 @@
 # 开机阶段：KernelSU 系列与 APatch 都有 boot-completed，Magisk 只有 service（late_start）。
 # 注意：APatch 会把 MAGISK_VER_CODE 设成 27000，所以必须先认 APatch，否则会被误标成 Magisk。
 IS_APATCH=0
-if [ "$APATCH" = true ] || [ "$KERNELPATCH" = true ] || [ -n "$APATCH_VER" ] || [ -d /data/adb/ap ]; then
+if [ "$APATCH" = true ] || [ "$KERNELPATCH" = true ] || [ -n "$APATCH_VER" ] || [ -x /data/adb/ap/bin/apd ] || [ -x /data/adb/apd ]; then
     IS_APATCH=1
 fi
 
