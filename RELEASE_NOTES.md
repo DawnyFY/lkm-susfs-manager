@@ -8,6 +8,7 @@
 - **KernelPatch 内核运行时探测**：通过 dmesg 的 `KernelPatch Version:` banner 判断 kpimg 是否激活；dmesg 不可读时返回 `unknown`，不误报 0/1。
 - **KMI 自动消歧**：无 Android tag 的 5.15 内核（如 `5.15.197-...-dirty`）可按 SDK 33/34 自动选择 `android13-5.15` / `android14-5.15`；仅当对应 KMI 已打包且 `.ko` 存在时采用，否则仍拒绝。
 - **APatch 安全策略不变**：APatch/KernelPatch 下默认不自动外挂 LKM；手动加载必须 `ctl.sh allow_lkm` 或 WebUI 放行。
+- **WebUI 状态语义**：ctl apply/load 的 rc=5 按“部分成功”提示并继续刷新；内核 builtin SUSFS 不再显示为 LKM，版本标签改为“内置 SUSFS”。
 - **修复（审计 F1/F3）**：连续失败 3 次后的自动暂停不再被启动守卫清理；APatch 判定收紧为 `apd` 强特征，残留 `package_config` 不再误拦 LKM。
 
 ## 自 1.2.1 起的变更
@@ -45,8 +46,8 @@
 ## 校验
 
 - 文件：`susfs_allinone-1.2.3.zip`
-- 大小：11,066,102 B
-- sha256：`1435afec7e985f4b87b6c1dcd7c941ba05730b58267dee2afc2514ee4f9b7680`
+- 大小：11,066,555 B
+- sha256：`b64b597a5c9d0fd9b7fa6f3128b052d7c2de2b5ba1b5338089d052f56f11b061`
 
 ## 说明
 

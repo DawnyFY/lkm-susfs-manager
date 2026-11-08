@@ -31,11 +31,13 @@ status() {
     SUSFS_KIND=$_SUSFS_KIND
     PRESENT=0
     [ "$SUSFS_KIND" != "none" ] && PRESENT=1
+    LKM_PRESENT=0
+    [ "$SUSFS_KIND" = "lkm" ] && LKM_PRESENT=1
     BIN=$(select_susfs_bin 2>/dev/null)
 
     VARIANT=""
     VERSION=""
-    if [ "$PRESENT" = "1" ] && [ -n "$BIN" ]; then
+    if [ "$LKM_PRESENT" = "1" ] && [ -n "$BIN" ]; then
         VARIANT=$("$BIN" show variant 2>/dev/null)
         VERSION=$("$BIN" show version 2>/dev/null)
     fi
@@ -74,7 +76,7 @@ status() {
     printf 'description=%s\n' "$(get_prop description)"
     printf 'kernel=%s\n' "$REL"
     printf 'kmi=%s\n' "$KMI"
-    printf 'lkm_present=%s\n' "$PRESENT"
+    printf 'lkm_present=%s\n' "$LKM_PRESENT"
     printf 'susfs_kernel=%s\n' "$SUSFS_KIND"
     printf 'lkm_variant=%s\n' "$VARIANT"
     printf 'lkm_version=%s\n' "$VERSION"

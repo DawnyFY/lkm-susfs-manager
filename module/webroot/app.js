@@ -26,6 +26,35 @@ let warnedReplace2 = false;
 
 const $ = (id) => document.getElementById(id);
 
+// 与 exec 相同，但返回 {code, stdout, stderr}；用于允许 0/5 的部分成功路径。
+function execCode(cmd) {
+  return new Promise((resolve, reject) => {
+    if (!window.ksu || typeof window.ksu.exec !== "function") {
+      reject(new Error("当前页面不在 SukiSU WebUI 中运行"));
+      return;
+    }
+    const cb = "susfs_allinone_cb_" + Date.now() + "_" + (execSeq++);
+    let settled = false;
+    let timer = 0;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      try { delete window[cb]; } catch (_) {}
+      fn(value);
+    };
+    timer = setTimeout(() => finish(reject, new Error("命令超时（90 秒）")), 90000);
+    window[cb] = (errno, stdout, stderr) => {
+      finish(resolve, { code: Number(errno), stdout: stdout || "", stderr: stderr || "" });
+    };
+    try {
+      window.ksu.exec(cmd, "{}", cb);
+    } catch (e) {
+      finish(reject, e);
+    }
+  });
+}
+
 function exec(cmd) {
   return new Promise((resolve, reject) => {
     if (!window.ksu || typeof window.ksu.exec !== "function") {
@@ -271,17 +300,18 @@ function waitForKsu(timeout = 2500) {
 
 function renderStatus() {
   const s = statusData;
+  const builtin = s.susfs_kernel === "builtin" || s.backend_kind === "builtin";
   const present = s.lkm_present === "1";
   const pill = $("statusPill");
   if (pill) {
-    pill.textContent = present ? "运行中" : "未加载";
-    pill.className = `pill ${present ? "pill-on" : "pill-off"}`;
+    pill.textContent = builtin ? "内置" : (present ? "运行中" : "未加载");
+    pill.className = "pill " + ((builtin || present) ? "pill-on" : "pill-off");
   }
   setText("kernel", s.kernel || "未知内核");
-  setText("kmiChip", `KMI ${s.kmi || "—"}`);
-  setText("versionChip", `LKM ${s.lkm_version || "—"}`);
-  setText("statLkm", present ? "已加载" : "未加载");
-  setState("statLkm", present);
+  setText("kmiChip", "KMI " + (s.kmi || "—"));
+  setText("versionChip", builtin ? "内置 SUSFS" : ("LKM " + (s.lkm_version || "—")));
+  setText("statLkm", builtin ? "内置 SUSFS" : (present ? "已加载" : "未加载"));
+  setState("statLkm", builtin || present);
   setText("statRules", s.rules || "0");
   setText("statHide", s.hide_kernelsu === "1" ? "已隐藏" : "未隐藏");
   setState("statHide", s.hide_kernelsu === "1");
@@ -617,21 +647,37 @@ function applyPresetSelection() {
 
 async function runLoad() {
   showBanner("正在加载 LKM 并应用配置…", "info");
-  await exec(`${CTL} load`);
+  const r = await execCode(CTL + " load");
+  if (r.code !== 0 && r.code !== 5) {
+    throw new Error((r.stderr || r.stdout || ("命令失败 (" + r.code + ")")).trim());
+  }
   await refreshStatus();
   await loadConfig();
   loadNoticeShown = false;
-  showBanner("加载并应用完成。", "ok", 5000);
-  toast("加载并应用完成");
+  if (r.code === 5) {
+    showBanner("加载完成，但部分规则失败；详情见日志。", "warn", 6000);
+    toast("部分规则失败，详情见日志");
+  } else {
+    showBanner("加载并应用完成。", "ok", 5000);
+    toast("加载并应用完成");
+  }
   await checkLoadHealth();
 }
 
 async function runApply() {
   showBanner("正在应用配置…", "info");
-  await exec(`${CTL} apply`);
+  const r = await execCode(CTL + " apply");
+  if (r.code !== 0 && r.code !== 5) {
+    throw new Error((r.stderr || r.stdout || ("命令失败 (" + r.code + ")")).trim());
+  }
   await refreshStatus();
-  showBanner("配置已应用。", "ok", 5000);
-  toast("配置已应用");
+  if (r.code === 5) {
+    showBanner("配置已应用，但部分规则失败；详情见日志。", "warn", 6000);
+    toast("部分规则失败，详情见日志");
+  } else {
+    showBanner("配置已应用。", "ok", 5000);
+    toast("配置已应用");
+  }
 }
 
 async function saveConfig() {
@@ -683,12 +729,20 @@ async function saveConfig() {
     $("susMap").value,
   ];
   const bundle = b64EncodeUnicode(bundleOrder.map((v) => b64EncodeUnicode(v)).join("|"));
-  await exec(`${CTL} set_bundle '${bundle}'`);
-  await exec(`${CTL} apply`);
+  await exec(CTL + " set_bundle '" + bundle + "'");
+  const r = await execCode(CTL + " apply");
+  if (r.code !== 0 && r.code !== 5) {
+    throw new Error((r.stderr || r.stdout || ("命令失败 (" + r.code + ")")).trim());
+  }
   await refreshStatus();
   await loadConfig();
-  showBanner("配置已保存并应用。", "ok", 5000);
-  toast("配置已保存并应用");
+  if (r.code === 5) {
+    showBanner("配置已保存并应用，但部分规则失败；详情见日志。", "warn", 7000);
+    toast("部分规则失败，详情见日志");
+  } else {
+    showBanner("配置已保存并应用。", "ok", 5000);
+    toast("配置已保存并应用");
+  }
 }
 
 async function importLegacy() {
