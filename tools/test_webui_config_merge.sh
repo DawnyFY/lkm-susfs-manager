@@ -2,6 +2,8 @@
 # 离线测试：WebUI 保存配置时保留未知键与特殊取值（node 执行真实函数）
 set -u
 REPO="$1"
+ROOT="$REPO"
+if [ -f "$REPO/module/module.prop" ]; then REPO="$REPO/module"; fi
 command -v node >/dev/null 2>&1 || { echo "SKIP  需要 node"; exit 0; }
 fail=0
 chk() { if [ "$2" = "$3" ]; then echo "PASS  $1"; else echo "FAIL  $1 expect=[$3] got=[$2]"; fail=1; fi; }

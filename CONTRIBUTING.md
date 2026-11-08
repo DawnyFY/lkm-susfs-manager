@@ -2,6 +2,16 @@
 
 感谢关注 LKM SUSFS管理器。
 
+## 仓库结构
+
+- `module/`：模块运行文件，构建后会成为 zip 根目录（module.prop、脚本、config、lib、bin、webroot）
+- `docs/`：使用、APatch、KMI、配置、验证与安全文档
+- `tools/`：构建、离线测试与静态校验脚本
+- `.github/`：CI
+- 根目录：README、CHANGELOG、CONTRIBUTING、SECURITY、LICENSE、NOTICE、provenance、RELEASE_NOTES
+
+修改模块运行文件请放 `module/`。构建脚本会自动从 `module/` 打包，并把根目录的 LICENSE / NOTICE / provenance 注入 zip。
+
 ## 报告问题
 
 请附上以下信息，否则很难定位：

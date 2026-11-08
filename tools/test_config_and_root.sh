@@ -2,6 +2,8 @@
 # 离线测试：注释解析、root_family 运行时判定、锁接管写 boot_id
 set -u
 REPO="$1"
+ROOT="$REPO"
+if [ -f "$REPO/module/module.prop" ]; then REPO="$REPO/module"; fi
 TMP=$(mktemp -d)
 fail=0
 chk() { if [ "$2" = "$3" ]; then echo "PASS  $1"; else echo "FAIL  $1 expect=[$3] got=[$2]"; fail=1; fi; }

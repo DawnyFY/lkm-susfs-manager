@@ -2,6 +2,8 @@
 # 离线测试：真实分区过滤（auto_try_umount 的强制保护）
 set -u
 REPO="$1"
+ROOT="$REPO"
+if [ -f "$REPO/module/module.prop" ]; then REPO="$REPO/module"; fi
 fail=0
 chk() { if [ "$2" = "$3" ]; then echo "PASS  $1"; else echo "FAIL  $1  expect=[$3] got=[$2]"; fail=1; fi; }
 MODDIR=$(mktemp -d); mkdir -p "$MODDIR/config" "$MODDIR/state"

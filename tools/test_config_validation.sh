@@ -2,6 +2,8 @@
 # 端到端测试：直接调用仓库里的 ctl.sh set_config，验证它真的会拦截
 set -u
 REPO="$1"
+ROOT="$REPO"
+if [ -f "$REPO/module/module.prop" ]; then REPO="$REPO/module"; fi
 TMP=$(mktemp -d)
 MOD="$TMP/mod"; mkdir -p "$MOD/config" "$MOD/state"
 sed "s#/data/adb/modules/susfs_allinone#$MOD#g" "$REPO/ctl.sh" > "$MOD/ctl.sh"

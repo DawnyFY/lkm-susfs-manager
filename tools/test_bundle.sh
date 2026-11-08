@@ -2,6 +2,8 @@
 # 端到端测试：set_bundle 一次写入 6 个文件；非法内容整体不落盘
 set -u
 REPO="$1"
+ROOT="$REPO"
+if [ -f "$REPO/module/module.prop" ]; then REPO="$REPO/module"; fi
 TMP=$(mktemp -d)
 MOD="$TMP/mod"; mkdir -p "$MOD/config" "$MOD/state"
 sed "s#/data/adb/modules/susfs_allinone#$MOD#g" "$REPO/ctl.sh" > "$MOD/ctl.sh"

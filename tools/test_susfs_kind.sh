@@ -2,6 +2,8 @@
 # 离线测试：内核侧 SUSFS 探测（LKM 标记 / 内核内置握手 / 无）
 set -u
 REPO="$1"
+ROOT="$REPO"
+if [ -f "$REPO/module/module.prop" ]; then REPO="$REPO/module"; fi
 TMP=$(mktemp -d)
 fail=0
 chk() { if [ "$2" = "$3" ]; then echo "PASS  $1"; else echo "FAIL  $1 expect=[$3] got=[$2]"; fail=1; fi; }

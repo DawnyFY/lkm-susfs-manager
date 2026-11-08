@@ -2,6 +2,8 @@
 # 离线测试：boot-completed 状态传递（rc=0/5 写 boot_stage_completed 并清守卫；rc=3 不写不清）
 set -u
 REPO="$1"
+ROOT="$REPO"
+if [ -f "$REPO/module/module.prop" ]; then REPO="$REPO/module"; fi
 TMP=$(mktemp -d)
 fail=0
 chk() { if [ "$2" = "$3" ]; then echo "PASS  $1"; else echo "FAIL  $1 expect=[$3] got=[$2]"; fail=1; fi; }

@@ -67,7 +67,9 @@ def main() -> int:
         prop = z.read("module.prop").decode("utf-8")
         if "name=LKM SUSFS管理器" not in prop:
             fail("module.prop name is not LKM SUSFS管理器")
-        _src = (BASE / "module.prop")
+        _src = BASE / "module" / "module.prop"
+        if not _src.is_file():
+            _src = BASE / "module.prop"
         _expect_v = re.search(r"^version=(.+)$", _src.read_text(encoding="utf-8"), re.M)
         _expect_c = re.search(r"^versionCode=(.+)$", _src.read_text(encoding="utf-8"), re.M)
         if _expect_v and f"version={_expect_v.group(1).strip()}" not in prop:

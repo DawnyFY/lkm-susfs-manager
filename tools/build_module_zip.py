@@ -64,6 +64,9 @@ def module_version() -> str:
     return match.group(1).strip() if match else "unknown"
 
 
+LEGAL_FILES = ("LICENSE", "LICENSE-AGPL-3.0", "NOTICE", "provenance.json")
+
+
 def collect_files():
     """收集要打包的文件（rel -> bytes），跳过开发文件。"""
     items = {}
@@ -81,6 +84,11 @@ def collect_files():
                 print(f"WARN: CR bytes in {rel}; normalizing to LF", file=sys.stderr)
                 data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
             items[rel] = data
+    # 法律/来源文件保留在仓库根目录，打包时注入 zip 根目录
+    for name in LEGAL_FILES:
+        src = BASE / name
+        if src.is_file() and name not in items:
+            items[name] = src.read_bytes()
     return items
 
 
