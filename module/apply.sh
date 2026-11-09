@@ -51,7 +51,7 @@ fi
 # 互斥：开机脚本与 WebUI 可能同时触发 apply，重复执行会让 our_paths 清单错乱
 if ! lock_acquire "$STATE/apply.lock" 900; then
     echo "[!] 另一个 apply 正在运行，跳过本次"
-    _set_apply_result skipped
+    # 不覆盖已有 apply_result，避免并发时状态在 success/skipped 之间闪变
     # 返回非 0：调用方（boot-completed）不能把"没执行"当成成功
     exit 1
 fi

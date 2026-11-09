@@ -3,7 +3,7 @@
 import sys
 from pathlib import Path
 
-SUFFIXES = {".sh", ".prop", ".js", ".css", ".html", ".json", ".txt"}
+SUFFIXES = {".sh", ".prop", ".js", ".css", ".html", ".json", ".txt", ".md"}
 SKIP_DIRS = {".git", "dist", "__pycache__", ".github"}
 
 base = Path(__file__).resolve().parent.parent

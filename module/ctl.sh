@@ -174,8 +174,8 @@ validate_config_file() {
         case "$_key" in
             # cmdline 值天然含空格；只放行空白与普通字符，元字符仍然拒绝
             fake_cmdline_value)
+                # 允许空白；引号/反斜杠仍然拒绝（之前空白分支把检查跳过了）
                 case "$_val" in
-                    *[[:space:]]*) ;;
                     *\"*|*'"'*|*\\*) _bad="line $_ln: quote or backslash in value"; break ;;
                 esac
                 ;;
@@ -345,6 +345,7 @@ case "$1" in
         _cf_gate || { echo "文件与发布包不一致，拒绝执行"; exit 1; }
         mkdir -p "$CONFIG" 2>/dev/null
         date '+%F %T' > "$CONFIG/allow_lkm_on_kernelpatch" 2>/dev/null
+        rm -f "$STATE/config_backup/allow_lkm_on_kernelpatch" 2>/dev/null
         if [ -f "$CONFIG/allow_lkm_on_kernelpatch" ]; then
             echo "allowed"
         else
@@ -355,6 +356,7 @@ case "$1" in
     disallow_lkm)
         _cf_gate || { echo "文件与发布包不一致，拒绝执行"; exit 1; }
         rm -f "$CONFIG/allow_lkm_on_kernelpatch" 2>/dev/null
+        rm -f "$STATE/config_backup/allow_lkm_on_kernelpatch" 2>/dev/null
         echo "disallowed"
         ;;
     crash_ack)
@@ -508,14 +510,23 @@ case "$1" in
             echo "rejected: $_bad"
             exit 1
         fi
+        _old="$CONFIG/.bundle.old.$$"
+        rm -rf "$_old"; mkdir -p "$_old" 2>/dev/null || { rm -rf "$_dir"; echo "tmp dir failed"; exit 1; }
+        for _n in $_names; do [ -f "$CONFIG/$_n" ] && cp -f "$CONFIG/$_n" "$_old/$_n" 2>/dev/null; done
+        _moved=""
         for _n in $_names; do
-            if ! mv -f "$_dir/$_n" "$CONFIG/$_n" 2>/dev/null; then
-                rm -rf "$_dir"
+            if mv -f "$_dir/$_n" "$CONFIG/$_n" 2>/dev/null; then
+                _moved="$_moved $_n"
+            else
+                for _r in $_moved; do
+                    [ -f "$_old/$_r" ] && cp -f "$_old/$_r" "$CONFIG/$_r" 2>/dev/null
+                done
+                rm -rf "$_dir" "$_old"
                 echo "write failed: $_n"
                 exit 1
             fi
         done
-        rm -rf "$_dir"
+        rm -rf "$_dir" "$_old"
         # 同步自动加载标记（load.sh 会检查 disable_autoload）
         _al=$(grep '^auto_load=' "$CONFIG/config.ini" 2>/dev/null | tail -1 | cut -d= -f2)
         case "$_al" in
@@ -572,11 +583,19 @@ case "$1" in
             exit 1
         fi
         for f in sus_path sus_mount try_umount; do
-            [ -f "$LEGACY/$f.txt" ] && cp -f "$LEGACY/$f.txt" "$CONFIG/$f.txt"
+            [ -f "$LEGACY/$f.txt" ] || continue
+            _tmp="$CONFIG/$f.txt.import.$$"
+            if cp -f "$LEGACY/$f.txt" "$_tmp" 2>/dev/null && mv -f "$_tmp" "$CONFIG/$f.txt" 2>/dev/null; then
+                :
+            else
+                rm -f "$_tmp"
+                echo "import failed: $f"
+                exit 1
+            fi
         done
         # 只在为空时补默认值，避免覆盖用户自定义的隐藏模块列表
         if [ ! -s "$CONFIG/hide_modules.txt" ]; then
-            echo "kernelsu" > "$CONFIG/hide_modules.txt"
+            printf 'kernelsu\n' > "$CONFIG/hide_modules.txt.tmp.$$" && mv -f "$CONFIG/hide_modules.txt.tmp.$$" "$CONFIG/hide_modules.txt"
         fi
         echo "imported"
         ;;

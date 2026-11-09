@@ -55,6 +55,15 @@ out=$( ( MODDIR="$M3"; CONFIG="$M3/config"; . "$REPO/common.sh"; apatch_lkm_allo
 : > "$M3/config/allow_lkm_on_kernelpatch"
 out=$( ( MODDIR="$M3"; CONFIG="$M3/config"; . "$REPO/common.sh"; apatch_lkm_allowed && echo yes || echo no ) ); chk "标记后放行" "$out" "yes"
 
+# F9: allow_lkm 不应进入配置自愈备份
+M4="$TMP/m4"; mkdir -p "$M4/config" "$M4/state"
+printf 'auto_load=1\n' > "$M4/config/config.ini"
+: > "$M4/config/allow_lkm_on_kernelpatch"
+( MODDIR="$M4"; CONFIG="$M4/config"; STATE="$M4/state"; . "$REPO/common.sh"; backup_config )
+
+chk "备份包含 config.ini" "$([ -f "$M4/state/config_backup/config.ini" ] && echo yes || echo no)" "yes"
+chk "备份不包含 allow_lkm" "$([ -f "$M4/state/config_backup/allow_lkm_on_kernelpatch" ] && echo yes || echo no)" "no"
+
 # ---------- 5) apply 早退不误清守卫（blocker 回归） ----------
 build_apply() { # $1=目标目录
     M="$1"; mkdir -p "$M/state" "$M/config"

@@ -14,8 +14,8 @@
 
 | 上游 | 仓库 | 版本 | 本项目使用方式 |
 |---|---|---|---|
-| inforcqb / susfs4ksu-lkm | https://github.com/inforcqb/susfs4ksu-lkm | `v2.3.0-r18.8` | `lib/susfs_guard_lkm-*.ko`（8）、`bin/susfs_insmod`，原样使用 |
-| sidex15 / ksu_module_susfs | https://github.com/sidex15/ksu_module_susfs | `v1.5.2-R28` | `bin/ksu_susfs_good`（回退用），原样使用 |
+| inforcqb / susfs4ksu-lkm | https://github.com/inforcqb/susfs4ksu-for-lkm | `v2.3.0-r18.9-1` | `lib/susfs_guard_lkm-*.ko`（8）、`bin/susfs_insmod`，原样使用 |
+| sidex15 / ksu_module_susfs | https://github.com/sidex15/susfs4ksu-module | `v1.5.2+_R28` | `bin/ksu_susfs_good`（回退用），原样使用 |
 | simonpunk / susfs4ksu | 原始 SUSFS 项目 | — | 经 inforcqb 移植，本项目不直接引用 |
 
 ## 上游 loader 与本项目的区别

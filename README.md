@@ -48,7 +48,7 @@
 ## 功能亮点
 
 - **8 个 KMI 自动匹配**（android12-5.10 ～ android17-6.18）；无 Android tag 的 5.15 支持按 SDK 自动消歧。
-- **多管理器开机阶段**：KSU 系 / APatch 走 `boot-completed`，Magisk 走 `service`；late-load 临时 root 有兜底。
+- **多管理器开机阶段**：KSU 系 / APatch 走 `boot-completed`，Magisk 走 `service`；boot-completed 会检查 LKM 状态，未加载时补一次（不显式判断 late-load）。
 - **APatch 检测与安全策略**：识别 `/data/adb/ap` / `apd`，默认不自动外挂 LKM，需显式放行。
 - **KernelPatch 运行时探测**：读 dmesg banner；不可读显示 `unknown`，不误报。
 - **启动守卫 / pstore 崩溃暂停 / 半加载保护**：避免错误 LKM 导致反复 bootloop。

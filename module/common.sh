@@ -165,19 +165,62 @@ kernelpatch_present() {
 # ("KernelPatch Version: d09"). The userspace marker only proves APatch exists,
 # not that kpimg is injected; unreadable dmesg returns unknown (not 0/1).
 kernelpatch_kernel_probe() {
-    if [ "${SUSFS_TEST_HOOK:-0}" = "1" ] && [ -n "${KERNELPATCH_DMESG_FILE:-}" ]; then
-        [ -r "$KERNELPATCH_DMESG_FILE" ] || return 2
-        _kp_log=$(cat "$KERNELPATCH_DMESG_FILE" 2>/dev/null) || return 2
-    else
-        _kp_log=$(dmesg 2>/dev/null) || return 2
+    # 同一进程内缓存（status 会同时取 state 和 version）；跨进程用 boot_id 缓存文件，
+    # 避免每次刷新 WebUI 都完整读一遍 dmesg。
+    _kp_cache_dir=$STATE
+    [ -n "$_kp_cache_dir" ] || _kp_cache_dir=$MODDIR/state
+    _kp_cache=$_kp_cache_dir/kp_probe
+    if [ "${SUSFS_TEST_HOOK:-0}" = "1" ] || [ -n "${KERNELPATCH_DMESG_FILE:-}" ]; then
+        # 测试钩子每轮都重新读文件，不能被上一轮进程缓存/文件缓存挡住
+        _kp_cache=""
+        _KP_PROBE_DONE=0
     fi
-    printf '%s\n' "$_kp_log" | grep -q 'KernelPatch' || return 1
-    printf '%s\n' "$_kp_log" | sed -n 's/.*KernelPatch Version: *\([0-9A-Fa-fx._-]*\).*/\1/p' | head -1
-    return 0
+    _kp_boot_file=${PROC_BOOT_ID_FILE:-}
+    [ -n "$_kp_boot_file" ] || _kp_boot_file=/proc/sys/kernel/random/boot_id
+    _kp_boot=$(cat "$_kp_boot_file" 2>/dev/null)
+    if [ -n "$_kp_cache" ] && [ -n "$_kp_boot" ] && [ -r "$_kp_cache" ]; then
+        _kp_cb=$(sed -n 's/^boot_id=//p' "$_kp_cache" 2>/dev/null)
+        if [ "$_kp_cb" = "$_kp_boot" ]; then
+            _kp_st=$(sed -n 's/^state=//p' "$_kp_cache" 2>/dev/null)
+            _kp_ver=$(sed -n 's/^version=//p' "$_kp_cache" 2>/dev/null)
+            _KP_PROBE_DONE=1; _KP_PROBE_STATE=$_kp_st; _KP_PROBE_VER=$_kp_ver
+            [ -n "$_kp_ver" ] && printf '%s\n' "$_kp_ver"
+            case "$_kp_st" in 1) return 0 ;; 0) return 1 ;; *) return 2 ;; esac
+        fi
+    fi
+    if [ "${_KP_PROBE_DONE:-0}" = "1" ]; then
+        [ -n "$_KP_PROBE_VER" ] && printf '%s\n' "$_KP_PROBE_VER"
+        case "$_KP_PROBE_STATE" in 1) return 0 ;; 0) return 1 ;; *) return 2 ;; esac
+    fi
+    _kp_ok=0
+    if [ "${SUSFS_TEST_HOOK:-0}" = "1" ] && [ -n "${KERNELPATCH_DMESG_FILE:-}" ]; then
+        if [ -r "$KERNELPATCH_DMESG_FILE" ] && _kp_log=$(cat "$KERNELPATCH_DMESG_FILE" 2>/dev/null); then
+            _kp_ok=1
+        fi
+    elif _kp_log=$(dmesg 2>/dev/null); then
+        _kp_ok=1
+    fi
+    _kp_st=unknown; _kp_ver=""
+    if [ "$_kp_ok" = "1" ]; then
+        if printf '%s\n' "$_kp_log" | grep -q 'KernelPatch'; then
+            _kp_st=1
+            _kp_ver=$(printf '%s\n' "$_kp_log" | sed -n 's/.*KernelPatch Version: *\([0-9A-Fa-fx._-]*\).*/\1/p' | head -1)
+        else
+            _kp_st=0
+        fi
+    fi
+    _KP_PROBE_DONE=1; _KP_PROBE_STATE=$_kp_st; _KP_PROBE_VER=$_kp_ver
+    if [ -n "$_kp_cache" ]; then
+        mkdir -p "$_kp_cache_dir" 2>/dev/null
+        { printf 'boot_id=%s\n' "$_kp_boot"; printf 'state=%s\n' "$_kp_st"; printf 'version=%s\n' "$_kp_ver"; } > "$_kp_cache" 2>/dev/null
+    fi
+    [ -n "$_kp_ver" ] && printf '%s\n' "$_kp_ver"
+    case "$_kp_st" in 1) return 0 ;; 0) return 1 ;; *) return 2 ;; esac
 }
 
 kernelpatch_kernel_state() {
-    _kp_v=$(kernelpatch_kernel_probe 2>/dev/null)
+    # 直接调用而不是 $(...)，避免测试钩子变量/缓存状态丢在子 shell 里
+    kernelpatch_kernel_probe >/dev/null
     _kp_rc=$?
     case "$_kp_rc" in
         0) echo 1 ;;
@@ -187,7 +230,8 @@ kernelpatch_kernel_state() {
 }
 
 kernelpatch_kernel_version() {
-    kernelpatch_kernel_probe 2>/dev/null || true
+    kernelpatch_kernel_probe >/dev/null || true
+    [ -n "${_KP_PROBE_VER:-}" ] && printf '%s\n' "$_KP_PROBE_VER"
 }
 
 # 共存模式下禁用的功能：avc_spoof（与 kpimg 的 SELinux hook 重叠）
@@ -468,8 +512,11 @@ _cf_cache_ok() {
         _cok_p=$(printf '%s' "$_cok_line" | awk '{print $2}')
         [ -n "$_cok_p" ] || return 1
         _cok_fmt=$(stat -c %Y "$MODDIR/$_cok_p" 2>/dev/null)
-        [ -n "$_cok_fmt" ] || return 1
+        _cok_fct=$(stat -c %Z "$MODDIR/$_cok_p" 2>/dev/null)
+        [ -n "$_cok_fmt" ] && [ -n "$_cok_fct" ] || return 1
         [ "$_cok_fmt" -lt "$_cok_mt" ] || return 1
+        # ctime 不能像 mtime 那样回拨；防「改文件后 touch -t 旧时间」绕过缓存
+        [ "$_cok_fct" -lt "$_cok_mt" ] || return 1
     done < "$_CF"
     return 0
 }
@@ -1169,7 +1216,7 @@ kernel_release_spoofed() {
 backup_config() {
     [ -d "$CONFIG" ] || return 0
     mkdir -p "$STATE/config_backup" 2>/dev/null || return 0
-    for _f in config.ini sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt allow_lkm_on_kernelpatch; do
+    for _f in config.ini sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt; do
         [ -f "$CONFIG/$_f" ] && cp -f "$CONFIG/$_f" "$STATE/config_backup/$_f" 2>/dev/null
     done
     # 带时间戳的历史副本，保留最近 3 份（防止当前配置被默认值覆盖后备份也跟着丢）
@@ -1192,7 +1239,7 @@ restore_config_if_missing() {
     mkdir -p "$CONFIG" 2>/dev/null || return 0
     # 只补缺失的文件：已有的规则文件可能是更新的，不能被旧备份覆盖
     _restored=0
-    for _f in config.ini config.ini.default sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt allow_lkm_on_kernelpatch; do
+    for _f in config.ini config.ini.default sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt; do
         [ -f "$CONFIG/$_f" ] && continue
         [ -f "$STATE/config_backup/$_f" ] || continue
         cp -f "$STATE/config_backup/$_f" "$CONFIG/$_f" 2>/dev/null && _restored=$((_restored + 1))

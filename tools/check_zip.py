@@ -16,8 +16,13 @@ import zipfile
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent
+def _version_key(p: Path):
+    import re
+    m = re.search(r"susfs_allinone-(\d+(?:\.\d+)*)", p.name)
+    return tuple(int(x) for x in m.group(1).split(".")) if m else (0,)
+
 def _newest_zip() -> Path:
-    zips = sorted((BASE / "dist").glob("susfs_allinone-*.zip"))
+    zips = sorted((BASE / "dist").glob("susfs_allinone-*.zip"), key=_version_key)
     return zips[-1] if zips else BASE / "dist" / "susfs_allinone.zip"
 
 DEFAULT = _newest_zip()

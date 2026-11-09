@@ -5,11 +5,13 @@
 `config/config.ini`（纯 `KEY=VALUE`，不会被执行）：
 
 ```ini
-auto_load=1        # 1=开机自动加载并应用规则；0=仅手动
-hide_sus_mnts=1    # 对非 root 进程隐藏 SUS 挂载点
-avc_spoof=0        # AVC 日志伪装（默认关闭；KernelPatch 共存时自动关闭）
-replace_rules=0    # 0=只追加；1=只清理本模块上次写入的；2=整表清空（慎用）
+auto_load=1
+hide_sus_mnts=1
+avc_spoof=0
+replace_rules=0
 ```
+
+> 配置值里不要写行内注释。WebUI 保存会拒绝“值含空白”的行；注释请单独占一行（以 `#` 开头）。auto_load=1 表示开机自动加载并应用；hide_sus_mnts=1 隐藏 SUS 挂载点；avc_spoof=0 默认关闭；replace_rules=0 只追加。
 
 其他配置：
 

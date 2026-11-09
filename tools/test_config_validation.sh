@@ -21,6 +21,9 @@ run_cfg() {
 ok=$(printf "# 注释\nauto_load=1\nfake_cmdline_value=androidboot.selinux=permissive\n")
 chk "正常配置保存成功" "$(run_cfg "$ok")" "saved"
 chk "正常配置已落盘" "$(grep -c "^auto_load=1$" "$MOD/config/config.ini")" "1"
+chk "fake_cmdline 允许空白" "$(run_cfg "$(printf "fake_cmdline_value=androidboot.selinux=permissive foo\n")")" "saved"
+R=$(run_cfg "$(printf "fake_cmdline_value=ok \"x\"\n")")
+case "$R" in rejected:*) echo "PASS  fake_cmdline 拒绝引号" ;; *) echo "FAIL  fake_cmdline 拒绝引号 got=[$R]"; fail=1 ;; esac
 
 # 值内空白 / 命令 / 引号：source 时会被拆成"赋值 + 命令"
 chk "拒绝值内命令（空格）" "$(run_cfg "$(printf "spoof_uname_version=ok touch /tmp/PWNED\n")")" "rejected: line 1: whitespace in value"
