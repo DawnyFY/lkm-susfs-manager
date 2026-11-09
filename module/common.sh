@@ -304,11 +304,19 @@ kernel_config_get() {
             _kc_src="$CONFIG_GZ_FILE"
         fi
         _KC_FILE=""
-        if [ -r "$_kc_src" ] && command -v zcat >/dev/null 2>&1; then
+        _kc_cached="$STATE/.kernel_config"
+        _kc_cache_bid="$STATE/.kernel_config.bid"
+        _kc_bid_file=${PROC_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}
+        _kc_bid=$(cat "$_kc_bid_file" 2>/dev/null)
+        if [ "${SUSFS_TEST_HOOK:-0}" != "1" ] && [ -s "$_kc_cached" ] && [ -n "$_kc_bid" ] && [ "$(cat "$_kc_cache_bid" 2>/dev/null)" = "$_kc_bid" ]; then
+            _KC_FILE="$_kc_cached"
+        fi
+        if [ -z "$_KC_FILE" ] && [ -r "$_kc_src" ] && command -v zcat >/dev/null 2>&1; then
             mkdir -p "$STATE" 2>/dev/null
             _kc_tmp="$STATE/.kernel_config.$$"
             if zcat "$_kc_src" > "$_kc_tmp" 2>/dev/null && [ -s "$_kc_tmp" ]; then
                 mv -f "$_kc_tmp" "$STATE/.kernel_config" 2>/dev/null
+                [ -n "$_kc_bid" ] && printf '%s\n' "$_kc_bid" > "$_kc_cache_bid" 2>/dev/null
                 _KC_FILE="$STATE/.kernel_config"
             else
                 rm -f "$_kc_tmp" 2>/dev/null
@@ -402,13 +410,14 @@ cfg_get() {
 cfg_load() {
     _f="$CONFIG/config.ini"
     [ -f "$_f" ] || return 0
+    # 一次 sed 去除行内注释/尾空白，避免每行 spawn 一个 sed（约 300ms）
+    _cfg_raw=$(sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//' "$_f" 2>/dev/null)
     while IFS= read -r _line || [ -n "$_line" ]; do
         case "$_line" in
             ""|"#"*) continue ;;
         esac
         _k=${_line%%=*}
         _v=${_line#*=}
-        _v=$(printf '%s' "$_v" | sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//')
         case "$_k" in
             auto_load) auto_load=$_v ;;
             hide_sus_mnts) hide_sus_mnts=$_v ;;
@@ -435,7 +444,9 @@ cfg_load() {
             vold_isolation) vold_isolation=$_v ;;
             *) : ;;
         esac
-    done < "$_f"
+    done <<EOF
+$_cfg_raw
+EOF
 }
 
 # 旧 config.sh → config.ini 迁移：只提取 KEY=VALUE 行，绝不 source
@@ -507,17 +518,22 @@ _cf_cache_ok() {
     [ -n "$_cok_now" ] && [ "$_cok_mf" = "$_cok_now" ] || return 1
     _cok_mt=$(stat -c %Y "$_cok" 2>/dev/null)
     [ -n "$_cok_mt" ] || return 1
-    while IFS= read -r _cok_line || [ -n "$_cok_line" ]; do
-        [ -n "$_cok_line" ] || continue
-        _cok_p=$(printf '%s' "$_cok_line" | awk '{print $2}')
-        [ -n "$_cok_p" ] || return 1
-        _cok_fmt=$(stat -c %Y "$MODDIR/$_cok_p" 2>/dev/null)
-        _cok_fct=$(stat -c %Z "$MODDIR/$_cok_p" 2>/dev/null)
-        [ -n "$_cok_fmt" ] && [ -n "$_cok_fct" ] || return 1
-        [ "$_cok_fmt" -lt "$_cok_mt" ] || return 1
+    # 一次 stat 批量取 mtime/ctime，避免 30 个文件 × 2 次子进程（约 1.1s）
+    _cok_list=$(awk -v d="$MODDIR/" '{print d $2}' "$_CF" 2>/dev/null)
+    [ -n "$_cok_list" ] || return 1
+    set -- $_cok_list
+    _cok_out=$(stat -c '%Y:%Z:%n' "$@" 2>/dev/null) || return 1
+    _cok_bad=0
+    while IFS=: read -r _cok_fmt _cok_fct _cok_p; do
+        [ -n "$_cok_p" ] || { _cok_bad=1; break; }
+        [ -n "$_cok_fmt" ] && [ -n "$_cok_fct" ] || { _cok_bad=1; break; }
+        [ "$_cok_fmt" -lt "$_cok_mt" ] || { _cok_bad=1; break; }
         # ctime 不能像 mtime 那样回拨；防「改文件后 touch -t 旧时间」绕过缓存
-        [ "$_cok_fct" -lt "$_cok_mt" ] || return 1
-    done < "$_CF"
+        [ "$_cok_fct" -lt "$_cok_mt" ] || { _cok_bad=1; break; }
+    done <<EOF
+$_cok_out
+EOF
+    [ "$_cok_bad" = 0 ] || return 1
     return 0
 }
 
@@ -608,27 +624,37 @@ ksu_branch() {
     _mn=$(cfg_get manager_name)
     [ -n "$_mn" ] && { echo "$_mn"; return 0; }
 
+    # 同一 boot 内管理器不会变；缓存 pm list 的结果，避免每次 status 都跑 pm（约 200ms）
+    _mb_file=${PROC_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}
+    _mb=$(cat "$_mb_file" 2>/dev/null)
+    _mc="$STATE/.manager"
+    if [ -n "$_mb" ] && [ -f "$_mc" ] && [ "$(sed -n '1p' "$_mc" 2>/dev/null)" = "$_mb" ]; then
+        sed -n '2p' "$_mc" 2>/dev/null
+        return 0
+    fi
+
+    _kr=Unknown
     if [ -d /data/adb/ksu ]; then
         _pkgs=$(pm list packages 2>/dev/null)
         case "$_pkgs" in
-            *com.sukisu.ultra*) echo "SukiSU"; return 0 ;;
+            *com.sukisu.ultra*) _kr=SukiSU ;;
             # BakaSU 沿用 ReSukiSU 的包名（com.resukisu.resukisu），仅凭包名无法区分
-            *org.bakasu*) echo "BakaSU"; return 0 ;;
-            *com.resukisu*) echo "ReSukiSU / BakaSU"; return 0 ;;
-            *com.rifsxd.ksunext*) echo "KernelSU Next"; return 0 ;;
-            *me.weishu.kernelsu*) echo "KernelSU"; return 0 ;;
-            *) echo "KernelSU 系列"; return 0 ;;
+            *org.bakasu*) _kr=BakaSU ;;
+            *com.resukisu*) _kr="ReSukiSU / BakaSU" ;;
+            *com.rifsxd.ksunext*) _kr="KernelSU Next" ;;
+            *me.weishu.kernelsu*) _kr=KernelSU ;;
+            *) _kr="KernelSU 系列" ;;
         esac
+    elif [ -d /data/adb/ap ]; then
+        _kr=APatch
+    elif [ -d /data/adb/magisk ]; then
+        _kr=Magisk
     fi
-    if [ -d /data/adb/ap ]; then
-        echo "APatch"
-        return 0
+    if [ -n "$_mb" ]; then
+        mkdir -p "$STATE" 2>/dev/null
+        { printf '%s\n' "$_mb"; printf '%s\n' "$_kr"; } > "$_mc" 2>/dev/null
     fi
-    if [ -d /data/adb/magisk ]; then
-        echo "Magisk"
-        return 0
-    fi
-    echo "Unknown"
+    echo "$_kr"
 }
 
 marker_paths() {

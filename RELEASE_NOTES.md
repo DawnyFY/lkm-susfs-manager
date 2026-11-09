@@ -32,8 +32,8 @@
 ## 校验
 
 - 文件：`susfs_allinone-1.2.4.zip`
-- 大小：12,635,673 B
-- sha256：a2a8e216480cdc05de1759391ff2fb6521b6b14c8803f49a383f036ee3cb5ea9
+- 大小：12,636,094 B
+- sha256：3ddfd81ec85cc83eb452f48cee40f44b2864ae49a9da2c1c357ae1b5d44fa8b6
 
 ## 说明
 
