@@ -17,6 +17,13 @@ def sha(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest().upper()
 
 
+def _version_key(p: Path):
+    """Sort susfs_allinone-X.Y.Z[.dev] numerically, not lexicographically."""
+    import re
+    m = re.search(r"susfs_allinone-(\d+(?:\.\d+)*)", p.name)
+    return tuple(int(x) for x in m.group(1).split(".")) if m else (0,)
+
+
 def check(path: Path) -> list[str]:
     gaps: list[str] = []
     z = zipfile.ZipFile(path)
@@ -59,7 +66,7 @@ def main() -> int:
         paths = [Path(a) for a in args]
     else:
         # 不带参数时选 dist 下版本号最新的 zip，避免默认值随版本过期
-        cands = sorted(Path("dist").glob("susfs_allinone-*.zip"))
+        cands = sorted(Path("dist").glob("susfs_allinone-*.zip"), key=_version_key)
         if not cands:
             print("no zip found under dist/; pass a path explicitly")
             return 1

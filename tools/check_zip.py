@@ -49,6 +49,50 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
+def verify_manifest(z: zipfile.ZipFile, names: set[str]) -> None:
+    """Validate .cache.files / .cache.meta against the actual archive bytes."""
+    if ".cache.files" not in names or ".cache.meta" not in names:
+        fail("missing .cache.files or .cache.meta")
+    manifest = z.read(".cache.files")
+    if not manifest.strip():
+        fail("empty .cache.files")
+    seen: dict[str, str] = {}
+    for line in manifest.decode("utf-8", "replace").splitlines():
+        if not line.strip():
+            continue
+        parts = line.split("  ", 1)
+        if len(parts) != 2 or len(parts[0]) != 64:
+            fail(f"bad manifest line: {line[:80]}")
+        digest, name = parts[0].lower(), parts[1]
+        if name in seen:
+            fail(f"duplicate manifest entry: {name}")
+        if name not in names:
+            fail(f"manifest entry missing from zip: {name}")
+        actual = hashlib.sha256(z.read(name)).hexdigest()
+        if actual != digest:
+            fail(f"manifest hash mismatch: {name}")
+        seen[name] = digest
+    meta_text = z.read(".cache.meta").decode("utf-8", "replace")
+    meta = {}
+    for line in meta_text.splitlines():
+        if "=" in line:
+            k, v = line.split("=", 1)
+            meta[k.strip()] = v.strip()
+    if meta.get("manifest_sha256", "").lower() != hashlib.sha256(manifest).hexdigest():
+        fail(".cache.meta manifest_sha256 mismatch")
+    try:
+        if int(meta.get("files", "-1")) != len(seen):
+            fail(".cache.meta files count mismatch")
+    except ValueError:
+        fail(".cache.meta files is not an integer")
+    skip = {"module.prop", "customize.sh", ".cache.files", ".cache.meta"}
+    extra = [
+        n for n in names
+        if n not in seen and n not in skip and not n.startswith(("config/", "state/"))
+    ]
+    if extra:
+        fail(f"unmanifested zip entries: {', '.join(sorted(extra)[:5])}")
+    print(f"manifest: {len(seen)} files verified")
 def main() -> int:
     path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT
     if not path.is_file():
@@ -109,6 +153,8 @@ def main() -> int:
         common_mode = (z.getinfo("common.sh").external_attr >> 16) & 0o777
         if common_mode != 0o644:
             fail(f"common.sh mode is {oct(common_mode)}, expected 0o644")
+
+        verify_manifest(z, names)
 
     print("OK: archive, manifest, branch support, WebUI and modes validated")
     return 0

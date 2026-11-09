@@ -33,8 +33,8 @@
 
 - 本项目脚本、安装器与 WebUI：**GPL-2.0**（`LICENSE`）；
 - 第三方二进制：
-  - `lib/susfs_guard_lkm-*.ko`、`bin/susfs_insmod` — inforcqb / `susfs4ksu-lkm` `v2.3.0-r18.8`，GPL-2.0，未修改；
-  - `bin/ksu_susfs_good` — sidex15 & simonpunk / `ksu_module_susfs` `v1.5.2-R28`，AGPL-3.0，未修改；
+  - `lib/susfs_guard_lkm-*.ko`、`bin/susfs_insmod` — inforcqb / `susfs4ksu-for-lkm` `v2.3.0-r18.9-1`，GPL-2.0，未修改；
+  - `bin/ksu_susfs_good` — sidex15 & simonpunk / `susfs4ksu-module` `v1.5.2+_R28`，AGPL-3.0，未修改；
 - 本仓库为上述组件的聚合分发，版权与许可证归原作者所有；
 - 详见 `NOTICE`、`provenance.json`。
 

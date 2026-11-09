@@ -519,7 +519,12 @@ case "$1" in
                 _moved="$_moved $_n"
             else
                 for _r in $_moved; do
-                    [ -f "$_old/$_r" ] && cp -f "$_old/$_r" "$CONFIG/$_r" 2>/dev/null
+                    if [ -f "$_old/$_r" ]; then
+                        cp -f "$_old/$_r" "$CONFIG/$_r" 2>/dev/null
+                    else
+                        # 失败前新建的文件没有旧备份，回滚时要删除，不能留下半套配置
+                        rm -f "$CONFIG/$_r" 2>/dev/null
+                    fi
                 done
                 rm -rf "$_dir" "$_old"
                 echo "write failed: $_n"

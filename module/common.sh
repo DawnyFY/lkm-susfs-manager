@@ -183,14 +183,20 @@ kernelpatch_kernel_probe() {
         if [ "$_kp_cb" = "$_kp_boot" ]; then
             _kp_st=$(sed -n 's/^state=//p' "$_kp_cache" 2>/dev/null)
             _kp_ver=$(sed -n 's/^version=//p' "$_kp_cache" 2>/dev/null)
-            _KP_PROBE_DONE=1; _KP_PROBE_STATE=$_kp_st; _KP_PROBE_VER=$_kp_ver
-            [ -n "$_kp_ver" ] && printf '%s\n' "$_kp_ver"
-            case "$_kp_st" in 1) return 0 ;; 0) return 1 ;; *) return 2 ;; esac
+            # unknown 表示上次 dmesg 暂时不可读；不能把它缓存整个 boot，
+            # 否则 dmesg 恢复后也不再重试。只信任确定性的 0/1。
+            case "$_kp_st" in
+                1|0)
+                    _KP_PROBE_DONE=1; _KP_PROBE_STATE=$_kp_st; _KP_PROBE_VER=$_kp_ver
+                    [ -n "$_kp_ver" ] && printf '%s\n' "$_kp_ver"
+                    [ "$_kp_st" = "1" ] && return 0 || return 1
+                    ;;
+            esac
         fi
     fi
     if [ "${_KP_PROBE_DONE:-0}" = "1" ]; then
         [ -n "$_KP_PROBE_VER" ] && printf '%s\n' "$_KP_PROBE_VER"
-        case "$_KP_PROBE_STATE" in 1) return 0 ;; 0) return 1 ;; *) return 2 ;; esac
+        case "$_KP_PROBE_STATE" in 1) return 0 ;; 0) return 1 ;; esac
     fi
     _kp_ok=0
     if [ "${SUSFS_TEST_HOOK:-0}" = "1" ] && [ -n "${KERNELPATCH_DMESG_FILE:-}" ]; then
@@ -209,10 +215,21 @@ kernelpatch_kernel_probe() {
             _kp_st=0
         fi
     fi
-    _KP_PROBE_DONE=1; _KP_PROBE_STATE=$_kp_st; _KP_PROBE_VER=$_kp_ver
-    if [ -n "$_kp_cache" ]; then
-        mkdir -p "$_kp_cache_dir" 2>/dev/null
-        { printf 'boot_id=%s\n' "$_kp_boot"; printf 'state=%s\n' "$_kp_st"; printf 'version=%s\n' "$_kp_ver"; } > "$_kp_cache" 2>/dev/null
+    _KP_PROBE_STATE=$_kp_st; _KP_PROBE_VER=$_kp_ver
+    if [ "$_kp_st" = "1" ] || [ "$_kp_st" = "0" ]; then
+        _KP_PROBE_DONE=1
+        if [ -n "$_kp_cache" ]; then
+            mkdir -p "$_kp_cache_dir" 2>/dev/null
+            _kp_tmp="$_kp_cache.tmp.$$"
+            if { printf 'boot_id=%s\n' "$_kp_boot"; printf 'state=%s\n' "$_kp_st"; printf 'version=%s\n' "$_kp_ver"; } > "$_kp_tmp" 2>/dev/null; then
+                mv -f "$_kp_tmp" "$_kp_cache" 2>/dev/null || rm -f "$_kp_tmp" 2>/dev/null
+            else
+                rm -f "$_kp_tmp" 2>/dev/null
+            fi
+        fi
+    else
+        # 不缓存 unknown；下次调用重新探测
+        _KP_PROBE_DONE=0
     fi
     [ -n "$_kp_ver" ] && printf '%s\n' "$_kp_ver"
     case "$_kp_st" in 1) return 0 ;; 0) return 1 ;; *) return 2 ;; esac
@@ -628,9 +645,13 @@ ksu_branch() {
     _mb_file=${PROC_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}
     _mb=$(cat "$_mb_file" 2>/dev/null)
     _mc="$STATE/.manager"
-    if [ -n "$_mb" ] && [ -f "$_mc" ] && [ "$(sed -n '1p' "$_mc" 2>/dev/null)" = "$_mb" ]; then
-        sed -n '2p' "$_mc" 2>/dev/null
-        return 0
+    if [ -n "$_mb" ] && [ -f "$_mc" ]; then
+        _mc_bid=$(sed -n '1p' "$_mc" 2>/dev/null)
+        _mc_name=$(sed -n '2p' "$_mc" 2>/dev/null)
+        if [ "$_mc_bid" = "$_mb" ] && [ -n "$_mc_name" ]; then
+            printf '%s\n' "$_mc_name"
+            return 0
+        fi
     fi
 
     _kr=Unknown
@@ -652,7 +673,12 @@ ksu_branch() {
     fi
     if [ -n "$_mb" ]; then
         mkdir -p "$STATE" 2>/dev/null
-        { printf '%s\n' "$_mb"; printf '%s\n' "$_kr"; } > "$_mc" 2>/dev/null
+        _mc_tmp="$_mc.tmp.$$"
+        if { printf '%s\n' "$_mb"; printf '%s\n' "$_kr"; } > "$_mc_tmp" 2>/dev/null; then
+            mv -f "$_mc_tmp" "$_mc" 2>/dev/null || rm -f "$_mc_tmp" 2>/dev/null
+        else
+            rm -f "$_mc_tmp" 2>/dev/null
+        fi
     fi
     echo "$_kr"
 }

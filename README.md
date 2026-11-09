@@ -91,7 +91,7 @@ APatch/KernelPatch 下默认**不自动加载** SUSFS LKM；需要外挂时，�
 - 离线：29/29 测试通过。
 - 未验证：Magisk 真机冷启动、APatch 真机全链路、其余 7 个 KMI。
 - 已知缺口：`sus_path` 目标目录删除重建后旧 inode 规则失效（重新挂接原型未合并）。
-- 默认隐藏 `/data/adb`：NeoZygisk 用户需删除该行或排除 `/data/adb/neozygisk`（外部反馈的 zygote 循环风险）。
+- 默认隐藏 `/data/adb`：NeoZygisk 用户必须删除该行；模块/SUSFS 不支持从已隐藏父目录中排除子目录（外部反馈的 zygote 循环风险）。
 
 详见 [验证记录与限制](docs/VERIFICATION.md)。
 

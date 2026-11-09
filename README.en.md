@@ -85,7 +85,7 @@ Full safety and disclaimer: [SAFETY.md](docs/SAFETY.md) (Chinese).
 - Offline: 29/29 tests pass.
 - Not verified: Magisk real-device cold boot, APatch real-device full chain, the other 7 KMI targets.
 - Known gap: `sus_path` rules on deleted/recreated inodes stop hiding; the reattach prototype is not merged.
-- Default hiding of `/data/adb`: NeoZygisk users should remove that line or exclude `/data/adb/neozygisk` (externally reported zygote loop risk).
+- Default hiding of `/data/adb`: NeoZygisk users must remove that line; the module/SUSFS cannot exclude a subdirectory from a hidden parent (externally reported zygote loop risk).
 
 See [VERIFICATION.md](docs/VERIFICATION.md) (Chinese).
 

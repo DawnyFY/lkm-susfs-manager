@@ -28,8 +28,11 @@ jobs:
       - name: Build module ZIP
         run: python tools/build_module_zip.py
 
-      - name: Validate module ZIP (archive, files, KMI, WebUI JS syntax)
+      - name: Validate module ZIP (archive, manifest, files, KMI, WebUI JS syntax)
         run: python tools/check_zip.py
+
+      - name: Release manifest hash gate
+        run: python tools/check_release_manifest.py
 
       - name: License compliance gate
         run: python tools/check_license_compliance.py dist/*.zip

@@ -33,7 +33,7 @@ Magisk 没有 `boot-completed`，规则在 `service`（late_start）阶段应用
 <details>
 <summary><b>用 NeoZygisk 时开机 zygote 循环 / 模块失效</b></summary>
 
-外部反馈：NeoZygisk v2.4 + r18.8 在默认隐藏 `/data/adb` 时，zygote 可能反复重启。请删除 `config/sus_path.txt` 中的 `/data/adb`，或至少排除 `/data/adb/neozygisk`，再重新应用规则。本环境使用 Zygisk Next，未复现；详见 `docs/RELEASE_NOTES_122.md`。
+外部反馈：NeoZygisk v2.4 + r18.8 在默认隐藏 `/data/adb` 时，zygote 可能反复重启。请删除 `config/sus_path.txt` 中的 `/data/adb`（只能删除整行；模块/SUSFS 不支持从已隐藏父目录排除 `/data/adb/neozygisk`），再重新应用规则。本环境使用 Zygisk Next，未复现；详见 `docs/RELEASE_NOTES_122.md`。
 </details>
 
 <details>

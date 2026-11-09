@@ -6,13 +6,14 @@
 
 - **SUSFS LKM 升级到 r18.9**：上游修复 #167（避免把 bind mount 设备路径当 source identity，可能影响 /data 父目录的 mountinfo）、#184（Termux 下无隐藏名时恢复 mkdirat 处理）、#192（改用 KallRecon 符号解析器）、#197（/proc/modules hook 目标校验失败时 fail closed，避免 kernel panic）。
 - **状态读取提速**：KernelPatch 探测增加单进程 + 按 boot_id 的缓存，WebUI 刷新不再每次完整读 dmesg；状态页和保存后的刷新应明显快于 1.2.3。
-- **审计遗留修复**：配置校验 `fake_cmdline_value` 引号分支、完整性缓存 ctime 防回拨、`allow_lkm` 备份恢复、`set_bundle` 半套写入回滚、`import_legacy` 原子写入、并发 apply 状态覆盖、`check_zip` 版本排序。
+- **审计遗留修复**：配置校验 `fake_cmdline_value` 引号分支、完整性缓存 ctime 防回拨、`allow_lkm` 备份恢复、`set_bundle` 半套写入回滚（含新建文件清理）、`import_legacy` 原子写入、并发 apply 状态覆盖、`check_zip` 版本排序，以及 `kp_probe`/`.manager` 原子写与 unknown 不落盘。
+- **发布门禁**：`check_zip` 逐文件校验 manifest；`check_license_compliance` 按版本号取最新包；CI 用 `tools/release_manifest.sha256` 固定清单 hash，防止未来漂移。
 - **文档/元数据**：NOTICE、UPSTREAM、KMI、provenance 更新到 r18.9 / `v1.5.2+_R28`；配置示例去掉 WebUI 不接受的行内注释；KMI 匹配顺序补充 tag 不配对兜底与 SDK 31/32。
 
 ## 验证
 
-- 离线测试：29/29（新增 F7/F8/F9 与探测缓存回归断言）
-- `check_no_crlf` / `check_zip` / `check_license_compliance` 通过
+- 离线测试：30/30（新增 F7/F8/F9、探测缓存 unknown 重试与发布引用一致性断言）
+- `check_no_crlf` / `check_zip` / `check_license_compliance` / `check_release_manifest` 通过（check_zip 现在逐文件校验 manifest）
 - 设备回归（2026-11-09 冷启动）：模块 1.2.4 加载 r18.9（3,101,664 B / 116 symbols）；LKM/规则/integrity 正常；LSPosed connected；status 冷缓存后约 1.35-1.45s，get_config ~45ms，apply ~1.4s
 
 ## 已知限制
@@ -32,8 +33,8 @@
 ## 校验
 
 - 文件：`susfs_allinone-1.2.4.zip`
-- 大小：12,636,094 B
-- sha256：3ddfd81ec85cc83eb452f48cee40f44b2864ae49a9da2c1c357ae1b5d44fa8b6
+- 大小：12,636,429 B
+- sha256：443996702f99a2f0a91cadab510d46b7f4958a80e65996b11fae86f510ec483d
 
 ## 说明
 
