@@ -12,6 +12,7 @@
 |---|---|
 | 1.2.3 冷启动 | LKM 加载；`/proc/susfs_*` 9 个；`integrity=ok`；规则 11 |
 | 1.2.3 热重启 | LKM / 规则 / 探测 / integrity 仍正常 |
+| 1.2.4 冷启动（r18.9） | 加载 3,101,664 B / 116 symbols；LKM/规则/integrity 正常；LSPosed connected |
 | LSPosed | 冷启动未 connected（临时 root / Zygisk 时序）；热重启后 connected、14 modules |
 | APatch 卡片 | KSU 环境正确隐藏 |
 | 1.2.3-dev 热回归 | `ctl.sh apply` rc=0、`apply_fails=0`，配置未丢 |

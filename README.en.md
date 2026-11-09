@@ -80,7 +80,7 @@ Full safety and disclaimer: [SAFETY.md](docs/SAFETY.md) (Chinese).
 
 ## Verification and limitations
 
-- KSU family: 1.2.3 cold boot loads the LKM, rules and integrity are OK; hot reboot keeps the module healthy and restores LSPosed.
+- KSU family: 1.2.4 cold boot loads r18.9 (3,101,664 B / 116 symbols); rules and integrity OK; LSPosed stays connected after hot reboot.
 - QEMU GKI: LKM load/hide/restore; module-level APatch path 14/14.
 - Offline: 29/29 tests pass.
 - Not verified: Magisk real-device cold boot, APatch real-device full chain, the other 7 KMI targets.

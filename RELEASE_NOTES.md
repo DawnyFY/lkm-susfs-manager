@@ -13,7 +13,7 @@
 
 - 离线测试：29/29（新增 F7/F8/F9 与探测缓存回归断言）
 - `check_no_crlf` / `check_zip` / `check_license_compliance` 通过
-- 设备回归：待设备重新连接后执行（本版本更换了 8 个 `.ko`，需要冷启动重新加载才能确认 r18.9 的真实加载）
+- 设备回归（2026-11-09 冷启动）：模块 1.2.4 加载 r18.9（3,101,664 B / 116 symbols）；LKM/规则/integrity 正常；LSPosed connected；status 冷缓存后约 1.35-1.45s，get_config ~45ms，apply ~1.4s
 
 ## 已知限制
 

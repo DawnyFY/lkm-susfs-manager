@@ -86,7 +86,7 @@ APatch/KernelPatch 下默认**不自动加载** SUSFS LKM；需要外挂时，�
 
 ## 验证与限制（摘要）
 
-- KSU 系：1.2.3 冷启动 LKM/规则/完整性正常；热重启后 LSPosed 恢复。
+- KSU 系：1.2.4 冷启动加载 r18.9（3,101,664 B / 116 symbols），规则/完整性正常；热重启后 LSPosed 保持 connected。
 - QEMU GKI：SUSFS LKM 加载/隐藏/恢复；模块级 APatch 路径 14/14。
 - 离线：29/29 测试通过。
 - 未验证：Magisk 真机冷启动、APatch 真机全链路、其余 7 个 KMI。
