@@ -4,10 +4,12 @@
 MODDIR=/data/adb/modules/susfs_allinone
 . "$MODDIR/common.sh"
 
-boot_gate_ok || exit 0
+clear_stale_state_on_upgrade
+
+boot_gate_ok || { clear_boot_guard_keep_pause; exit 0; }
 
 # 加载前校验：文件被改过就不注入内核
-_cf_gate || { echo "=== post-fs-data: 文件被修改，跳过加载 ===" >> "$MODDIR/load.log" 2>/dev/null; exit 0; }
+_cf_gate || { clear_boot_guard_keep_pause; echo "=== post-fs-data: 文件被修改，跳过加载 ===" >> "$MODDIR/load.log" 2>/dev/null; exit 0; }
 
 cfg_ensure
 cfg_load
@@ -15,7 +17,7 @@ cfg_load
 MODDIR=/data/adb/modules/susfs_allinone
 CONFIG=$MODDIR/config
 STATE=$MODDIR/state
-[ "${auto_load:-1}" = "1" ] || exit 0
+[ "${auto_load:-1}" = "1" ] || { clear_boot_guard_keep_pause; exit 0; }
 
 # 守卫：上次加载后没能完成启动（panic/卡死），这次不再自动加载
 if ! boot_guard_should_pause; then

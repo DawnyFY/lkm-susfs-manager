@@ -37,9 +37,9 @@ _set_apply_result() {
 [ -f "$MODDIR/remove" ] && { echo "模块待移除"; _set_apply_result skipped; exit 0; }
 if [ -f "$STATE/loading" ]; then
     # 残留超过 10 分钟视为上次异常退出，自动清理后继续，避免永久跳过
-    if file_older_than "$STATE/loading" 600; then
+    if file_older_than "$STATE/loading" 600 || susfs_kernel_ready; then
         rm -f "$STATE/loading"
-        echo "[!] 清理过期的 state/loading 残留（>10 分钟）"
+        echo "[!] 清理 state/loading 残留（>10 分钟或 LKM 已就绪）"
     else
         echo "[!] 上次 LKM 加载未完成（state/loading 残留），跳过规则应用（稍后会重试）"
         _set_apply_result skipped
@@ -88,7 +88,7 @@ vold_isolation=${vold_isolation:-0}
 _cf_run 2>&1 || { echo "[!] 文件被修改，拒绝应用规则"; _set_apply_result failed; exit 1; }
 
 # 自动路径：已处于暂停状态时直接跳过（保留守卫/暂停标记，避免被调用方误清）
-if [ "${AUTOLOAD:-0}" = "1" ] && [ -f "$STATE/autoload_paused" ]; then
+if [ "${AUTOLOAD:-0}" = "1" ] && [ -f "$STATE/autoload_paused" ] && ! susfs_kernel_ready; then
     echo "[!] 自动加载已暂停，跳过本次应用（ctl.sh resume_autoload 恢复）"
     set_description "⚠️ 自动加载已暂停（ctl.sh resume_autoload 恢复）"
     _set_apply_result skipped

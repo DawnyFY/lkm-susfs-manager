@@ -377,13 +377,13 @@ kernel_load_preflight() {
         if [ -n "$_klp_cfg" ]; then
             case "$_klp_cfg" in
                 *CONFIG_MODULES=y*) : ;;
-                *) printf '%s' "内核未编译 CONFIG_MODULES，无法加载 SUSFS LKM"; return 1 ;;
+                *"# CONFIG_MODULES is not set"*|*CONFIG_MODULES=n*)
+                    printf '%s' "内核显式未编译 CONFIG_MODULES，无法加载 SUSFS LKM"; return 1
+                    ;;
+                *) : ;;  # 配置缺键/被截断/非本内核：状态未知，交给实际 loader
             esac
-            # MODULE_SIG_FORCE 不是确定性拒载：KernelSU/SukiSU/APatch 的加载器可能
-            # 走内核侧接口绕过签名校验。交给实际 loader 验证，失败时由 boot guard 暂停。
-            case "$_klp_cfg" in
-                *CONFIG_MODULE_SIG_FORCE=y*) : ;;
-            esac
+            # MODULE_SIG_FORCE 是否真的拒载取决于管理器/内核实现，预检无法判断，
+            # 不在这里硬拒绝；由 loader 的实际返回值和 boot guard 处理。
         fi
     fi
     return 0
@@ -819,6 +819,21 @@ boot_guard_path() {
     echo "$STATE/boot_guard"
 }
 
+# 版本升级（含 promote_pending_update.sh 保留 state/ 的就地升级）清理旧暂停状态。
+# 只清“上次开机失败”的运行态，不动 config/、归属清单、real_uname。
+clear_stale_state_on_upgrade() {
+    _csu_cur=$(sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null | head -1)
+    [ -n "$_csu_cur" ] || return 0
+    _csu_file="$STATE/last_version"
+    _csu_last=$(cat "$_csu_file" 2>/dev/null)
+    if [ "$_csu_cur" != "$_csu_last" ]; then
+        rm -f "$STATE/autoload_paused" "$STATE/fail_count" "$STATE/loading" "$(boot_guard_path)" 2>/dev/null
+        echo "=== 版本 $_csu_last -> $_csu_cur：清理旧暂停/失败状态 ===" >> "$MODDIR/load.log" 2>/dev/null
+        mkdir -p "$STATE" 2>/dev/null
+        printf '%s\n' "$_csu_cur" > "$_csu_file" 2>/dev/null
+    fi
+    return 0
+}
 autoload_paused() {
     [ -f "$STATE/autoload_paused" ]
 }

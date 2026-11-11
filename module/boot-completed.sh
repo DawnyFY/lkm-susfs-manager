@@ -4,10 +4,12 @@
 MODDIR=/data/adb/modules/susfs_allinone
 . "$MODDIR/common.sh"
 
-boot_gate_ok || exit 0
+clear_stale_state_on_upgrade
+
+boot_gate_ok || { clear_boot_guard_keep_pause; exit 0; }
 
 # 应用规则前校验：文件被改过就不下发规则
-_cf_gate || { echo "=== boot-completed: 文件被修改，跳过应用 ===" >> "$MODDIR/apply.log" 2>/dev/null; exit 0; }
+_cf_gate || { clear_boot_guard_keep_pause; echo "=== boot-completed: 文件被修改，跳过应用 ===" >> "$MODDIR/apply.log" 2>/dev/null; exit 0; }
 
 cfg_ensure
 cfg_load
@@ -15,7 +17,25 @@ cfg_load
 MODDIR=/data/adb/modules/susfs_allinone
 CONFIG=$MODDIR/config
 STATE=$MODDIR/state
-[ "${auto_load:-1}" = "1" ] || exit 0
+[ "${auto_load:-1}" = "1" ] || { clear_boot_guard_keep_pause; exit 0; }
+
+# 设备已经跑到 boot-completed：上次“加载未完成”的守卫不能永久挡住自动加载。
+# LKM 已就绪：清守卫/loading 后正常 apply。
+# 未就绪且无 pstore 崩溃：清守卫，让本次 apply 重试一次自动加载；
+# pstore 仍疑似本模块崩溃则保留暂停，等用户手动确认。
+if [ -f "$STATE/autoload_paused" ] || [ -f "$(boot_guard_path)" ]; then
+    if susfs_kernel_ready; then
+        rm -f "$STATE/loading"
+        clear_boot_guard
+        echo "[i] 本次启动已完成，且 LKM 已就绪，清除旧守卫"
+    elif pstore_crash_suspect; then
+        echo "[!] pstore 仍疑似本模块崩溃，保留自动加载暂停"
+    else
+        clear_boot_guard
+        rm -f "$STATE/loading"
+        echo "[i] 本次启动已完成，清除旧守卫并重试一次自动加载"
+    fi
+fi
 
 # 只执行一次应用；只有真正跑完（rc=0）才认为本次启动成功，清除守卫标记。
 # 开机早期尚不存在的应用数据目录不会重试，需要时在 WebUI 手动「加载并应用」补一次。

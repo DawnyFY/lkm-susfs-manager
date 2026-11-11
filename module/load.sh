@@ -219,7 +219,7 @@ echo "[i] 加载: $KO"
 : > "$STATE/loading"
 # 捕获加载输出：内核拒绝时需要给出可执行的诊断提示
 if command -v timeout >/dev/null 2>&1; then
-    _ins_out=$(timeout 20 "$MODDIR/bin/susfs_insmod" "$KO" expose_proc=1 2>&1); rc=$?
+    _ins_out=$(timeout 12 "$MODDIR/bin/susfs_insmod" "$KO" expose_proc=1 2>&1); rc=$?
 else
     _ins_out=$("$MODDIR/bin/susfs_insmod" "$KO" expose_proc=1 2>&1); rc=$?
 fi
@@ -253,7 +253,7 @@ if [ "$rc" != "0" ]; then
             if [ -n "$_ksud" ]; then
                 echo "[i] kallsyms 地址不可读，回退 KernelSU ksud insmod（内核侧符号解析）"
                 if command -v timeout >/dev/null 2>&1; then
-                    _ins2=$(timeout 30 "$_ksud" insmod "$KO" expose_proc=1 2>&1); rc2=$?
+                    _ins2=$(timeout 12 "$_ksud" insmod "$KO" expose_proc=1 2>&1); rc2=$?
                 else
                     _ins2=$("$_ksud" insmod "$KO" expose_proc=1 2>&1); rc2=$?
                 fi

@@ -28,15 +28,15 @@
 
 ## 升级 / 回滚
 
-- 升级：覆盖安装；`config/`、`state/` 保留。
+- 升级：覆盖安装；`config/`、`state/` 保留。1.2.5 首次启动会检测版本变化并清理旧的 `autoload_paused` / `fail_count` / `state/loading` / `boot_guard`，避免 1.2.4 的暂停状态阻断新加载路径。
 - 已加载旧 LKM 时，新 `.ko` 需要**冷启动**才会重新加载；热重启不会替换已加载的 LKM。
 - 回滚：恢复上一版本 zip；如需回到 r18.8，同时恢复旧 `lib/*.ko` 与 `bin/susfs_insmod`。
 
 ## 校验
 
-- 文件：`susfs_allinone-1.2.4.zip`
-- 大小：12,636,915 B
-- sha256：00dcb5e808a57a942564d1c6121ec7dd39f6e023429010968cc5a6b073ef5452
+- 文件：`susfs_allinone-1.2.5.zip`
+- 大小：12,637,655 B
+- sha256：239311c61a4c80bc7a719398fc605d02e726312dd0ee4178e9284e290d212f23
 
 ## 说明
 

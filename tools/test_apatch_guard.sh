@@ -46,6 +46,8 @@ printf "0\n" > "$TMP/msd"; printf "# CONFIG_MODULES is not set\n" | gzip > "$TMP
 res=$(PRE >/dev/null 2>&1; echo $?); chk "未编译 CONFIG_MODULES → 拒绝" "$res" "1"
 printf "CONFIG_MODULES=y\nCONFIG_MODULE_SIG_FORCE=y\n" | gzip > "$TMP/config.gz"
 res=$(PRE >/dev/null 2>&1; echo $?); chk "强制签名 → 交给实际加载器" "$res" "0"
+printf "CONFIG_MODULE_SIG=n\n" | gzip > "$TMP/config.gz"
+res=$(PRE >/dev/null 2>&1; echo $?); chk "配置缺 CONFIG_MODULES 键 → 不误杀" "$res" "0"
 printf "not-a-gzip-file\n" > "$TMP/config.gz"
 res=$(PRE >/dev/null 2>&1; echo $?); chk "config.gz 不可解析 → 跳过不误杀" "$res" "0"
 

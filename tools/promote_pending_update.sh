@@ -27,6 +27,9 @@ done
 
 rm -rf "$SRC"
 rmdir /data/adb/modules_update 2>/dev/null
+# 就地升级也要清掉上一版本遗留的失败/暂停/守卫，否则新版本首启不会尝试新加载路径
+rm -f "$DST/state/autoload_paused" "$DST/state/fail_count" "$DST/state/loading" "$DST/state/boot_guard" 2>/dev/null
+echo "已清理旧 autoload_paused/fail_count/loading/boot_guard"
 # 清掉「待更新」标记，否则管理器一直隐藏 执行 / WebUI 按钮
 rm -f "$DST/update"
 chmod 0755 "$DST"/*.sh "$DST/bin"/* 2>/dev/null
