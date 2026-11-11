@@ -379,8 +379,10 @@ kernel_load_preflight() {
                 *CONFIG_MODULES=y*) : ;;
                 *) printf '%s' "内核未编译 CONFIG_MODULES，无法加载 SUSFS LKM"; return 1 ;;
             esac
+            # MODULE_SIG_FORCE 不是确定性拒载：KernelSU/SukiSU/APatch 的加载器可能
+            # 走内核侧接口绕过签名校验。交给实际 loader 验证，失败时由 boot guard 暂停。
             case "$_klp_cfg" in
-                *CONFIG_MODULE_SIG_FORCE=y*) printf '%s' "内核强制模块签名（MODULE_SIG_FORCE），SUSFS LKM 会加载失败"; return 1 ;;
+                *CONFIG_MODULE_SIG_FORCE=y*) : ;;
             esac
         fi
     fi
