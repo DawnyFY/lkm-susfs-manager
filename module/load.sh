@@ -241,7 +241,37 @@ if [ "$rc" != "0" ]; then
             echo "[i] 若 modules_disabled=1，LKM 路线不可行，需要改用内核内置 SUSFS 的版本"
             ;;
     esac
-    fail "$(susfs_hint insmod) (rc=$rc)"
+    # 部分 GKI 6.12+/锁定内核把 kallsyms 地址全部打成 0，susfs_insmod 会 fail-closed。
+    # KernelSU 的 ksud insmod 走 KSU_IOCTL_LOOKUP_SYMBOLS（内核侧解析），可绕过用户态 kallsyms 限制。
+    case "$_ins_out" in
+        *"zero address"*|*"kptr_restrict"*|*"cannot read /proc/kallsyms"*)
+            _ksud=""
+            for _c in /data/adb/ksu/bin/ksud /data/adb/ksud; do
+                [ -x "$_c" ] && { _ksud=$_c; break; }
+            done
+            [ -n "$_ksud" ] || _ksud=$(command -v ksud 2>/dev/null)
+            if [ -n "$_ksud" ]; then
+                echo "[i] kallsyms 地址不可读，回退 KernelSU ksud insmod（内核侧符号解析）"
+                if command -v timeout >/dev/null 2>&1; then
+                    _ins2=$(timeout 30 "$_ksud" insmod "$KO" expose_proc=1 2>&1); rc2=$?
+                else
+                    _ins2=$("$_ksud" insmod "$KO" expose_proc=1 2>&1); rc2=$?
+                fi
+                printf '%s\n' "$_ins2"
+                if [ "$rc2" = "0" ]; then
+                    echo "[i] KernelSU ksud insmod 加载成功"
+                    rc=0
+                else
+                    echo "[!] KernelSU ksud insmod 也失败 (rc=$rc2)"
+                fi
+            else
+                echo "[!] 未找到 ksud，无法回退内核侧符号解析"
+            fi
+            ;;
+    esac
+    if [ "$rc" != "0" ]; then
+        fail "$(susfs_hint insmod) (rc=$rc)"
+    fi
 fi
 
 BIN=$(select_susfs_bin) || fail "$(susfs_hint missing)（模块内也没有备份）"
