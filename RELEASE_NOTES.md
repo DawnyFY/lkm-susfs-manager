@@ -1,9 +1,10 @@
-# LKM SUSFS管理器 v1.2.5
+# LKM SUSFS管理器 v1.2.6
 
-> 修复锁定 kallsyms 的 Android 16 / 6.12 设备 LKM 加载失败；保留 r18.9 与 1.2.4 的审计修复。APatch 仍是实验性，真机未验收。
+> 增加管理器内更新提示（updateJson），并保留 1.2.5 的 kallsyms 回退与 1.2.4 的审计修复。APatch 仍是实验性，真机未验收。
 
 ## 重点变化
 
+- **管理器内更新提示**：module.prop 增加 updateJson，仓库根目录增加 update.json（version/versionCode/zipUrl/changelog）；KernelSU / SukiSU / Magisk 模块页会显示新版本，CI 校验 update.json 与 module.prop 一致。
 - **修复锁定 kallsyms 的 Android 16 / 6.12 设备**：susfs_insmod 在 kptr_restrict 导致 /proc/kallsyms 全零地址时 fail-closed（rc=13）；1.2.5 自动回退到 KernelSU ksud insmod，走 KSU_IOCTL_LOOKUP_SYMBOLS 内核侧符号解析并重写 SHN_ABS。需要 KernelSU UAPI v6+；旧版仍会失败。
 - **SUSFS LKM 升级到 r18.9**：上游修复 #167（避免把 bind mount 设备路径当 source identity，可能影响 /data 父目录的 mountinfo）、#184（Termux 下无隐藏名时恢复 mkdirat 处理）、#192（改用 KallRecon 符号解析器）、#197（/proc/modules hook 目标校验失败时 fail closed，避免 kernel panic）。
 - **状态读取提速**：KernelPatch 探测增加单进程 + 按 boot_id 的缓存，WebUI 刷新不再每次完整读 dmesg；状态页和保存后的刷新应明显快于 1.2.3。
@@ -13,9 +14,9 @@
 
 ## 验证
 
-- 离线测试：31/31（新增加载器零地址回退断言）
-- `check_no_crlf` / `check_zip` / `check_license_compliance` / `check_release_manifest` 通过（check_zip 现在逐文件校验 manifest）
-- 1.2.5 的零地址回退尚无设备结果；沿用 1.2.4 的 r18.9 冷启动、规则、integrity 与 UI 性能数据
+- 离线测试：32/32
+- `check_no_crlf` / `check_zip` / `check_license_compliance` / `check_release_manifest` / `check_update_json` 通过
+- 1.2.5 已在原设备完成冷启动自动加载、boot guard 自愈和 RCQ 热重启验证；1.2.6 的 updateJson 管理器提示待发布后验证
 
 ## 已知限制
 
@@ -28,15 +29,15 @@
 
 ## 升级 / 回滚
 
-- 升级：覆盖安装；`config/`、`state/` 保留。1.2.5 首次启动会检测版本变化并清理旧的 `autoload_paused` / `fail_count` / `state/loading` / `boot_guard`，避免 1.2.4 的暂停状态阻断新加载路径。
+- 升级：覆盖安装；`config/`、`state/` 保留。1.2.6 沿用版本变化清理逻辑，会清掉旧的 `autoload_paused` / `fail_count` / `state/loading` / `boot_guard`，避免 1.2.4 的暂停状态阻断新加载路径。
 - 已加载旧 LKM 时，新 `.ko` 需要**冷启动**才会重新加载；热重启不会替换已加载的 LKM。
 - 回滚：恢复上一版本 zip；如需回到 r18.8，同时恢复旧 `lib/*.ko` 与 `bin/susfs_insmod`。
 
 ## 校验
 
-- 文件：`susfs_allinone-1.2.5.zip`
-- 大小：12,637,655 B
-- sha256：239311c61a4c80bc7a719398fc605d02e726312dd0ee4178e9284e290d212f23
+- 文件：`susfs_allinone-1.2.6.zip`
+- 大小：12,637,718 B
+- sha256：cc684a04d83a53f5c991e0b52fc50b5bd881cd3d255c2c4d54badf6bafed9618
 
 ## 说明
 

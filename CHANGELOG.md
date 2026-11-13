@@ -2,6 +2,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| 1.2.6 | 模块内管理器更新提示：module.prop 增加 updateJson，仓库根目录增加 update.json（version/versionCode/zipUrl/changelog）；新增 update.json 一致性 CI 校验 |
 | 1.2.5 | Android 16 / 6.12 等锁定 kallsyms 的设备：`susfs_insmod` 遇到 `kptr_restrict` 全零地址拒绝加载时，回退 `ksud insmod` 走 KernelSU `KSU_IOCTL_LOOKUP_SYMBOLS` 内核侧符号解析（含 SHN_ABS 重写）；针对 1.2.3/1.2.4 在该类设备上 LKM 加载失败（rc=13），待设备验证 |
 | 1.2.4 | SUSFS LKM 升级上游 r18.9（#167/#184/#192/#197）；WebUI 状态读取加 KernelPatch 探测缓存；审计遗留修复 F7/F8/F9/F10/F11/F12/F13（配置校验、完整性缓存 ctime、allow_lkm 备份、set_bundle 回滚、import 原子写入、并发状态、check_zip 排序）；文档/元数据同步 r18.9 与 v1.5.2+_R28 |
 | 1.2.3 | 审计修复：WebUI rc=5 部分成功提示、builtin SUSFS 不再显示为 LKM、连续失败暂停被 clear_boot_guard 清除、APatch 残留 package_config 误判、RELEASE_NOTES 补 NeoZygisk /data/adb 风险；APatch 实验性支持：状态页新增 APatch/KernelPatch 卡片（用户态/KernelPatch 内核/共存模式/LKM 放行 + 显式放行开关，默认仍不外挂）；新增 KernelPatch 内核运行时探测（dmesg banner，不可读返回 unknown）；KMI 自动消歧：无 tag 的 5.15 按 SDK 区分 android13/14-5.15（仅已打包 ko 存在时采用）；QEMU 模块级 APatch 路径 14/14 + KSU 冷/热启动回归；APatch 真机仍未验收 |

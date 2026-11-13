@@ -25,6 +25,9 @@ jobs:
             sh "$t" "$PWD"
           done
 
+      - name: Validate update.json
+        run: python tools/check_update_json.py
+
       - name: Build module ZIP
         run: python tools/build_module_zip.py
 
