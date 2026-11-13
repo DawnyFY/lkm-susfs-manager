@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LKM SUSFS管理器 - 发布与公告</title>
+<style>
+body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;max-width:820px;margin:36px auto;padding:0 18px;line-height:1.65;color:#222}
+h1{font-size:26px;margin-bottom:4px} .sub{color:#666;margin-top:0}
+.card{border:1px solid #e5e5e5;border-radius:12px;padding:18px 20px;margin:18px 0}
+code{background:#f4f4f4;padding:2px 5px;border-radius:4px;word-break:break-all}
+a{color:#0b63ce} .ok{color:#0a7a36}
+</style></head><body>
+<h1>LKM SUSFS管理器</h1>
+<p class="sub">SUSFS LKM 管理 · 发布公告与校验信息</p>
+<div class="card">
+<h2>最新版本：1.2.6</h2>
+<p><span class="ok">已发布</span> · 2026-11-13</p>
+<ul>
+<li>模块内 updateJson 更新提示</li>
+<li>sus_path_loop 延迟路径规则</li>
+<li>安装密钥、手动日志导出、启动公告拉取</li>
+<li>33/33 离线测试；1.2.6 审计高危项修复</li>
+</ul>
+</div>
+<div class="card">
+<h2>下载</h2>
+<ul>
+<li><a href="https://github.com/DawnyFY/lkm-susfs-manager/releases/tag/v1.2.6">GitHub Release（推荐）</a></li>
+<li><a href="SHA256SUMS">SHA256SUMS</a></li>
+<li><a href="CHANGELOG.md">更新日志</a></li>
+</ul>
+<p>文件：<code>susfs_allinone-1.2.6.zip</code><br>
+大小：12,642,973 B<br>
+sha256：<code>a58e41ada1b605e4d757a262503ba7eed693be6a839d51a0c9abcd1f529c5858</code></p>
+</div>
+<div class="card">
+<h2>公告</h2>
+<ul>
+<li>1.2.6 已发布，重点加入 updateJson、sus_path_loop、安装密钥和日志导出。</li>
+<li>1.2.5 用户没有 updateJson；升级到 1.2.6 需要手动安装一次，之后的新版本才走管理器更新提示。</li>
+<li>APatch 仍为实验性，未做真机验收。</li>
+<li>默认隐藏 /data/adb；NeoZygisk 用户只能删除该行，不能假定排除子目录有效。</li>
+</ul>
+</div>
+<div class="card">
+<h2>说明</h2>
+<p>本页只用于公告和校验信息，不接收上传，不参与模块运行。</p>
+<p>GitHub：<a href="https://github.com/DawnyFY/lkm-susfs-manager">DawnyFY/lkm-susfs-manager</a></p>
+</div>
+</body></html>

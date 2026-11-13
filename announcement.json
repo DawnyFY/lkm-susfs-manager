@@ -1,0 +1,12 @@
+{
+  "title": "LKM SUSFS管理器 公告",
+  "summary": "1.2.6 已发布：updateJson 更新提示、sus_path_loop、安装密钥、日志导出。",
+  "items": [
+    "1.2.6 已发布，33/33 离线测试通过。",
+    "新增 updateJson、sus_path_loop 延迟路径规则、安装密钥和手动日志导出。",
+    "1.2.5 用户没有 updateJson，升级到 1.2.6 需手动安装一次。",
+    "APatch 仍为实验性，未做真机验收。"
+  ],
+  "link": "https://susfs.stdawns.top/",
+  "updated": "2026-11-13"
+}
