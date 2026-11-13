@@ -54,6 +54,12 @@ KSU / Magisk 环境不显示该卡片。
 - `coexist_mode` / `allow_lkm`
 - `root_manager` / `selinux` / `bootloader`
 
+## install_id / install_key
+
+- 安装时在 `state/install_key` 生成 32 字节随机 hex，权限 600；升级时优先复用旧值
+- `ctl.sh install_id` 只输出密钥的 16 位 SHA-256 前缀，用于匿名标识
+- 不要把 `install_key` 发到日志/截图；密钥可被 root 读取，只适合匿名关联，不是硬件级秘密
+
 ## sus_path_loop
 
 `sus_path_loop.txt` 用于会被删除后重建的路径。

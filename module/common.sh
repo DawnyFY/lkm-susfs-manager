@@ -819,6 +819,37 @@ boot_guard_path() {
     echo "$STATE/boot_guard"
 }
 
+# 安装时生成的一次性设备密钥：只用于本地/服务端匿名标识，不打印明文。
+install_key_file() { printf '%s' "$STATE/install_key"; }
+
+ensure_install_key() {
+    _ik_f=$(install_key_file)
+    if [ -s "$_ik_f" ]; then
+        _ik=$(cat "$_ik_f" 2>/dev/null)
+        case "$_ik" in
+            *[!0-9a-fA-F]*|'') ;;  # 非法内容重新生成
+            *) [ "${#_ik}" -eq 64 ] && { chmod 600 "$_ik_f" 2>/dev/null; return 0; } ;;
+        esac
+    fi
+    mkdir -p "$STATE" 2>/dev/null
+    chmod 700 "$STATE" 2>/dev/null
+    _ik=$(head -c 32 /dev/urandom 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n')
+    case "$_ik" in
+        *[!0-9a-fA-F]*|'') _ik="" ;;
+    esac
+    [ "${#_ik}" -eq 64 ] || _ik=$(head -c 64 /dev/urandom 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1)
+    case "$_ik" in *[!0-9a-fA-F]*|'') return 1 ;; esac
+    ( umask 077; printf '%s\n' "$_ik" > "$_ik_f" ) 2>/dev/null || return 1
+    chmod 600 "$_ik_f" 2>/dev/null
+    return 0
+}
+
+# 对外只暴露哈希前缀，绝不把 install_key 打进日志/状态。
+install_id() {
+    ensure_install_key >/dev/null 2>&1 || { printf 'unknown'; return 1; }
+    sha256sum "$(install_key_file)" 2>/dev/null | cut -c1-16
+}
+
 # 版本升级（含 promote_pending_update.sh 保留 state/ 的就地升级）清理旧暂停状态。
 # 只清“上次开机失败”的运行态，不动 config/、归属清单、real_uname。
 clear_stale_state_on_upgrade() {

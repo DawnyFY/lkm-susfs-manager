@@ -73,6 +73,7 @@ status() {
     LSIZE=${LSIZE:-0}
 
     printf 'module_version=%s\n' "$(get_prop version)"
+    printf 'install_id=%s\n' "$(install_id)"
     printf 'description=%s\n' "$(get_prop description)"
     printf 'kernel=%s\n' "$REL"
     printf 'kmi=%s\n' "$KMI"
@@ -202,6 +203,9 @@ validate_config_file() {
 case "$1" in
     status)
         status
+        ;;
+    install_id)
+        install_id
         ;;
     kmiinfo)
         kmiinfo

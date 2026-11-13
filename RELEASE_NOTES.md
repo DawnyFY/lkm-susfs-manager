@@ -5,6 +5,7 @@
 ## 重点变化
 
 - **sus_path_loop 延迟路径规则**：新增 `config/sus_path_loop.txt` 和 WebUI 编辑框；路径暂不存在时由内核 pending 解析，上游有界重试；boot_id 账本避免重复注册，失败在 apply.log 明确报告。
+- **安装密钥**：首次安装生成 32 字节随机 `state/install_key`（权限 600），升级复用；`ctl.sh install_id` 只输出 16 位 SHA-256 前缀，不打印密钥。
 - **公告启动拉取**：WebUI 启动时请求 `https://susfs.stdawns.top/announcement.json`，成功后更新公告摘要/详情；同一次启动最多一次，`localStorage` 缓存与尝试时间均为 60 秒，失败保留内置公告。
 - **WebUI 公告卡片**：状态页顶部显示当前发布/候选版本说明，并提供 `https://susfs.stdawns.top/` 发布页入口。
 - **手动日志导出**：日志页新增「导出日志」，写入 `/sdcard/Download/susfs_allinone-log-*.txt`（含 status、load.log、apply.log）。
@@ -18,7 +19,7 @@
 
 ## 验证
 
-- 离线测试：32/32
+- 离线测试：33/33
 - `check_no_crlf` / `check_zip` / `check_license_compliance` / `check_release_manifest` / `check_update_json` 通过
 - 1.2.5 已在原设备完成冷启动自动加载、boot guard 自愈和 RCQ 热重启验证；1.2.6 的 updateJson 管理器提示待发布后验证
 
@@ -40,8 +41,8 @@
 ## 校验
 
 - 文件：`susfs_allinone-1.2.6.zip`
-- 大小：12,640,889 B
-- sha256：2a215efc321b390f1b3c183591b9b99c36dc4b1d2a7bfbf3e38a43285787fe7c
+- 大小：12,641,661 B
+- sha256：349bc2c9fc25cc0e63735f56a6d90b59e1346ca0ec53ee5e331bc0056061a22b
 
 ## 说明
 

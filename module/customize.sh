@@ -91,6 +91,9 @@ if [ -d "$INSTALLED/config" ]; then
     fi
     # 保留归属清单：丢了会让 replace_rules=1 退化为"按配置清理"
     mkdir -p "$MODPATH/state" 2>/dev/null
+    if [ -s "$INSTALLED/state/install_key" ]; then
+        cp -f "$INSTALLED/state/install_key" "$MODPATH/state/install_key" 2>/dev/null && chmod 600 "$MODPATH/state/install_key" 2>/dev/null && ui_print "- 保留安装密钥"
+    fi
     for _sf in our_paths.txt hide_mounts_added.txt sus_map_added.txt; do
         if [ -f "$INSTALLED/state/$_sf" ]; then
             cp -f "$INSTALLED/state/$_sf" "$MODPATH/state/$_sf" 2>/dev/null \
@@ -106,6 +109,24 @@ elif [ -f /data/adb/susfs4ksu/sus_path.txt ]; then
     done
     [ -s "$MODPATH/config/hide_modules.txt" ] || echo "kernelsu" > "$MODPATH/config/hide_modules.txt"
 fi
+
+# 安装时签发一次设备密钥；升级优先复用旧的，避免服务端标识变化。
+# 只用于匿名标识/后续签名请求，不打印明文，文件权限 600。
+mkdir -p "$MODPATH/state" 2>/dev/null
+chmod 700 "$MODPATH/state" 2>/dev/null
+if [ ! -s "$MODPATH/state/install_key" ]; then
+    _ik=$(head -c 32 /dev/urandom 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n')
+    case "$_ik" in *[!0-9a-fA-F]*|'') _ik="" ;; esac
+    [ "${#_ik}" -eq 64 ] || _ik=$(head -c 64 /dev/urandom 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1)
+    if [ "${#_ik}" -eq 64 ]; then
+        ( umask 077; printf '%s\n' "$_ik" > "$MODPATH/state/install_key" ) 2>/dev/null
+        chmod 600 "$MODPATH/state/install_key" 2>/dev/null
+        ui_print "- 已签发安装密钥"
+    else
+        ui_print "[!] 安装密钥生成失败（/dev/urandom 不可用）"
+    fi
+fi
+chmod 600 "$MODPATH/state/install_key" 2>/dev/null
 
 # 用真实内核选 KMI（/proc/version 通常不受 uname 伪装影响）
 REL=$(awk 'NR==1 { if ($3 ~ /^[0-9]+\.[0-9]+/ && $3 ~ /android[0-9]/) print $3 }' /proc/version 2>/dev/null)
