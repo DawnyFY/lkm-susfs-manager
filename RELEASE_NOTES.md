@@ -5,6 +5,7 @@
 ## 重点变化
 
 - **sus_path_loop 延迟路径规则**：新增 `config/sus_path_loop.txt` 和 WebUI 编辑框；路径暂不存在时由内核 pending 解析，上游有界重试；boot_id 账本避免重复注册，失败在 apply.log 明确报告。
+- **公告启动拉取**：WebUI 启动时请求 `https://susfs.stdawns.top/announcement.json`，成功后更新公告摘要/详情；同一次启动最多一次，`localStorage` 缓存与尝试时间均为 60 秒，失败保留内置公告。
 - **WebUI 公告卡片**：状态页顶部显示当前发布/候选版本说明，并提供 `https://susfs.stdawns.top/` 发布页入口。
 - **手动日志导出**：日志页新增「导出日志」，写入 `/sdcard/Download/susfs_allinone-log-*.txt`（含 status、load.log、apply.log）。
 - **管理器内更新提示**：module.prop 增加 updateJson，仓库根目录增加 update.json（version/versionCode/zipUrl/changelog）；KernelSU / SukiSU / Magisk 模块页会显示新版本，CI 校验 update.json 与 module.prop 一致。
