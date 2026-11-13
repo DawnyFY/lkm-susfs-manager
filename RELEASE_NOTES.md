@@ -5,6 +5,7 @@
 ## 重点变化
 
 - **sus_path_loop 延迟路径规则**：新增 `config/sus_path_loop.txt` 和 WebUI 编辑框；路径暂不存在时由内核 pending 解析，上游有界重试；boot_id 账本避免重复注册，失败在 apply.log 明确报告。
+- **WebUI 公告卡片**：状态页顶部显示当前发布/候选版本说明，并提供 `https://susfs.stdawns.top/` 发布页入口。
 - **手动日志导出**：日志页新增「导出日志」，写入 `/sdcard/Download/susfs_allinone-log-*.txt`（含 status、load.log、apply.log）。
 - **管理器内更新提示**：module.prop 增加 updateJson，仓库根目录增加 update.json（version/versionCode/zipUrl/changelog）；KernelSU / SukiSU / Magisk 模块页会显示新版本，CI 校验 update.json 与 module.prop 一致。
 - **修复锁定 kallsyms 的 Android 16 / 6.12 设备**：susfs_insmod 在 kptr_restrict 导致 /proc/kallsyms 全零地址时 fail-closed（rc=13）；1.2.5 自动回退到 KernelSU ksud insmod，走 KSU_IOCTL_LOOKUP_SYMBOLS 内核侧符号解析并重写 SHN_ABS。需要 KernelSU UAPI v6+；旧版仍会失败。
@@ -38,8 +39,8 @@
 ## 校验
 
 - 文件：`susfs_allinone-1.2.6.zip`
-- 大小：12,639,340 B
-- sha256：3bed458232a9739af7d4afd1e84bcefab898e0d2ec768e10d36d33007c74e8c5
+- 大小：12,639,633 B
+- sha256：0be70859ecdf1cb6b9626dce7cb770339f085b394de1ec8449976929013becc1
 
 ## 说明
 
