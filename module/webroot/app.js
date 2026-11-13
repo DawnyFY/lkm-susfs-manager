@@ -456,6 +456,20 @@ async function loadConfig() {
   if (!filesOk) showBanner("规则文件读取失败，已禁用保存以免覆盖现有内容", "error", 6000);
 }
 
+function openAnnouncement() {
+  const modal = $("announceModal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  lockBackground();
+}
+
+function closeAnnouncement() {
+  const modal = $("announceModal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  unlockBackground();
+}
+
 async function exportLog() {
   const out = await exec(`${CTL} export_log`);
   const lines = String(out || "").trim().split("\n").filter(Boolean);
@@ -893,6 +907,11 @@ function bind() {
   $("presetOk").addEventListener("click", applyPresetSelection);
   $("btnImport").addEventListener("click", (e) => withBusy(e.currentTarget, importLegacy));
   $("btnReset").addEventListener("click", (e) => withBusy(e.currentTarget, resetDefaults));
+  $("btnAnnounce").addEventListener("click", openAnnouncement);
+  $("announceClose").addEventListener("click", closeAnnouncement);
+  $("announceModal").addEventListener("click", (e) => {
+    if (e.target === $("announceModal")) closeAnnouncement();
+  });
   $("btnLog").addEventListener("click", (e) => withBusy(e.currentTarget, refreshLog));
   $("btnExportLog").addEventListener("click", (e) => withBusy(e.currentTarget, exportLog));
 }

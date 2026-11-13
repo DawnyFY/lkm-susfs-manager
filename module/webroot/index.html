@@ -52,7 +52,7 @@
       <div class="card announcement">
         <div class="row log-head">
           <h2>公告 <span class="badge">发布</span></h2>
-          <a class="btn small" href="https://susfs.stdawns.top/" target="_blank" rel="noopener">查看发布页</a>
+          <button id="btnAnnounce" class="btn small" type="button">查看详情</button>
         </div>
         <p class="hint">1.2.5 临时修复版已发布；1.2.6 候选正在准备 updateJson、sus_path_loop 和日志导出。</p>
       </div>
@@ -380,6 +380,21 @@
     <p class="integrity-note">github.com/DawnyFY/lkm-susfs-manager</p>
     <div class="modal-actions">
       <button id="integrityOk" class="btn danger" type="button">我知道了</button>
+    </div>
+  </div>
+</div>
+
+<div id="announceModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="announceTitle">
+  <div class="modal-box">
+    <h3 id="announceTitle">公告</h3>
+    <div id="announceBody">
+      <p>1.2.5 已发布：kallsyms 回退、boot guard 自愈、超时与升级状态修复。</p>
+      <p>1.2.6 候选：管理器更新提示、sus_path_loop、手动日志导出。</p>
+      <p>APatch 仍为实验性，未做真机验收。</p>
+    </div>
+    <div class="modal-actions">
+      <a class="btn" href="https://susfs.stdawns.top/" target="_blank" rel="noopener">发布页</a>
+      <button id="announceClose" class="btn primary" type="button">关闭</button>
     </div>
   </div>
 </div>
