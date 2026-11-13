@@ -54,7 +54,7 @@
           <h2>公告 <span class="badge">发布</span></h2>
           <button id="btnAnnounce" class="btn small" type="button">查看详情</button>
         </div>
-        <p class="hint">1.2.5 临时修复版已发布；1.2.6 候选正在准备 updateJson、sus_path_loop 和日志导出。</p>
+        <p id="announceSummary" class="hint">1.2.5 临时修复版已发布；1.2.6 候选正在准备 updateJson、sus_path_loop 和日志导出。</p>
       </div>
 
       <div class="grid stats">
@@ -393,7 +393,7 @@
       <p>APatch 仍为实验性，未做真机验收。</p>
     </div>
     <div class="modal-actions">
-      <a class="btn" href="https://susfs.stdawns.top/" target="_blank" rel="noopener">发布页</a>
+      <a id="announceLink" class="btn" href="https://susfs.stdawns.top/" target="_blank" rel="noopener">发布页</a>
       <button id="announceClose" class="btn primary" type="button">关闭</button>
     </div>
   </div>

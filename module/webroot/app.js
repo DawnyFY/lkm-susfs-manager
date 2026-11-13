@@ -2,6 +2,10 @@
 "use strict";
 
 const CTL = "sh /data/adb/modules/susfs_allinone/ctl.sh";
+const ANNOUNCEMENT_URL = "https://susfs.stdawns.top/announcement.json";
+const ANNOUNCEMENT_TTL = 60 * 1000;
+const ANNOUNCEMENT_CACHE_KEY = "susfs_announcement_cache_v1";
+const ANNOUNCEMENT_ATTEMPT_KEY = "susfs_announcement_attempt_v1";
 const FILE_IDS = {
   sus_path: "susPath",
   sus_path_loop: "susPathLoop",
@@ -454,6 +458,61 @@ async function loadConfig() {
   const saveBtn = $("btnSave");
   if (saveBtn) saveBtn.disabled = !filesOk;
   if (!filesOk) showBanner("规则文件读取失败，已禁用保存以免覆盖现有内容", "error", 6000);
+}
+
+function renderAnnouncement(data) {
+  if (!data || typeof data !== "object") return;
+  const summary = $("announceSummary");
+  if (summary && typeof data.summary === "string" && data.summary.trim()) {
+    summary.textContent = data.summary.trim();
+  }
+  const body = $("announceBody");
+  if (body && Array.isArray(data.items)) {
+    body.textContent = "";
+    for (const item of data.items) {
+      if (typeof item !== "string" || !item.trim()) continue;
+      const p = document.createElement("p");
+      p.textContent = item.trim();
+      body.appendChild(p);
+    }
+  }
+  const link = $("announceLink");
+  if (link && typeof data.link === "string" && data.link.startsWith("https://susfs.stdawns.top/")) {
+    link.href = data.link;
+  }
+}
+
+// 启动时最多每分钟拉取一次；页面重载在同分钟内只读缓存，不发网络请求。
+async function loadAnnouncement() {
+  if (typeof fetch !== "function") return;
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem(ANNOUNCEMENT_CACHE_KEY) || "null"); } catch (_) {}
+  const now = Date.now();
+  if (cached && cached.ts && now - cached.ts < ANNOUNCEMENT_TTL) {
+    renderAnnouncement(cached.data);
+    return;
+  }
+  let lastAttempt = 0;
+  try { lastAttempt = Number(localStorage.getItem(ANNOUNCEMENT_ATTEMPT_KEY) || "0") || 0; } catch (_) {}
+  if (now - lastAttempt < ANNOUNCEMENT_TTL) {
+    if (cached) renderAnnouncement(cached.data);
+    return;
+  }
+  try { localStorage.setItem(ANNOUNCEMENT_ATTEMPT_KEY, String(now)); } catch (_) {}
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 6000) : null;
+  try {
+    const res = await fetch(ANNOUNCEMENT_URL, { cache: "no-store", signal: controller ? controller.signal : undefined });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    renderAnnouncement(data);
+    try { localStorage.setItem(ANNOUNCEMENT_CACHE_KEY, JSON.stringify({ ts: now, data })); } catch (_) {}
+  } catch (_) {
+    // 网络/解析失败时保留内置公告，不阻塞 UI；一分钟后才允许再次尝试。
+    if (cached) renderAnnouncement(cached.data);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function openAnnouncement() {
@@ -984,6 +1043,7 @@ async function init() {
     await refreshStatus();
     await loadConfig();
     await refreshLog();
+    loadAnnouncement().catch(() => {});
     await checkLoadHealth();
     await checkBootGuard();
   } catch (e) {
