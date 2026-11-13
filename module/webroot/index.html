@@ -257,6 +257,12 @@
       </div>
 
       <div class="card">
+        <h2>sus_path_loop <span class="badge">延迟路径</span></h2>
+        <p class="hint">每行一个路径，支持 <code>#</code> 注释。路径可以暂不存在；内核会保存规则并有界重试解析，路径出现后自动隐藏。适合会被删除后重建的目录。需要内核支持 <code>add_sus_path_loop</code>；不支持的设备会在 apply.log 明确报错。</p>
+        <textarea id="susPathLoop" spellcheck="false" rows="6" placeholder="# 例如 /data/adb/modules/某模块/新建目录"></textarea>
+      </div>
+
+      <div class="card">
         <h2>hide_modules <span class="badge">隐藏模块名</span></h2>
         <p class="hint">每行一个模块名，写入 <code>/proc/susfs_hide_modules</code>。LKM 会自动隐藏自己，这里通常只需要 <code>kernelsu</code>。</p>
         <textarea id="hideModules" spellcheck="false" rows="5" placeholder="kernelsu"></textarea>
@@ -290,6 +296,7 @@
       <div class="card">
         <div class="row log-head">
           <h2>运行日志</h2>
+          <button id="btnExportLog" class="btn small" type="button">导出日志</button>
           <button id="btnLog" class="btn small" type="button">刷新</button>
         </div>
         <pre id="log" class="log">加载中…</pre>

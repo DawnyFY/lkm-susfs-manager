@@ -4,6 +4,7 @@
 const CTL = "sh /data/adb/modules/susfs_allinone/ctl.sh";
 const FILE_IDS = {
   sus_path: "susPath",
+  sus_path_loop: "susPathLoop",
   hide_modules: "hideModules",
   sus_mount: "susMount",
   try_umount: "tryUmount",
@@ -455,6 +456,14 @@ async function loadConfig() {
   if (!filesOk) showBanner("规则文件读取失败，已禁用保存以免覆盖现有内容", "error", 6000);
 }
 
+async function exportLog() {
+  const out = await exec(`${CTL} export_log`);
+  const lines = String(out || "").trim().split("\n").filter(Boolean);
+  const path = lines.length ? lines[lines.length - 1] : "";
+  if (!path || path === "export failed") throw new Error(path || "导出失败");
+  showBanner(`日志已导出：${path}`, "info", 9000);
+}
+
 async function refreshLog() {
   const out = await exec(`${CTL} log`);
   $("log").textContent = out && out.trim() ? out : tr("暂无日志。");
@@ -722,6 +731,7 @@ async function saveConfig() {
   const bundleOrder = [
     configText,
     $("susPath").value,
+    $("susPathLoop").value,
     $("hideModules").value,
     $("skipHide").value,
     $("susMount").value,
@@ -884,6 +894,7 @@ function bind() {
   $("btnImport").addEventListener("click", (e) => withBusy(e.currentTarget, importLegacy));
   $("btnReset").addEventListener("click", (e) => withBusy(e.currentTarget, resetDefaults));
   $("btnLog").addEventListener("click", (e) => withBusy(e.currentTarget, refreshLog));
+  $("btnExportLog").addEventListener("click", (e) => withBusy(e.currentTarget, exportLog));
 }
 
 // 启动守卫：上次加载后未能完成启动时会暂停自动加载，这里提示并支持恢复

@@ -417,6 +417,31 @@ case "$1" in
             echo "crash_evidence=unavailable"
         fi
         ;;
+    export_log)
+        _outdir=/sdcard/Download
+        [ -d "$_outdir" ] || _outdir=/data/local/tmp
+        _out="$_outdir/susfs_allinone-log-$(date +%Y%m%d-%H%M%S 2>/dev/null).txt"
+        {
+            echo "LKM SUSFS管理器 日志导出"
+            echo "time=$(date '+%F %T' 2>/dev/null)"
+            echo "module=$(get_prop version) / versionCode=$(get_prop versionCode)"
+            echo "osrelease=$(cat /proc/sys/kernel/osrelease 2>/dev/null)"
+            echo "manager=$(ksu_branch 2>/dev/null)"
+            echo "===== status ====="
+            sh "$MODDIR/ctl.sh" status 2>&1
+            echo "===== load.log (tail 200) ====="
+            tail -n 200 "$MODDIR/load.log" 2>/dev/null
+            echo "===== apply.log (tail 300) ====="
+            tail -n 300 "$MODDIR/apply.log" 2>/dev/null
+        } > "$_out" 2>/dev/null
+        if [ -s "$_out" ]; then
+            chmod 644 "$_out" 2>/dev/null
+            echo "$_out"
+        else
+            echo "export failed"
+            exit 1
+        fi
+        ;;
     log)
         echo "===== load.log ====="
         tail -n 80 "$MODDIR/load.log" 2>/dev/null
@@ -428,7 +453,7 @@ case "$1" in
         ;;
     get_file)
         case "$2" in
-            sus_path|sus_mount|try_umount|hide_modules|skip_hide|sus_map)
+            sus_path|sus_path_loop|sus_mount|try_umount|hide_modules|skip_hide|sus_map)
                 cat "$CONFIG/$2.txt" 2>/dev/null
                 ;;
             *)
@@ -451,7 +476,7 @@ case "$1" in
         ;;
     set_file)
         case "$2" in
-            sus_path|sus_mount|try_umount|hide_modules|skip_hide|sus_map)
+            sus_path|sus_path_loop|sus_mount|try_umount|hide_modules|skip_hide|sus_map)
                 ;;
             *)
                 echo "unknown file"
@@ -475,22 +500,22 @@ case "$1" in
         # 和 apply 共用一把锁，避免写规则文件时被另一次 apply 读到半截
         lock_acquire "$STATE/apply.lock" 900 || { echo "apply busy"; exit 1; }
         trap 'lock_release "$STATE/apply.lock"' EXIT
-        # 一次写入 config + 6 个规则文件：WebUI 保存从 7 次调用降到 1 次，
+        # 一次写入 config + 7 个规则文件：WebUI 保存从 8 次调用降到 1 次，
         # 避免开机 apply 读到「新配置 + 旧规则文件」的中间状态。
-        # 参数：base64( "b64(config)|b64(sus_path)|b64(hide_modules)|b64(skip_hide)|b64(sus_mount)|b64(try_umount)|b64(sus_map)" ) —— 共 7 段
+        # 参数：b64(config)|b64(sus_path)|b64(sus_path_loop)|b64(hide_modules)|b64(skip_hide)|b64(sus_mount)|b64(try_umount)|b64(sus_map) —— 共 8 段
         [ -n "$2" ] || { echo "empty bundle"; exit 1; }
         valid_b64 "$2" || { echo "invalid base64"; exit 1; }
         _raw=$(printf '%s' "$2" | base64 -d 2>/dev/null) || { echo "decode failed"; exit 1; }
-        # 必须恰好 6 段：段数不对就把规则文件写空，不能接受
+        # 必须恰好 7 段：段数不对就把规则文件写空，不能接受
         _nsep=$(printf '%s' "$_raw" | tr -cd '|' | wc -c | tr -d ' ')
-        if [ "$_nsep" != "6" ]; then
-            echo "rejected: expect 7 segments, got $((_nsep + 1))"
+        if [ "$_nsep" != "7" ]; then
+            echo "rejected: expect 8 segments, got $((_nsep + 1))"
             exit 1
         fi
         _dir="$CONFIG/.bundle.$$"
         rm -rf "$_dir"
         mkdir -p "$_dir" || { echo "tmp dir failed"; exit 1; }
-        _names="config.ini sus_path.txt hide_modules.txt skip_hide.txt sus_mount.txt try_umount.txt sus_map.txt"
+        _names="config.ini sus_path.txt sus_path_loop.txt hide_modules.txt skip_hide.txt sus_mount.txt try_umount.txt sus_map.txt"
         _bad=""
         _idx=1
         for _n in $_names; do

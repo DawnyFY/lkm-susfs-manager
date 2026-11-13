@@ -1285,7 +1285,7 @@ kernel_release_spoofed() {
 backup_config() {
     [ -d "$CONFIG" ] || return 0
     mkdir -p "$STATE/config_backup" 2>/dev/null || return 0
-    for _f in config.ini sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt; do
+    for _f in config.ini sus_path.txt sus_path_loop.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt; do
         [ -f "$CONFIG/$_f" ] && cp -f "$CONFIG/$_f" "$STATE/config_backup/$_f" 2>/dev/null
     done
     # 带时间戳的历史副本，保留最近 3 份（防止当前配置被默认值覆盖后备份也跟着丢）
@@ -1308,7 +1308,7 @@ restore_config_if_missing() {
     mkdir -p "$CONFIG" 2>/dev/null || return 0
     # 只补缺失的文件：已有的规则文件可能是更新的，不能被旧备份覆盖
     _restored=0
-    for _f in config.ini config.ini.default sus_path.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt; do
+    for _f in config.ini config.ini.default sus_path.txt sus_path_loop.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt; do
         [ -f "$CONFIG/$_f" ] && continue
         [ -f "$STATE/config_backup/$_f" ] || continue
         cp -f "$STATE/config_backup/$_f" "$CONFIG/$_f" 2>/dev/null && _restored=$((_restored + 1))

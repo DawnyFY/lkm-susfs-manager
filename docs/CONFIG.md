@@ -30,7 +30,7 @@ replace_rules=0
 |---|---|
 | 状态 | LKM 版本、KMI、规则数、SELinux、二进制路径、失败计数；APatch 环境额外显示 APatch 卡片 |
 | 配置 | 图形化编辑规则与开关；强制指定 KMI |
-| 日志 | `load.log` / `apply.log` 在线查看 |
+| 日志 | `load.log` / `apply.log` 在线查看；可手动导出到 `/sdcard/Download` |
 | 关于 | 版本、致谢、许可证摘要、语言切换 |
 
 APatch 卡片：
@@ -53,3 +53,14 @@ KSU / Magisk 环境不显示该卡片。
 - `kernelpatch` / `apatch_userland` / `kernelpatch_kernel` / `kernelpatch_version`
 - `coexist_mode` / `allow_lkm`
 - `root_manager` / `selinux` / `bootloader`
+
+## sus_path_loop
+
+`sus_path_loop.txt` 用于会被删除后重建的路径。
+
+- 每行一个绝对路径，支持 `#` 注释
+- 路径可以暂时不存在；内核保存 pending 规则并在有界范围内重试解析
+- 路径出现后由内核隐藏，不需要用户态常驻循环
+- 模块用 boot_id 账本避免同一次启动重复注册
+- 内核/`ksu_susfs` 不支持 `add_sus_path_loop` 时，apply.log 会明确报错，不会静默成功
+- 仍无法做到“目录重建后旧 inode 一定自动跟上”；上游规则在重建场景下的行为需要实测，必要时重新 apply 或重启

@@ -94,7 +94,7 @@ chk("index.html 文案全部有译文", missHtml.length, 0);
 missHtml.slice(0, 12).forEach((t) => console.log("      未覆盖：" + JSON.stringify(t)));
 
 const ATT_ALLOW = ["页面导航", "留空不生效", "如 6.6.99-custom", "如 #1 SMP PREEMPT",
-  "# 每行一个挂载前缀", "# 每行一个路径", "# 每行一个文件路径，如 /data/adb/modules/xxx/lib.so"];
+  "# 每行一个挂载前缀", "# 每行一个路径", "# 每行一个文件路径，如 /data/adb/modules/xxx/lib.so", "# 例如 /data/adb/modules/某模块/新建目录"];
 const attrRe = /\b(placeholder|title|aria-label)="([^"]*)"/g;
 const missAttr = [];
 let m;

@@ -301,6 +301,10 @@ case "$replace_rules" in
         ;;
     2) if clear_all_paths; then echo "[!] 已清空全部 sus_path 规则（replace_rules=2）"; else echo "[!] 清空 sus_path 失败（内核拒绝）"; _rule_fails=$((_rule_fails + 1)); fi ;;
 esac
+# 路径表被清理后，loop 账本也必须失效，否则本次 apply 不会重新注册
+if [ "$replace_rules" = "1" ] || [ "$replace_rules" = "2" ]; then
+    rm -f "$STATE/sus_path_loop_added" "$STATE/sus_path_loop_added.boot" 2>/dev/null
+fi
 if [ -f "$CONFIG/sus_path.txt" ]; then
     while IFS= read -r _line || [ -n "$_line" ]; do
         path=$(clean_entry "$_line")
@@ -324,6 +328,45 @@ if [ -f "$CONFIG/sus_path.txt" ]; then
             _rule_fails=$((_rule_fails + 1))
         fi
     done < "$CONFIG/sus_path.txt"
+fi
+
+# 5a. sus_path_loop：延迟解析规则，不在用户态跑常驻循环。
+# 内核会保存路径并重试解析（有界），路径出现后自动隐藏；重复 apply 用 boot_id 账本去重。
+if [ -f "$CONFIG/sus_path_loop.txt" ]; then
+    _spl_boot=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
+    _spl_ledger="$STATE/sus_path_loop_added"
+    _spl_bootf="$STATE/sus_path_loop_added.boot"
+    if [ "$(cat "$_spl_bootf" 2>/dev/null)" != "$_spl_boot" ]; then
+        : > "$_spl_ledger" 2>/dev/null
+        printf '%s\n' "$_spl_boot" > "$_spl_bootf" 2>/dev/null
+    fi
+    while IFS= read -r _line || [ -n "$_line" ]; do
+        path=$(clean_entry "$_line")
+        [ -n "$path" ] || continue
+        case "$path" in
+            /*) ;;
+            *) echo "[!] 忽略非绝对路径: $path"; continue ;;
+        esac
+        if [ "${skip_detection_paths:-1}" = "1" ] && is_detection_app_path "$path"; then
+            echo "[i] 跳过检测类应用数据目录: $path"
+            continue
+        fi
+        if grep -Fxq "$path" "$_spl_ledger" 2>/dev/null; then
+            echo "[=] sus_path_loop $path (本次启动已注册)"
+            continue
+        fi
+        if "$BIN" add_sus_path_loop "$path" >/dev/null 2>&1; then
+            printf '%s\n' "$path" >> "$_spl_ledger" 2>/dev/null
+            if grep -F "path=$path " /proc/susfs_path 2>/dev/null | grep -q 'pending'; then
+                echo "[~] sus_path_loop $path (已注册，等待路径出现)"
+            else
+                echo "[+] sus_path_loop $path"
+            fi
+        else
+            echo "[!] sus_path_loop $path 失败（内核/ksu_susfs 可能不支持 add_sus_path_loop）"
+            _rule_fails=$((_rule_fails + 1))
+        fi
+    done < "$CONFIG/sus_path_loop.txt"
 fi
 
 # 5b. 扩展隐藏开关（只隐藏实际存在的路径，默认全关）
