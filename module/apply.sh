@@ -331,15 +331,19 @@ if [ -f "$CONFIG/sus_path.txt" ]; then
 fi
 
 # 5a. sus_path_loop：延迟解析规则，不在用户态跑常驻循环。
-# 内核会保存路径并重试解析（有界），路径出现后自动隐藏；重复 apply 用 boot_id 账本去重。
+# 内核会保存路径并重试解析（有界），路径出现后自动隐藏。
+# 账本只用于去重；每次 apply 都回读 /proc/susfs_path，失效/pending 已过期时重新 add。
 if [ -f "$CONFIG/sus_path_loop.txt" ]; then
     _spl_boot=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
+    [ -n "$_spl_boot" ] || _spl_boot="btime_$(awk '/^btime /{print $2}' /proc/stat 2>/dev/null)"
     _spl_ledger="$STATE/sus_path_loop_added"
     _spl_bootf="$STATE/sus_path_loop_added.boot"
     if [ "$(cat "$_spl_bootf" 2>/dev/null)" != "$_spl_boot" ]; then
         : > "$_spl_ledger" 2>/dev/null
         printf '%s\n' "$_spl_boot" > "$_spl_bootf" 2>/dev/null
     fi
+    _spl_cfg_tmp="$STATE/sus_path_loop.current"
+    : > "$_spl_cfg_tmp" 2>/dev/null
     while IFS= read -r _line || [ -n "$_line" ]; do
         path=$(clean_entry "$_line")
         [ -n "$path" ] || continue
@@ -351,22 +355,83 @@ if [ -f "$CONFIG/sus_path_loop.txt" ]; then
             echo "[i] 跳过检测类应用数据目录: $path"
             continue
         fi
-        if grep -Fxq "$path" "$_spl_ledger" 2>/dev/null; then
-            echo "[=] sus_path_loop $path (本次启动已注册)"
+        printf '%s\n' "$path" >> "$_spl_cfg_tmp" 2>/dev/null
+        _spl_line=$(grep -F "path=$path " /proc/susfs_path 2>/dev/null | head -n 1)
+        _spl_should_add=1
+        _spl_state=missing
+        if [ -n "$_spl_line" ]; then
+            case "$_spl_line" in
+                *pending*) _spl_state=pending ;;
+                *) _spl_state=active ;;
+            esac
+            if [ "$_spl_state" = "pending" ]; then
+                if [ -e "$path" ]; then
+                    _spl_should_add=1
+                else
+                    _spl_should_add=0
+                fi
+            elif [ -e "$path" ]; then
+                _spl_dev=$(stat -c %d "$path" 2>/dev/null)
+                _spl_ino=$(stat -c %i "$path" 2>/dev/null)
+                case "$_spl_line" in
+                    *"dev=$_spl_dev ino=$_spl_ino "*) _spl_should_add=0 ;;
+                esac
+            else
+                _spl_should_add=0
+            fi
+        fi
+        if [ "$_spl_should_add" = "0" ]; then
+            grep -Fqx -- "$path" "$_spl_ledger" 2>/dev/null || printf '%s\n' "$path" >> "$_spl_ledger" 2>/dev/null
+            record_our_path "$path"
+            case "$_spl_state" in
+                pending) echo "[~] sus_path_loop $path (已注册，等待路径出现)" ;;
+                active) echo "[=] sus_path_loop $path (已生效)" ;;
+                *) echo "[=] sus_path_loop $path (已注册)" ;;
+            esac
             continue
         fi
+        # 账本命中但规则已失效：先移除旧账本行，再重新 add
+        if grep -Fqx -- "$path" "$_spl_ledger" 2>/dev/null; then
+            _spl_tmp="$_spl_ledger.tmp.$$"
+            grep -Fvx -- "$path" "$_spl_ledger" > "$_spl_tmp" 2>/dev/null
+            mv -f "$_spl_tmp" "$_spl_ledger" 2>/dev/null
+        fi
         if "$BIN" add_sus_path_loop "$path" >/dev/null 2>&1; then
-            printf '%s\n' "$path" >> "$_spl_ledger" 2>/dev/null
-            if grep -F "path=$path " /proc/susfs_path 2>/dev/null | grep -q 'pending'; then
-                echo "[~] sus_path_loop $path (已注册，等待路径出现)"
-            else
-                echo "[+] sus_path_loop $path"
+            _spl_after=$(grep -F "path=$path " /proc/susfs_path 2>/dev/null | head -n 1)
+            if [ -z "$_spl_after" ]; then
+                echo "[!] sus_path_loop $path 命令返回成功但内核未注册"
+                _rule_fails=$((_rule_fails + 1))
+                continue
             fi
+            printf '%s\n' "$path" >> "$_spl_ledger" 2>/dev/null
+            record_our_path "$path"
+            case "$_spl_after" in
+                *pending*) echo "[~] sus_path_loop $path (已注册，等待路径出现)" ;;
+                *) echo "[+] sus_path_loop $path" ;;
+            esac
         else
             echo "[!] sus_path_loop $path 失败（内核/ksu_susfs 可能不支持 add_sus_path_loop）"
             _rule_fails=$((_rule_fails + 1))
         fi
     done < "$CONFIG/sus_path_loop.txt"
+    # 配置里删掉的 loop 行：用 /proc 的 del 逐条撤销，不能等重启
+    if [ -s "$_spl_ledger" ]; then
+        while IFS= read -r _spl_old || [ -n "$_spl_old" ]; do
+            [ -n "$_spl_old" ] || continue
+            grep -Fqx -- "$_spl_old" "$_spl_cfg_tmp" 2>/dev/null && continue
+            if susfs_path_del "$_spl_old"; then
+                unrecord_our_path "$_spl_old"
+                _spl_tmp="$_spl_ledger.tmp.$$"
+                grep -Fvx -- "$_spl_old" "$_spl_ledger" > "$_spl_tmp" 2>/dev/null
+                mv -f "$_spl_tmp" "$_spl_ledger" 2>/dev/null
+                echo "[i] sus_path_loop $_spl_old (已移除)"
+            else
+                echo "[!] sus_path_loop $_spl_old 无法逐条删除（需重启或 replace_rules=2）"
+                _rule_fails=$((_rule_fails + 1))
+            fi
+        done < "$_spl_ledger"
+    fi
+    rm -f "$_spl_cfg_tmp" 2>/dev/null
 fi
 
 # 5b. 扩展隐藏开关（只隐藏实际存在的路径，默认全关）

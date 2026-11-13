@@ -530,6 +530,8 @@ function closeAnnouncement() {
 }
 
 async function exportLog() {
+  const ok = await ask("导出文件包含隐藏路径、模块挂载点和 install_id，分享前请检查，用完建议删除。继续导出？");
+  if (!ok) return;
   const out = await exec(`${CTL} export_log`);
   const lines = String(out || "").trim().split("\n").filter(Boolean);
   const path = lines.length ? lines[lines.length - 1] : "";

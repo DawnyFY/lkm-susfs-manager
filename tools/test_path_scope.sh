@@ -50,7 +50,7 @@ clear_own_paths >/dev/null
 chk "删除失败保留清单" "$(grep -c "^/data/adb$" "$STATE/our_paths.txt")" "1"
 
 # 集成断言：apply 只在 add 成功后才登记清单
-chk "成功后才记录" "$(grep -c 'record_our_path "$path"' "$REPO/apply.sh")" "1"
+chk "成功后才记录" "$(grep -c 'record_our_path "$path"' "$REPO/apply.sh")" "3"
 chk "不再预登记" "$(grep -B2 'record_our_path "$path"' "$REPO/apply.sh" | grep -c '记入本模块的期望清单')" "0"
 
 # 场景 4：显式整表清空

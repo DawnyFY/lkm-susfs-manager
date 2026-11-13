@@ -13,6 +13,7 @@
     "状态": "Status",
     "导出日志": "Export logs",
     "导出失败": "Export failed",
+    "导出文件包含隐藏路径、模块挂载点和 install_id，分享前请检查，用完建议删除。继续导出？": "The export contains hidden paths, module mounts, and the install_id. Review it before sharing and delete it afterwards. Continue?",
     "日志已导出：%s": "Logs exported: %s",
     "配置": "Config",
     "日志": "Logs",

@@ -28,8 +28,16 @@
 
 ## 离线
 
-- 32/32 测试通过；1.2.5 的 kallsyms 零地址回退待设备验证（1.2.4/r18.9 冷启动已验证）。
+- 33/33 测试通过；1.2.5 的 kallsyms 零地址回退已验证（1.2.4/r18.9 冷启动已验证）。
 - `check_zip` / `check_no_crlf` 通过。
+
+## 1.2.6 候选（手动验证）
+
+- 设备：Xiaomi 15 Ultra（8e483448），SukiSU，LKM r18.9，android15-6.6。
+- 安装 1.2.6 后 `version=1.2.6` / `versionCode=18`，`lkm_present=1`、`rules=13`、`apply_result=success`、`integrity=ok`、`autoload=ok`。
+- `sus_path_loop`：测试路径 apply 后在 `/proc/susfs_path` 出现；清空/恢复配置后测试规则消失；`export_log` 生成 `/sdcard/Download/susfs_allinone-log-*.txt` 且含 status/load/apply。
+- `install_key`：`state/install_key` 65 B、`-rw-------`，`install_id` 为 16 位 hash；重复调用不重签。
+- 未验证：真实 WebView 公告 fetch/CORS、Magisk/APatch 上的 set_perm 与 updateJson UI、所有 KMI 冷启动。
 
 ## 未验证
 

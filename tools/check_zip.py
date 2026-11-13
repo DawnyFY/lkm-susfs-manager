@@ -40,6 +40,7 @@ REQUIRED = {
     "webroot/index.html",
     "webroot/app.js",
     "webroot/style.css",
+    "config/sus_path_loop.txt",
 }
 EXEC_REQUIRED = {"load.sh", "apply.sh", "ctl.sh", "action.sh", "customize.sh", "service.sh"}
 
@@ -97,6 +98,11 @@ def main() -> int:
     path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT
     if not path.is_file():
         fail(f"missing {path}")
+    # 运行期密钥/状态绝不能进入发布包
+    with zipfile.ZipFile(path) as _z:
+        _names = set(_z.namelist())
+    if any(n.startswith("state/") or "install_key" in n for n in _names):
+        fail("release zip contains state/ or install_key")
 
     raw = path.read_bytes()
     digest = hashlib.sha256(raw).hexdigest().upper()

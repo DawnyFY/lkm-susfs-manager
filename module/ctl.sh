@@ -422,11 +422,14 @@ case "$1" in
         fi
         ;;
     export_log)
+        umask 077
         _outdir=/sdcard/Download
         [ -d "$_outdir" ] || _outdir=/data/local/tmp
-        _out="$_outdir/susfs_allinone-log-$(date +%Y%m%d-%H%M%S 2>/dev/null).txt"
+        _out=$(mktemp "$_outdir/susfs_allinone-log-XXXXXX.txt" 2>/dev/null)
+        [ -n "$_out" ] || _out="$_outdir/susfs_allinone-log-$$.txt"
         {
             echo "LKM SUSFS管理器 日志导出"
+            echo "WARNING: 文件含隐藏路径、模块挂载点和 install_id；分享前请检查，用完建议删除。"
             echo "time=$(date '+%F %T' 2>/dev/null)"
             echo "module=$(get_prop version) / versionCode=$(get_prop versionCode)"
             echo "osrelease=$(cat /proc/sys/kernel/osrelease 2>/dev/null)"
@@ -439,7 +442,7 @@ case "$1" in
             tail -n 300 "$MODDIR/apply.log" 2>/dev/null
         } > "$_out" 2>/dev/null
         if [ -s "$_out" ]; then
-            chmod 644 "$_out" 2>/dev/null
+            chmod 600 "$_out" 2>/dev/null
             echo "$_out"
         else
             echo "export failed"
@@ -670,6 +673,10 @@ EOF
         cat > "$CONFIG/hide_modules.txt" <<'EOF'
 # 每行一个模块名，写入 /proc/susfs_hide_modules
 kernelsu
+EOF
+        cat > "$CONFIG/sus_path_loop.txt" <<'EOF'
+# 每行一个路径；路径可以暂时不存在，内核会在它出现后解析并隐藏
+# 适合会被删除后重建的路径；静态路径请继续放 sus_path.txt
 EOF
         cat > "$CONFIG/sus_mount.txt" <<'EOF'
 # 每行一个挂载点，调用 ksu_susfs add_sus_mount

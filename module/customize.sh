@@ -111,20 +111,23 @@ elif [ -f /data/adb/susfs4ksu/sus_path.txt ]; then
 fi
 
 # 安装时签发一次设备密钥；升级优先复用旧的，避免服务端标识变化。
-# 只用于匿名标识/后续签名请求，不打印明文，文件权限 600。
+# 只用于匿名标识/后续签名请求，不打印明文，文件权限 600；熵源失败必须中止安装。
 mkdir -p "$MODPATH/state" 2>/dev/null
 chmod 700 "$MODPATH/state" 2>/dev/null
 if [ ! -s "$MODPATH/state/install_key" ]; then
-    _ik=$(head -c 32 /dev/urandom 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n')
-    case "$_ik" in *[!0-9a-fA-F]*|'') _ik="" ;; esac
-    [ "${#_ik}" -eq 64 ] || _ik=$(head -c 64 /dev/urandom 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1)
-    if [ "${#_ik}" -eq 64 ]; then
-        ( umask 077; printf '%s\n' "$_ik" > "$MODPATH/state/install_key" ) 2>/dev/null
-        chmod 600 "$MODPATH/state/install_key" 2>/dev/null
-        ui_print "- 已签发安装密钥"
-    else
-        ui_print "[!] 安装密钥生成失败（/dev/urandom 不可用）"
+    _ik=""
+    _ik_rnd="${INSTALL_KEY_RANDOM:-/dev/urandom}"
+    if [ -r "$_ik_rnd" ]; then
+        _ik=$(dd if="$_ik_rnd" bs=32 count=1 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n')
+        [ "${#_ik}" -eq 64 ] || _ik=$(od -An -N32 -tx1 "$_ik_rnd" 2>/dev/null | tr -d ' \n')
     fi
+    case "$_ik" in *[!0-9a-fA-F]*|'') _ik="" ;; esac
+    case "$_ik" in *[!0]*) ;; *) _ik="" ;; esac
+    if [ "${#_ik}" -ne 64 ]; then
+        abort "- 安装密钥熵源失败，拒绝使用固定/空 key"
+    fi
+    ( umask 077; printf '%s\n' "$_ik" > "$MODPATH/state/install_key" ) 2>/dev/null || abort "- 写入安装密钥失败"
+    ui_print "- 已签发安装密钥"
 fi
 chmod 600 "$MODPATH/state/install_key" 2>/dev/null
 
@@ -167,6 +170,8 @@ else
 fi
 
 set_perm_recursive "$MODPATH" 0 0 0755 0644
+chmod 700 "$MODPATH/state" 2>/dev/null
+chmod 600 "$MODPATH/state/install_key" 2>/dev/null
 set_perm "$MODPATH/bin/susfs_insmod" 0 0 0755
 set_perm "$MODPATH/bin/ksu_susfs_good" 0 0 0755
 for script in action.sh load.sh apply.sh ctl.sh post-fs-data.sh boot-completed.sh service.sh; do

@@ -34,15 +34,15 @@
 
 ## 升级 / 回滚
 
-- 升级：覆盖安装；`config/`、`state/` 保留。1.2.6 沿用版本变化清理逻辑，会清掉旧的 `autoload_paused` / `fail_count` / `state/loading` / `boot_guard`，避免 1.2.4 的暂停状态阻断新加载路径。
+- 升级：覆盖安装；`config/` 与 `state/` 中 install_key/规则清单等已知文件保留；其他运行状态按管理器升级行为可能重建。1.2.6 沿用版本变化清理逻辑，会清掉旧的 `autoload_paused` / `fail_count` / `state/loading` / `boot_guard`，避免 1.2.4 的暂停状态阻断新加载路径。
 - 已加载旧 LKM 时，新 `.ko` 需要**冷启动**才会重新加载；热重启不会替换已加载的 LKM。
 - 回滚：恢复上一版本 zip；如需回到 r18.8，同时恢复旧 `lib/*.ko` 与 `bin/susfs_insmod`。
 
 ## 校验
 
 - 文件：`susfs_allinone-1.2.6.zip`
-- 大小：12,641,661 B
-- sha256：349bc2c9fc25cc0e63735f56a6d90b59e1346ca0ec53ee5e331bc0056061a22b
+- 大小：12,642,973 B
+- sha256：a58e41ada1b605e4d757a262503ba7eed693be6a839d51a0c9abcd1f529c5858
 
 ## 说明
 

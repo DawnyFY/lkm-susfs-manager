@@ -24,4 +24,10 @@ K2=$(cat "$KEY")
 ID1=$( ( MODDIR="$M"; STATE="$M/state"; CONFIG="$M/config"; . "$REPO/module/common.sh"; install_id ) )
 ID2=$( ( MODDIR="$M"; STATE="$M/state"; CONFIG="$M/config"; . "$REPO/module/common.sh"; install_id ) )
 [ "$ID1" = "$ID2" ] && [ ${#ID1} -eq 16 ] && echo "PASS  install_id 稳定" || { echo "FAIL  install_id=$ID1/$ID2"; fail=1; }
+
+# 熵源失败必须 fail closed，不能生成空输入 SHA-256 的固定 key
+M2DIR="$TMP/mod2"; mkdir -p "$M2DIR/state" "$M2DIR/config"
+( MODDIR="$M2DIR"; STATE="$M2DIR/state"; CONFIG="$M2DIR/config"; INSTALL_KEY_RANDOM=/dev/null; . "$REPO/module/common.sh"; ensure_install_key )
+RC=$?
+[ "$RC" != "0" ] && [ ! -s "$M2DIR/state/install_key" ] && echo "PASS  熵源失败 fail closed" || { echo "FAIL  熵源失败仍返回 rc=$RC"; fail=1; }
 exit "$fail"

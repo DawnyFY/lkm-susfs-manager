@@ -70,3 +70,16 @@ KSU / Magisk 环境不显示该卡片。
 - 模块用 boot_id 账本避免同一次启动重复注册
 - 内核/`ksu_susfs` 不支持 `add_sus_path_loop` 时，apply.log 会明确报错，不会静默成功
 - 仍无法做到“目录重建后旧 inode 一定自动跟上”；上游规则在重建场景下的行为需要实测，必要时重新 apply 或重启
+- pending 规则的内核重试约 120 秒；超时后路径才出现时，下一次 apply 会重新注册
+- 配置中删除 loop 行后，apply 会用 `/proc/susfs_path` 的 `del` 逐条撤销；若内核拒绝，日志会明确提示需重启或 `replace_rules=2`
+- `replace_rules=1` 会按 `state/our_paths.txt` 删除 loop 规则；`replace_rules=2` 整表清空
+
+## 日志导出
+
+- 导出文件包含 status、隐藏路径、模块挂载点和 `install_id`，默认写入 `/sdcard/Download`，权限 600
+- WebUI 导出前会二次确认；分享前请检查内容，用完删除
+
+## install_id 的边界
+
+- 仅用于安装期匿名标识/粗粒度限流
+- 不是鉴权 token，不能防重放、不能作为封禁依据；root/备份可读取或克隆

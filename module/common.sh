@@ -828,18 +828,25 @@ ensure_install_key() {
         _ik=$(cat "$_ik_f" 2>/dev/null)
         case "$_ik" in
             *[!0-9a-fA-F]*|'') ;;  # 非法内容重新生成
-            *) [ "${#_ik}" -eq 64 ] && { chmod 600 "$_ik_f" 2>/dev/null; return 0; } ;;
+            *) [ "${#_ik}" -eq 64 ] && { chmod 700 "$STATE" 2>/dev/null; chmod 600 "$_ik_f" 2>/dev/null; return 0; } ;;
         esac
     fi
     mkdir -p "$STATE" 2>/dev/null
     chmod 700 "$STATE" 2>/dev/null
-    _ik=$(head -c 32 /dev/urandom 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n')
+    _ik=""
+    _ik_rnd="${INSTALL_KEY_RANDOM:-/dev/urandom}"
+    if [ -r "$_ik_rnd" ]; then
+        _ik=$(dd if="$_ik_rnd" bs=32 count=1 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n')
+        [ "${#_ik}" -eq 64 ] || _ik=$(od -An -N32 -tx1 "$_ik_rnd" 2>/dev/null | tr -d ' \n')
+    fi
     case "$_ik" in
         *[!0-9a-fA-F]*|'') _ik="" ;;
     esac
-    [ "${#_ik}" -eq 64 ] || _ik=$(head -c 64 /dev/urandom 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1)
-    case "$_ik" in *[!0-9a-fA-F]*|'') return 1 ;; esac
+    [ "${#_ik}" -eq 64 ] || return 1
+    # 全零同样不是有效随机源
+    case "$_ik" in *[!0]*) ;; *) return 1 ;; esac
     ( umask 077; printf '%s\n' "$_ik" > "$_ik_f" ) 2>/dev/null || return 1
+    chmod 700 "$STATE" 2>/dev/null
     chmod 600 "$_ik_f" 2>/dev/null
     return 0
 }
@@ -847,7 +854,9 @@ ensure_install_key() {
 # 对外只暴露哈希前缀，绝不把 install_key 打进日志/状态。
 install_id() {
     ensure_install_key >/dev/null 2>&1 || { printf 'unknown'; return 1; }
-    sha256sum "$(install_key_file)" 2>/dev/null | cut -c1-16
+    _id=$(sha256sum "$(install_key_file)" 2>/dev/null | cut -c1-16)
+    [ -n "$_id" ] || { printf 'unknown\n'; return 1; }
+    printf '%s\n' "$_id"
 }
 
 # 版本升级（含 promote_pending_update.sh 保留 state/ 的就地升级）清理旧暂停状态。
@@ -1236,6 +1245,16 @@ record_our_path() {
     _rp_f=$(our_paths_file)
     mkdir -p "$STATE" 2>/dev/null
     grep -Fqx -- "$_rp_p" "$_rp_f" 2>/dev/null || printf '%s\n' "$_rp_p" >> "$_rp_f"
+}
+
+unrecord_our_path() {
+    _ur_p=$1
+    [ -n "$_ur_p" ] || return 0
+    _ur_f=$(our_paths_file)
+    [ -f "$_ur_f" ] || return 0
+    _ur_tmp="$_ur_f.tmp.$$"
+    grep -Fvx -- "$_ur_p" "$_ur_f" > "$_ur_tmp" 2>/dev/null && mv -f "$_ur_tmp" "$_ur_f" 2>/dev/null
+    rm -f "$_ur_tmp" 2>/dev/null
 }
 
 # replace_rules=1：只移除上一次记录的路径

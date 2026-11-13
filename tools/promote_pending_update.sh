@@ -12,7 +12,8 @@ DST=/data/adb/modules/$ID
 [ -d "$DST" ] || { echo "模块不存在：$DST"; exit 1; }
 
 echo "== 备份 =="
-tar -czf "/data/local/tmp/$ID.backup.tgz" -C /data/adb/modules "$ID" || { echo "备份失败，停止"; exit 1; }
+tar -czf "/data/local/tmp/$ID.backup.tgz" --exclude="$ID/state/install_key" -C /data/adb/modules "$ID" || { echo "备份失败，停止"; exit 1; }
+chmod 600 "/data/local/tmp/$ID.backup.tgz" 2>/dev/null
 ls -l "/data/local/tmp/$ID.backup.tgz"
 
 echo "== 补齐文件 =="
@@ -25,10 +26,23 @@ for f in $(cd "$SRC" && ls -A); do
     echo "已更新 $f"
 done
 
+# 新版本可能新增默认规则文件（例如 sus_path_loop.txt）；只补缺失文件，不覆盖用户配置
+if [ -d "$SRC/config" ]; then
+    for _cf in "$SRC"/config/*; do
+        [ -f "$_cf" ] || continue
+        _cn=$(basename "$_cf")
+        if [ ! -f "$DST/config/$_cn" ]; then
+            mkdir -p "$DST/config" 2>/dev/null
+            cp -a "$_cf" "$DST/config/$_cn" && echo "补齐配置 $_cn"
+        fi
+    done
+fi
 rm -rf "$SRC"
 rmdir /data/adb/modules_update 2>/dev/null
 # 就地升级也要清掉上一版本遗留的失败/暂停/守卫，否则新版本首启不会尝试新加载路径
 rm -f "$DST/state/autoload_paused" "$DST/state/fail_count" "$DST/state/loading" "$DST/state/boot_guard" 2>/dev/null
+chmod 700 "$DST/state" 2>/dev/null
+chmod 600 "$DST/state/install_key" 2>/dev/null
 echo "已清理旧 autoload_paused/fail_count/loading/boot_guard"
 # 清掉「待更新」标记，否则管理器一直隐藏 执行 / WebUI 按钮
 rm -f "$DST/update"
