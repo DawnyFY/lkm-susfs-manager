@@ -389,6 +389,7 @@ async function loadConfig() {
   const spoofU = cfg.spoof_uname === undefined ? "0" : cfg.spoof_uname;
   const sepolicy = cfg.hide_vendor_sepolicy === undefined ? "0" : cfg.hide_vendor_sepolicy;
   const vold = cfg.vold_isolation === undefined ? "0" : cfg.vold_isolation;
+  const stats = cfg.anonymous_stats === undefined ? "1" : cfg.anonymous_stats;
   $("autoLoad").checked = auto === "1";
   $("hideSusMnts").checked = hide === "1";
   $("avcSpoof").checked = avc === "1";
@@ -410,6 +411,7 @@ async function loadConfig() {
   $("fakeCmdline").checked = fakeCmd === "1";
   $("hideVendorSepolicy").checked = sepolicy === "1";
   $("voldIsolation").checked = vold === "1";
+  $("anonymousStats").checked = stats === "1";
   $("fakeCmdlineValue").value = cfg.fake_cmdline_value || "";
 
   // 强制 KMI 用下拉：选项来自模块实际打包的 .ko，避免手输拼错
@@ -799,6 +801,7 @@ async function saveConfig() {
     spoof_uname_version: $("spoofUnameVersion").value.trim(),
     hide_vendor_sepolicy: $("hideVendorSepolicy").checked ? 1 : 0,
     vold_isolation: $("voldIsolation").checked ? 1 : 0,
+    anonymous_stats: $("anonymousStats").checked ? 1 : 0,
   };
   const configText = mergeConfigText(rawConfigText, updates);
 
@@ -821,6 +824,8 @@ async function saveConfig() {
   }
   await refreshStatus();
   await loadConfig();
+  // 开关变化后异步申请/撤销 token，不阻塞保存流程
+  exec(CTL + " report_install").catch(() => {});
   if (r.code === 5) {
     showBanner("配置已保存并应用，但部分规则失败；详情见日志。", "warn", 7000);
     toast("部分规则失败，详情见日志");

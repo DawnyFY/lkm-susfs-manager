@@ -1,0 +1,30 @@
+#!/bin/sh
+# 匿名统计：开关、一次请求、版本绑定、关闭删除 token
+set -u
+REPO=${1:-.}
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+M="$TMP/mod"; mkdir -p "$M/config" "$M/state"
+printf 'version=1.2.7\nversionCode=19\n' > "$M/module.prop"
+printf 'anonymous_stats=1\n' > "$M/config/config.ini"
+cat > "$TMP/fake-curl" <<'EOF'
+#!/bin/sh
+cat <<'JSON'
+{"token":"ZmFrZS5wYXlsb2Fk.c2ln","version":"1.2.7","version_code":19,"expires_at":"2027-01-01T00:00:00Z"}
+JSON
+EOF
+chmod +x "$TMP/fake-curl"
+fail=0
+chk() { if [ "$2" = "$3" ]; then echo "PASS  $1"; else echo "FAIL  $1 expect=[$3] got=[$2]"; fail=1; fi; }
+( MODDIR="$M"; CONFIG="$M/config"; STATE="$M/state"; STATS_CURL="$TMP/fake-curl"; STATS_URL="https://example.invalid/api"; . "$REPO/module/common.sh"; report_install )
+chk "开关开启时写 token" "$(grep -c '^token=ZmFrZS5wYXlsb2Fk.c2ln$' "$M/state/server_token")" "1"
+chk "记录版本号" "$(grep -c '^version_code=19$' "$M/state/server_token")" "1"
+# 第二次调用应直接复用，不依赖 fake curl（即使 fake curl 被删也能成功）
+mv "$TMP/fake-curl" "$TMP/fake-curl.off"
+( MODDIR="$M"; CONFIG="$M/config"; STATE="$M/state"; STATS_CURL="$TMP/fake-curl"; STATS_URL="https://example.invalid/api"; . "$REPO/module/common.sh"; report_install )
+chk "同版本不重复请求" "$(grep -c '^token=ZmFrZS5wYXlsb2Fk.c2ln$' "$M/state/server_token")" "1"
+# 关闭开关必须删除 token
+printf 'anonymous_stats=0\n' > "$M/config/config.ini"
+( MODDIR="$M"; CONFIG="$M/config"; STATE="$M/state"; STATS_CURL="$TMP/fake-curl"; STATS_URL="https://example.invalid/api"; . "$REPO/module/common.sh"; report_install )
+chk "关闭后删除 token" "$([ -e "$M/state/server_token" ] && echo exists || echo gone)" "gone"
+exit "$fail"

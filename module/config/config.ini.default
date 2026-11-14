@@ -1,6 +1,8 @@
 # SUSFS 管理器配置（纯 KEY=VALUE，不会被 source）
 # auto_load=1：开机自动加载 LKM 并应用规则；0：只在手动操作时加载
 auto_load=1
+# 匿名安装统计：只发送随机 install_id 与模块版本，不发送设备信息/路径/日志
+anonymous_stats=1
 # 非 root 进程隐藏 SUS 挂载点
 hide_sus_mnts=1
 # AVC 日志伪装（默认关闭）

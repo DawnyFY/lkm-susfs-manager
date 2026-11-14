@@ -207,6 +207,9 @@ case "$1" in
     install_id)
         install_id
         ;;
+    report_install)
+        report_install
+        ;;
     kmiinfo)
         kmiinfo
         echo "--- real ---"
@@ -643,6 +646,7 @@ case "$1" in
 # SUSFS 管理器配置
 auto_load=1
 hide_sus_mnts=1
+anonymous_stats=1
 avc_spoof=0
 replace_rules=0
 hide_ksu_loop=0

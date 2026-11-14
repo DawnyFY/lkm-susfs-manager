@@ -2,6 +2,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| 1.2.7 | 新增匿名安装统计开关：首次开机/保存时申请一次版本绑定 token（install_id + version，180 天），关闭立即删除本地 token；服务端只记录 install_id/版本/首次/最近时间，不做日志上传 |
 | 1.2.6 | 模块内管理器更新提示：module.prop 增加 updateJson，仓库根目录增加 update.json（version/versionCode/zipUrl/changelog），新增 update.json 一致性 CI 校验；新增 sus_path_loop 延迟路径规则（能力失败显式报错、boot_id 账本去重、内核 pending 由上游有界解析）；日志页新增手动导出到 `/sdcard/Download`；状态页新增发布公告卡片与发布页入口，启动时拉取远程公告（60 秒缓存/尝试限制，失败回退内置）；安装时签发 32 字节 install_key（升级复用、600 权限，对外只显示 16 位 install_id hash） |
 | 1.2.5 | Android 16 / 6.12 等锁定 kallsyms 的设备：`susfs_insmod` 遇到 `kptr_restrict` 全零地址拒绝加载时，回退 `ksud insmod` 走 KernelSU `KSU_IOCTL_LOOKUP_SYMBOLS` 内核侧符号解析（含 SHN_ABS 重写）；针对 1.2.3/1.2.4 在该类设备上 LKM 加载失败（rc=13），已验证 |
 | 1.2.4 | SUSFS LKM 升级上游 r18.9（#167/#184/#192/#197）；WebUI 状态读取加 KernelPatch 探测缓存；审计遗留修复 F7/F8/F9/F10/F11/F12/F13（配置校验、完整性缓存 ctime、allow_lkm 备份、set_bundle 回滚、import 原子写入、并发状态、check_zip 排序）；文档/元数据同步 r18.9 与 v1.5.2+_R28 |

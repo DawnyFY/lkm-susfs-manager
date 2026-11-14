@@ -54,6 +54,14 @@ KSU / Magisk 环境不显示该卡片。
 - `coexist_mode` / `allow_lkm`
 - `root_manager` / `selinux` / `bootloader`
 
+## 匿名安装统计
+
+- `anonymous_stats=1` 默认开启；只发送随机 install_id、模块版本、versionCode
+- 服务端只保存 install_id/版本/首次/最近时间；不保存设备型号、序列号、路径、日志
+- 关闭后删除 `state/server_token`，不再请求
+- token 按 versionCode 绑定，升级后重新申请；同一版本只申请一次
+- 首次开机或保存配置时请求一次，失败不阻塞开机
+
 ## install_id / install_key
 
 - 安装时在 `state/install_key` 生成 32 字节随机 hex，权限 600；升级时优先复用旧值

@@ -1,49 +1,36 @@
-# LKM SUSFS管理器 v1.2.6
+# LKM SUSFS管理器 v1.2.7
 
-> 增加管理器内更新提示（updateJson），并保留 1.2.5 的 kallsyms 回退与 1.2.4 的审计修复。APatch 仍是实验性，真机未验收。
+> 1.2.7 加入匿名安装统计开关：默认开启，首次安装或升级后申请一次版本绑定 token；只发送随机 install_id 和模块版本，不发送设备信息、路径或日志。可随时在 WebUI 关闭。
 
 ## 重点变化
 
-- **sus_path_loop 延迟路径规则**：新增 `config/sus_path_loop.txt` 和 WebUI 编辑框；路径暂不存在时由内核 pending 解析，上游有界重试；boot_id 账本避免重复注册，失败在 apply.log 明确报告。
-- **安装密钥**：首次安装生成 32 字节随机 `state/install_key`（权限 600），升级复用；`ctl.sh install_id` 只输出 16 位 SHA-256 前缀，不打印密钥。
-- **公告启动拉取**：WebUI 启动时请求 `https://susfs.stdawns.top/announcement.json`，成功后更新公告摘要/详情；同一次启动最多一次，`localStorage` 缓存与尝试时间均为 60 秒，失败保留内置公告。
-- **WebUI 公告卡片**：状态页顶部显示当前发布/候选版本说明，并提供 `https://susfs.stdawns.top/` 发布页入口。
-- **手动日志导出**：日志页新增「导出日志」，写入 `/sdcard/Download/susfs_allinone-log-*.txt`（含 status、load.log、apply.log）。
-- **管理器内更新提示**：module.prop 增加 updateJson，仓库根目录增加 update.json（version/versionCode/zipUrl/changelog）；KernelSU / SukiSU / Magisk 模块页会显示新版本，CI 校验 update.json 与 module.prop 一致。
-- **修复锁定 kallsyms 的 Android 16 / 6.12 设备**：susfs_insmod 在 kptr_restrict 导致 /proc/kallsyms 全零地址时 fail-closed（rc=13）；1.2.5 自动回退到 KernelSU ksud insmod，走 KSU_IOCTL_LOOKUP_SYMBOLS 内核侧符号解析并重写 SHN_ABS。需要 KernelSU UAPI v6+；旧版仍会失败。
-- **SUSFS LKM 升级到 r18.9**：上游修复 #167（避免把 bind mount 设备路径当 source identity，可能影响 /data 父目录的 mountinfo）、#184（Termux 下无隐藏名时恢复 mkdirat 处理）、#192（改用 KallRecon 符号解析器）、#197（/proc/modules hook 目标校验失败时 fail closed，避免 kernel panic）。
-- **状态读取提速**：KernelPatch 探测增加单进程 + 按 boot_id 的缓存，WebUI 刷新不再每次完整读 dmesg；状态页和保存后的刷新应明显快于 1.2.3。
-- **审计遗留修复**：配置校验 `fake_cmdline_value` 引号分支、完整性缓存 ctime 防回拨、`allow_lkm` 备份恢复、`set_bundle` 半套写入回滚（含新建文件清理）、`import_legacy` 原子写入、并发 apply 状态覆盖、`check_zip` 版本排序，以及 `kp_probe`/`.manager` 原子写与 unknown 不落盘。
-- **发布门禁**：`check_zip` 逐文件校验 manifest；`check_license_compliance` 按版本号取最新包；CI 用 `tools/release_manifest.sha256` 固定清单 hash，防止未来漂移。
-- **文档/元数据**：NOTICE、UPSTREAM、KMI、provenance 更新到 r18.9 / `v1.5.2+_R28`；配置示例去掉 WebUI 不接受的行内注释；KMI 匹配顺序补充 tag 不配对兜底与 SDK 31/32。
+- **匿名安装统计**：新增 `anonymous_stats` 开关（默认 1）。首次开机或保存配置时向 `/api/v1/install` 申请一次 token；同一 versionCode 只申请一次，失败不阻塞开机。关闭开关会删除本地 `state/server_token`，不再请求。
+- **服务端只记统计**：只保存 install_id、版本、首次/最近时间；token 用服务端 HMAC 签名，绑定 versionCode 和 180 天有效期，为后续日志上传预留凭证，但本版不做日志上传接口。
+- **隐私边界**：不发送设备型号、序列号、路径、日志；安装密钥仍只在本地生成，install_id 是它的 SHA-256 前缀。
 
 ## 验证
 
-- 离线测试：33/33
-- `check_no_crlf` / `check_zip` / `check_license_compliance` / `check_release_manifest` / `check_update_json` 通过
-- 1.2.5 已在原设备完成冷启动自动加载、boot guard 自愈和 RCQ 热重启验证；1.2.6 的 updateJson 管理器提示待发布后验证
+- 34/34 离线测试通过（新增匿名统计测试：开关、同版本不重复请求、关闭删除 token）。
+- 真机（Xiaomi 15 Ultra / Android 16 / 6.6.77 / SukiSU）：
+  - 1.2.7 安装成功，versionCode 19
+  - WebUI/ctl 申请 token 成功，`state/server_token` 600 权限
+  - D1 只写入当前 install_id + 1.2.7 + 时间戳
+  - 关闭开关后本地 token 删除
+- 1.2.6 的 loop、日志导出、install_key 回归仍通过。
 
-## 已知限制
+## 风险 / 限制
 
-- **APatch 仍是实验性**：默认不自动加载 LKM；QEMU 模块路径验证通过，但真机未验收。
-- 1.2.5 的 kallsyms 回退仅限 KernelSU：Magisk / APatch 没有 ksud insmod 内核侧解析入口，仍走 susfs_insmod，同类锁定内核可能仍失败。
-- **sus_path 持续隐藏缺口**：目录删除重建后旧 inode 规则失效；重新挂接原型未合并。
-- **Magisk**：代码适配，真机冷启动未验证。
-- **NeoZygisk**：r18.8 曾有外部反馈的 `/data/adb` 整目录隐藏导致 zygote 循环风险；r18.9 未复测。使用 NeoZygisk 时请删除 `/data/adb` 行，不要假定排除子目录能抵消父目录隐藏。
-- 其余 7 个 KMI、官方 KernelSU / ReSukiSU / BakaSU / KernelSU Next 实机组合未逐项验证。
+- 服务端只接受 1.2.7 / versionCode 19；升级后需要更新 Worker 的允许版本。
+- 统计默认开启；不需要可在 WebUI 关闭，关闭不会删除服务端已写入的匿名记录。
+- 统计失败不影响模块加载和规则。
+- 仍不承诺过检测；APatch 实验性、Magisk 冷启动未验证、其余 KMI 未逐一实机。
 
-## 升级 / 回滚
+## 文件
 
-- 升级：覆盖安装；`config/` 与 `state/` 中 install_key/规则清单等已知文件保留；其他运行状态按管理器升级行为可能重建。1.2.6 沿用版本变化清理逻辑，会清掉旧的 `autoload_paused` / `fail_count` / `state/loading` / `boot_guard`，避免 1.2.4 的暂停状态阻断新加载路径。
-- 已加载旧 LKM 时，新 `.ko` 需要**冷启动**才会重新加载；热重启不会替换已加载的 LKM。
-- 回滚：恢复上一版本 zip；如需回到 r18.8，同时恢复旧 `lib/*.ko` 与 `bin/susfs_insmod`。
+- 文件：`susfs_allinone-1.2.7.zip`
+- 大小：12,644,511 B
+- sha256：80f64542fffdf4503284e25b5f84fad01a16e02ad5269dec1dd687007b47386a
 
-## 校验
+## 升级
 
-- 文件：`susfs_allinone-1.2.6.zip`
-- 大小：12,642,973 B
-- sha256：a58e41ada1b605e4d757a262503ba7eed693be6a839d51a0c9abcd1f529c5858
-
-## 说明
-
-r18.9 是上游的修复版本，但仍建议先在测试设备冷启动确认 LKM 加载与规则正常，再用于主力机。
+1.2.6 用户可覆盖安装；1.2.5 仍需先手动安装 1.2.6 或 1.2.7。

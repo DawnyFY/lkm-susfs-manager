@@ -440,6 +440,7 @@ cfg_load() {
         case "$_k" in
             auto_load) auto_load=$_v ;;
             hide_sus_mnts) hide_sus_mnts=$_v ;;
+            anonymous_stats) anonymous_stats=$_v ;;
             avc_spoof) avc_spoof=$_v ;;
             replace_rules) replace_rules=$_v ;;
             hide_ksu_loop) hide_ksu_loop=$_v ;;
@@ -857,6 +858,57 @@ install_id() {
     _id=$(sha256sum "$(install_key_file)" 2>/dev/null | cut -c1-16)
     [ -n "$_id" ] || { printf 'unknown\n'; return 1; }
     printf '%s\n' "$_id"
+}
+
+# ---- 匿名安装统计 ----
+# 只发送 install_id + 版本号；服务端只记录这三项，不接收设备信息/日志/路径。
+anonymous_stats_enabled() {
+    [ "$(cfg_get anonymous_stats 1)" = "1" ]
+}
+
+stats_token_file() { printf '%s' "$STATE/server_token"; }
+
+report_install() {
+    _st_f=$(stats_token_file)
+    _st_vc=$(grep '^versionCode=' "$MODDIR/module.prop" 2>/dev/null | tail -1 | cut -d= -f2)
+    _st_ver=$(grep '^version=' "$MODDIR/module.prop" 2>/dev/null | tail -1 | cut -d= -f2)
+    [ -n "$_st_vc" ] || return 1
+    if ! anonymous_stats_enabled; then
+        rm -f "$_st_f" 2>/dev/null
+        return 0
+    fi
+    if [ -s "$_st_f" ]; then
+        _st_saved_vc=$(grep '^version_code=' "$_st_f" 2>/dev/null | cut -d= -f2)
+        _st_saved_tk=$(grep '^token=' "$_st_f" 2>/dev/null | cut -d= -f2-)
+        [ "$_st_saved_vc" = "$_st_vc" ] && [ -n "$_st_saved_tk" ] && return 0
+    fi
+    _st_id=$(install_id 2>/dev/null)
+    case "$_st_id" in *[!0-9a-f]*) echo "stats: install_id unavailable" >> "$STATE/stats.log" 2>/dev/null; return 1 ;; esac
+    _st_curl="${STATS_CURL:-/system/bin/curl}"
+    [ -x "$_st_curl" ] || _st_curl=$(command -v curl 2>/dev/null)
+    [ -x "$_st_curl" ] || { echo "stats: curl unavailable" >> "$STATE/stats.log" 2>/dev/null; return 1; }
+    _st_url="${STATS_URL:-https://susfs.stdawns.top/api/v1/install}"
+    _st_body="{\"install_id\":\"$_st_id\",\"version\":\"$_st_ver\",\"version_code\":$_st_vc}"
+    _st_resp=$("$_st_curl" -fsS --connect-timeout 8 --max-time 15 \
+        -A "LKM-SUSFS/${_st_ver:-unknown}" \
+        -H 'content-type: application/json' -X POST --data "$_st_body" "$_st_url" 2>/dev/null) || {
+        echo "stats: request failed" >> "$STATE/stats.log" 2>/dev/null
+        return 1
+    }
+    _st_token=$(printf '%s' "$_st_resp" | sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+    _st_exp=$(printf '%s' "$_st_resp" | sed -n 's/.*"expires_at"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+    case "$_st_token" in *[!A-Za-z0-9._-]*|'') echo "stats: invalid token" >> "$STATE/stats.log" 2>/dev/null; return 1 ;; esac
+    mkdir -p "$STATE" 2>/dev/null
+    ( umask 077; {
+        printf 'version_code=%s\n' "$_st_vc"
+        printf 'version=%s\n' "$_st_ver"
+        printf 'token=%s\n' "$_st_token"
+        printf 'expires_at=%s\n' "$_st_exp"
+        printf 'saved_at=%s\n' "$(date '+%F %T' 2>/dev/null)"
+    } > "$_st_f" ) 2>/dev/null || return 1
+    chmod 600 "$_st_f" 2>/dev/null
+    echo "stats: reported version_code=$_st_vc" >> "$STATE/stats.log" 2>/dev/null
+    return 0
 }
 
 # 版本升级（含 promote_pending_update.sh 保留 state/ 的就地升级）清理旧暂停状态。

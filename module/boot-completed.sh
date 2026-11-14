@@ -13,6 +13,8 @@ _cf_gate || { clear_boot_guard_keep_pause; echo "=== boot-completed: 文件被�
 
 cfg_ensure
 cfg_load
+# 匿名安装统计：只申请一次，后台执行，不阻塞开机；开关关闭时不发请求
+( report_install >> "$STATE/stats.log" 2>&1 & ) 2>/dev/null || true
 # 配置不能改变模块路径与状态目录
 MODDIR=/data/adb/modules/susfs_allinone
 CONFIG=$MODDIR/config
