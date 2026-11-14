@@ -265,7 +265,7 @@
           <input type="checkbox" id="anonymousStats">
           <span class="switch" aria-hidden="true"></span>
         </label>
-        <p class="row-hint">只发送随机 install_id 和模块版本，用于统计安装量；不发送设备型号、序列号、路径或日志。关闭会删除本地 token，并且不再请求。只有加载/应用失败时会自动上传 load.log/apply.log 尾段用于定位，成功时不上传。</p>
+        <p class="row-hint">只发送随机 install_id 和模块版本，用于统计安装量；不发送设备型号、序列号、路径或日志。关闭会删除本地 token，并且不再请求。只有加载/应用失败时会先在设备本地保存快照，再自动上传 load.log/apply.log 尾段用于定位；成功时不上传。</p>
       </div>
 
       <div class="card">

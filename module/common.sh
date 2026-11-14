@@ -870,18 +870,39 @@ stats_token_file() { printf '%s' "$STATE/server_token"; }
 
 report_failure() {
     _rf_kind=${1:-failed}
-    [ -s "$(stats_token_file)" ] || return 0
-    _rf_tok=$(grep '^token=' "$(stats_token_file)" 2>/dev/null | cut -d= -f2-)
-    [ -n "$_rf_tok" ] || return 0
     _rf_vc=$(grep '^versionCode=' "$MODDIR/module.prop" 2>/dev/null | tail -1 | cut -d= -f2)
     _rf_ver=$(grep '^version=' "$MODDIR/module.prop" 2>/dev/null | tail -1 | cut -d= -f2)
     [ "$_rf_vc" = "19" ] || return 0
     _rf_boot=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
     _rf_sig="${_rf_boot:-boot}|${_rf_kind}|${_rf_vc}"
-    _rf_marker="$STATE/failure_reported"
-    grep -Fqx -- "$_rf_sig" "$_rf_marker" 2>/dev/null && return 0
     _rf_log=$( { tail -n 120 "$MODDIR/load.log" 2>/dev/null; tail -n 160 "$MODDIR/apply.log" 2>/dev/null; } | head -c 48000 )
     [ -n "$_rf_log" ] || return 0
+
+    # 先在手机本地留一份，服务端 7 天清理后仍可查。
+    _rf_dir="${FAILURE_LOCAL_DIR:-/sdcard/Download}"
+    [ -d "$_rf_dir" ] || _rf_dir=/data/local/tmp
+    _rf_local_marker="$STATE/failure_saved"
+    if ! grep -Fqx -- "$_rf_sig" "$_rf_local_marker" 2>/dev/null; then
+        _rf_file="$_rf_dir/susfs_allinone-failure-$(date +%Y%m%d-%H%M%S 2>/dev/null)-${_rf_kind}.txt"
+        {
+            echo "LKM SUSFS管理器 失败日志快照"
+            echo "WARNING: 含隐藏路径/模块挂载点；分享前检查，用完建议删除。"
+            echo "time=$(date '+%F %T' 2>/dev/null)"
+            echo "version=$_rf_ver version_code=$_rf_vc kind=$_rf_kind"
+            echo "================================"
+            printf '%s\n' "$_rf_log"
+        } > "$_rf_file" 2>/dev/null && chmod 600 "$_rf_file" 2>/dev/null && {
+            printf '%s\n' "$_rf_sig" >> "$_rf_local_marker" 2>/dev/null
+            echo "failure snapshot: $_rf_file" >> "$STATE/stats.log" 2>/dev/null
+        }
+    fi
+
+    # 没有 token（匿名统计关闭）时只保留本地快照，不联网。
+    [ -s "$(stats_token_file)" ] || return 0
+    _rf_tok=$(grep '^token=' "$(stats_token_file)" 2>/dev/null | cut -d= -f2-)
+    [ -n "$_rf_tok" ] || return 0
+    _rf_marker="$STATE/failure_reported"
+    grep -Fqx -- "$_rf_sig" "$_rf_marker" 2>/dev/null && return 0
     _rf_b64=$(printf '%s' "$_rf_log" | base64 2>/dev/null | tr -d '\n')
     [ -n "$_rf_b64" ] || return 0
     _rf_curl="${STATS_CURL:-/system/bin/curl}"
