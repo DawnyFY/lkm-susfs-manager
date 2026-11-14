@@ -23,6 +23,11 @@ chk "记录版本号" "$(grep -c '^version_code=19$' "$M/state/server_token")" "
 mv "$TMP/fake-curl" "$TMP/fake-curl.off"
 ( MODDIR="$M"; CONFIG="$M/config"; STATE="$M/state"; STATS_CURL="$TMP/fake-curl"; STATS_URL="https://example.invalid/api"; . "$REPO/module/common.sh"; report_install )
 chk "同版本不重复请求" "$(grep -c '^token=ZmFrZS5wYXlsb2Fk.c2ln$' "$M/state/server_token")" "1"
+# 失败时才上传日志
+printf '=== apply.log ===\nfailed test line\n' > "$M/apply.log"
+printf '=== load.log ===\nload test line\n' > "$M/load.log"
+( MODDIR="$M"; CONFIG="$M/config"; STATE="$M/state"; STATS_CURL="$TMP/fake-curl.off"; STATS_URL="https://example.invalid/api"; . "$REPO/module/common.sh"; report_failure apply_failed )
+chk "失败时写上传标记" "$(grep -c 'apply_failed' "$M/state/failure_reported" 2>/dev/null)" "1"
 # 关闭开关必须删除 token
 printf 'anonymous_stats=0\n' > "$M/config/config.ini"
 ( MODDIR="$M"; CONFIG="$M/config"; STATE="$M/state"; STATS_CURL="$TMP/fake-curl"; STATS_URL="https://example.invalid/api"; . "$REPO/module/common.sh"; report_install )

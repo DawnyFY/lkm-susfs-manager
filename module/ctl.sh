@@ -338,6 +338,7 @@ case "$1" in
         case "$_arc" in
             0|5) [ "$_lrc" = "0" ] && susfs_kernel_ready && clear_boot_guard ;;
         esac
+        if [ "$_lrc" != "0" ] || [ "$_arc" != "0" ]; then ( report_failure "manual_failed" >> "$STATE/stats.log" 2>&1 & ) 2>/dev/null || true; fi
         exit "$_arc"
         ;;
     apply)
@@ -346,6 +347,7 @@ case "$1" in
         case "$_arc" in
             0|5) susfs_kernel_ready && clear_boot_guard ;;
         esac
+        if [ "$_arc" != "0" ]; then ( report_failure "apply_failed" >> "$STATE/stats.log" 2>&1 & ) 2>/dev/null || true; fi
         exit "$_arc"
         ;;
     allow_lkm)

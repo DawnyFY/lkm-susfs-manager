@@ -35,7 +35,8 @@
 
 - 新增 anonymous_stats 开关，默认开启；只发送 install_id + 版本号，关闭删除本地 token。
 - 开机/保存时最多申请一次版本绑定 token；失败不阻塞开机。
-- 真实联网与 D1 写入需在设备上验证。
+- 设备实测：1.2.7 / versionCode 19；ctl report_install 返回 0；state/server_token 600；D1 写入当前 install_id + 1.2.7 + 时间戳。
+- 服务端只接受 1.2.7 / 19；1.2.6 请求返回 400。
 
 ## 1.2.6 候选（手动验证）
 

@@ -48,6 +48,12 @@ case "$rc" in
     5) echo "[!] 规则部分失败（rc=5），本 boot 已完成，详见 apply.log"
        clear_boot_guard ;;
 esac
+# 只有失败时自动上传日志；成功/跳过不上传。无独立开关，关闭匿名统计即无 token。
+_ar=$(cat "$STATE/apply_result" 2>/dev/null)
+case "$_ar" in
+    success|skipped) ;;
+    *) ( report_failure "apply_${_ar:-failed}" >> "$STATE/stats.log" 2>&1 & ) 2>/dev/null || true ;;
+esac
 case "$rc" in
     0|5) printf '%s %s\n' "$(date '+%F %T' 2>/dev/null)" "$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)" > "$STATE/boot_stage_completed" 2>/dev/null ;;
 esac

@@ -16,7 +16,7 @@
     "隐私": "Privacy",
     "匿名统计": "Anonymous stats",
     "匿名安装统计": "Anonymous install stats",
-    "只发送随机 install_id 和模块版本，用于统计安装量；不发送设备型号、序列号、路径或日志。关闭会删除本地 token，并且不再请求。": "Only a random install_id and the module version are sent for install counts; no device model, serial, paths, or logs. Turning this off deletes the local token and stops requests.",
+    "只发送随机 install_id 和模块版本，用于统计安装量；不发送设备型号、序列号、路径或日志。关闭会删除本地 token，并且不再请求。只有加载/应用失败时会自动上传 load.log/apply.log 尾段用于定位，成功时不上传。": "Only a random install_id and module version are sent for install counts; no device model, serial, paths, or logs. Turning this off deletes the local token and stops requests. Only on load/apply failure are the tails of load.log/apply.log uploaded automatically; nothing is uploaded on success.",
     "导出文件包含隐藏路径、模块挂载点和 install_id，分享前请检查，用完建议删除。继续导出？": "The export contains hidden paths, module mounts, and the install_id. Review it before sharing and delete it afterwards. Continue?",
     "日志已导出：%s": "Logs exported: %s",
     "配置": "Config",

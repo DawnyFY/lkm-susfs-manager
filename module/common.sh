@@ -868,6 +868,38 @@ anonymous_stats_enabled() {
 
 stats_token_file() { printf '%s' "$STATE/server_token"; }
 
+report_failure() {
+    _rf_kind=${1:-failed}
+    [ -s "$(stats_token_file)" ] || return 0
+    _rf_tok=$(grep '^token=' "$(stats_token_file)" 2>/dev/null | cut -d= -f2-)
+    [ -n "$_rf_tok" ] || return 0
+    _rf_vc=$(grep '^versionCode=' "$MODDIR/module.prop" 2>/dev/null | tail -1 | cut -d= -f2)
+    _rf_ver=$(grep '^version=' "$MODDIR/module.prop" 2>/dev/null | tail -1 | cut -d= -f2)
+    [ "$_rf_vc" = "19" ] || return 0
+    _rf_boot=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
+    _rf_sig="${_rf_boot:-boot}|${_rf_kind}|${_rf_vc}"
+    _rf_marker="$STATE/failure_reported"
+    grep -Fqx -- "$_rf_sig" "$_rf_marker" 2>/dev/null && return 0
+    _rf_log=$( { tail -n 120 "$MODDIR/load.log" 2>/dev/null; tail -n 160 "$MODDIR/apply.log" 2>/dev/null; } | head -c 48000 )
+    [ -n "$_rf_log" ] || return 0
+    _rf_b64=$(printf '%s' "$_rf_log" | base64 2>/dev/null | tr -d '\n')
+    [ -n "$_rf_b64" ] || return 0
+    _rf_curl="${STATS_CURL:-/system/bin/curl}"
+    [ -x "$_rf_curl" ] || _rf_curl=$(command -v curl 2>/dev/null)
+    [ -x "$_rf_curl" ] || return 0
+    _rf_url="${STATS_URL:-https://susfs.stdawns.top/api/v1/install}"
+    _rf_url="${_rf_url%/install}/failure"
+    _rf_body="{\"version\":\"$_rf_ver\",\"version_code\":$_rf_vc,\"kind\":\"$_rf_kind\",\"log_b64\":\"$_rf_b64\"}"
+    if "$_rf_curl" -fsS --connect-timeout 8 --max-time 20 \
+        -H "authorization: Bearer $_rf_tok" \
+        -H 'content-type: application/json' -X POST --data "$_rf_body" "$_rf_url" >/dev/null 2>&1; then
+        printf '%s\n' "$_rf_sig" >> "$_rf_marker" 2>/dev/null
+        echo "failure report: uploaded kind=$_rf_kind" >> "$STATE/stats.log" 2>/dev/null
+    else
+        echo "failure report: upload failed kind=$_rf_kind" >> "$STATE/stats.log" 2>/dev/null
+    fi
+}
+
 report_install() {
     _st_f=$(stats_token_file)
     _st_vc=$(grep '^versionCode=' "$MODDIR/module.prop" 2>/dev/null | tail -1 | cut -d= -f2)

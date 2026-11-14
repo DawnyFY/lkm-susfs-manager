@@ -62,6 +62,12 @@ KSU / Magisk 环境不显示该卡片。
 - token 按 versionCode 绑定，升级后重新申请；同一版本只申请一次
 - 首次开机或保存配置时请求一次，失败不阻塞开机
 
+## 失败日志上传
+
+- 只有加载/应用失败时自动上传 `load.log`/`apply.log` 尾段（约 48KB）到 `/api/v1/failure`
+- 成功/跳过不上传；没有独立开关，关闭匿名统计后无 token，也就不会上传
+- 服务端只保留 7 天；日志可能含隐藏路径，用于定位，不适合公开
+
 ## install_id / install_key
 
 - 安装时在 `state/install_key` 生成 32 字节随机 hex，权限 600；升级时优先复用旧值
