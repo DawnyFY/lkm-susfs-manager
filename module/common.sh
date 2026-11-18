@@ -948,16 +948,14 @@ report_install() {
     if [ -s "$_st_f" ]; then
         _st_saved_vc=$(grep '^version_code=' "$_st_f" 2>/dev/null | cut -d= -f2)
         _st_saved_tk=$(grep '^token=' "$_st_f" 2>/dev/null | cut -d= -f2-)
-        _st_exp=$(grep '^expires_at=' "$_st_f" 2>/dev/null | cut -d= -f2-)
-        # token 180 天到期；剩不足 7 天就重签一次，否则到期后失败上报会永久 401
+        # token 180 天到期：用签发时刻的 epoch 判断（不解析 ISO 时间，toybox date 解析不可靠），
+        # 剩不足 7 天就重签一次，否则到期后失败上报会永久 401
         _st_stale=0
-        case "$_st_exp" in
-            ????-??-??T*)
-                _st_exp_s=$(date -d "$_st_exp" +%s 2>/dev/null)
-                [ -n "$_st_exp_s" ] || _st_exp_s=0
-                [ "$_st_exp_s" -gt 0 ] && [ "$((_st_exp_s - $(date +%s)))" -lt 604800 ] && _st_stale=1
-                ;;
-        esac
+        _st_se=$(grep '^saved_epoch=' "$_st_f" 2>/dev/null | cut -d= -f2)
+        case "$_st_se" in ''|*[!0-9]*) _st_stale=1 ;; esac
+        if [ "$_st_stale" = "0" ] && [ "$(( $(date +%s) - _st_se ))" -gt $((173 * 86400)) ]; then
+            _st_stale=1
+        fi
         [ "$_st_saved_vc" = "$_st_vc" ] && [ -n "$_st_saved_tk" ] && [ "$_st_stale" = "0" ] && return 0
     fi
     _st_id=$(install_id 2>/dev/null)
@@ -996,6 +994,7 @@ report_install() {
         printf 'token=%s\n' "$_st_token"
         printf 'expires_at=%s\n' "$_st_exp"
         printf 'saved_at=%s\n' "$(date '+%F %T' 2>/dev/null)"
+        printf 'saved_epoch=%s\n' "$(date +%s 2>/dev/null)"
     } > "$_st_f" ) 2>/dev/null || return 1
     chmod 600 "$_st_f" 2>/dev/null
     echo "stats: reported version_code=$_st_vc" >> "$STATE/stats.log" 2>/dev/null

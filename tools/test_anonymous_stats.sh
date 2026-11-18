@@ -46,6 +46,17 @@ chmod +x "$TMP/flaky-curl"
 chk "首次失败后重试成功仍写 token" "$(grep -c '^token=RkxBS1kuVE9LRU4.c2ln$' "$M/state/server_token" 2>/dev/null)" "1"
 chk "确实请求了两次" "$([ -e "$TMP/flaky.state" ] && echo yes || echo no)" "yes"
 
+# token 临近到期（签发超过 173 天）必须重签，否则 180 天后失败上报永久 401
+printf 'version_code=19\nversion=1.2.7\ntoken=OLD.tok\nexpires_at=2027-01-01T00:00:00Z\nsaved_at=x\nsaved_epoch=%s\n' \
+    "$(( $(date +%s) - 200 * 86400 ))" > "$M/state/server_token"
+( MODDIR="$M"; CONFIG="$M/config"; STATE="$M/state"; STATS_CURL="$TMP/flaky-curl"; STATS_URL="https://example.invalid/api"; . "$REPO/module/common.sh"; report_install )
+chk "旧 token 会被重签" "$(grep -c '^token=RkxBS1kuVE9LRU4.c2ln$' "$M/state/server_token" 2>/dev/null)" "1"
+chk "重签后记录 saved_epoch" "$(grep -c '^saved_epoch=[0-9]' "$M/state/server_token" 2>/dev/null)" "1"
+
+# 未到期的 token 必须复用（不请求）
+( MODDIR="$M"; CONFIG="$M/config"; STATE="$M/state"; STATS_CURL="$TMP/does-not-exist"; STATS_URL="https://example.invalid/api"; . "$REPO/module/common.sh"; report_install )
+chk "未到期不重复请求" "$(grep -c '^token=RkxBS1kuVE9LRU4.c2ln$' "$M/state/server_token" 2>/dev/null)" "1"
+
 # 关闭开关必须删除 token
 printf 'anonymous_stats=0\n' > "$M/config/config.ini"
 ( MODDIR="$M"; CONFIG="$M/config"; STATE="$M/state"; STATS_CURL="$TMP/fake-curl"; STATS_URL="https://example.invalid/api"; . "$REPO/module/common.sh"; report_install )
