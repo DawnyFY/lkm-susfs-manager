@@ -31,12 +31,33 @@
 - 35/35 测试通过；1.2.5 的 kallsyms 零地址回退已验证（1.2.4/r18.9 冷启动已验证）。
 - `check_zip` / `check_no_crlf` 通过。
 
-## 1.2.7 候选（匿名统计）
+## 1.2.7（已发布，2026-11-18）
 
-- 新增 anonymous_stats 开关，默认开启；只发送 install_id + 版本号，关闭删除本地 token。
-- 开机/保存时最多申请一次版本绑定 token；失败不阻塞开机。
-- 设备实测：1.2.7 / versionCode 19；ctl report_install 返回 0；state/server_token 600；D1 写入当前 install_id + 1.2.7 + 时间戳。
-- 服务端只接受 1.2.7 / 19；1.2.6 请求返回 400。
+构建：13,183,411 B，sha256 `574a466357ff698d2cbee635fa3ffa08330b12837dadc0d6cd949cd24099dd5e`，
+manifest `8d93ac3c…`；同源码重建字节一致。离线 35/35、门禁 5/5、`I18N_OK`。
+
+**Probe PID Guard（自研内核模块，Beta）**
+
+- 装载：`ctl.sh pid_guard_reload` → `loaded=1`、`visible=0`、`hidden=1`、`result=ok`、`kmi=android15-6.6`
+- 隐藏：`/proc/modules` 命中 0；`/proc/susfs_hide_modules` 名字含 `generic_pid_guard`
+- sysfs：`parameters/` 三个文件 `-r--r-----`（0440）；`su 2000` 读 0400 对照文件为 Permission denied，参数文件对该 uid 不可见
+- 参数即时生效：改 `target_uids` 后 `/sys/module/generic_pid_guard/parameters/target_uids` 立即变化
+- 关闭：`enabled=0` → `result=unloaded`、`/sys/module` 消失、隐藏名单回到 `susfs_guard_lkm kernelsu`；改回 → 恢复
+- 配置校验：`target_comms=*` / `target_comms=$(reboot)` / `target_uids=abc` / 两侧全空 → 全部 `rejected`，旧配置哈希不变
+- 未验证：其余 5 套 KMI（只编译）；冷启动首次装载（临时 root 重启即失效）
+
+**sus_path 目录重建**
+
+- 首次 apply → 规则带真实 inode；不改动再 apply → `[=] 已存在`（无 churn）；
+  删除重建后再 apply → `[i] inode 已变，撤销旧规则后重加` + 新 inode 落表
+- 前提：`replace_rules=0` 才会走到该分支；`=1` 时每次全量重建，同样能恢复
+
+**匿名统计**
+
+- 开关在「关于」页，切换即写 `config.ini` 并生效；关闭立即删除 `state/server_token`
+- 设备实测：`set_stats 0` → 值 0 且 token 删除；`set_stats 1` → 值 1、token 重签、`stats.log` 记 `reported version_code=19`
+- 失败上报：`state/failures` 落盘（700/600），`/sdcard/Download` 不新增；`{"ok":true}` 返回正常
+- 服务端只接受 1.2.7 / 19；1.2.6 请求返回 400
 
 ## 1.2.6 候选（手动验证）
 

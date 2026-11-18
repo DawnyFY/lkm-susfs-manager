@@ -1,6 +1,31 @@
 # 常见问题
 
 <details>
+<summary><b>PID 隐藏（Probe PID Guard）怎么关，关了会怎样</b></summary>
+
+WebUI「PID 隐藏」页把开关关掉即可，保存即生效：立即 `rmmod`，并从 `/proc/susfs_hide_modules` 撤掉名字，不需要重启。
+也可以在 `config/pid_guard.conf` 里把 `enabled=1` 改成 `0`，下次 apply 时卸载。
+
+它只影响 `getppid` 伪装，不影响任何 SUSFS 规则；关掉后状态卡会显示「已关闭」、最近结果 `unloaded`。
+
+装完想看是否真的生效：状态卡「内核模块」应为已加载、「内核可见」应为否（`/proc/modules` 命中 0）、
+「隐藏列表」应为已隐藏；命令行为 `ctl.sh status | grep pid_guard` 与 `ls /sys/module/generic_pid_guard`。
+</details>
+
+<details>
+<summary><b>PID 隐藏保存后提示「配置无效」</b></summary>
+
+`pid_guard.conf` 只接受受限字符：字母数字与 `_,.:/@+-`，comm 允许 `*` 但只能作后缀。常见触发点：
+
+- 「目标 comm」里写了空格（例如 `probe-*, canProbe*`）——空格会被拒绝，因为旧实现下空格会让整行静默失效
+- 写了裸 `*` 想匹配全部进程——内核侧空前缀判定为不匹配，配置侧直接拒绝
+- `target_uids` 写了非数字（如 `abc`）、两端带 `-`、或 `1-2-3` 这种多段
+- `target_uids` 与 `target_comms` 同时为空
+
+被拒绝时旧配置不会被覆盖，`load.log` 会记 `配置被拒绝：...`，状态码为 `bad_conf`。
+</details>
+
+<details>
 <summary><b>KMI 匹配失败 / 内核带 -dirty 怎么办</b></summary>
 
 先跑 `ctl.sh kmiinfo`。无 Android tag 的 5.15 会尝试按 SDK 33/34 消歧；仍失败时在 WebUI 配置页填「强制指定 KMI」。自编译内核可能因符号/CFI 不匹配失败，不要反复试。

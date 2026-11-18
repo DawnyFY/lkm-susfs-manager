@@ -17,7 +17,9 @@
 
 ---
 
-A **multi-manager** SUSFS LKM module: auto-detect KMI → load the SUSFS LKM → apply rules → write status back to the module description. Includes a MIUIX-style WebUI (Chinese/English).
+A **multi-manager** SUSFS LKM manager: auto-detect KMI → load the SUSFS LKM → apply rules → write status back to the module description. Includes a MIUIX-style WebUI (Chinese/English).
+
+Since 1.2.7 it also ships a **self-developed kernel module**, Probe PID Guard (`generic_pid_guard`, GPL-2.0, source at `source/generic_pid_guard/`), which spoofs `getppid` for matching UID/comm targets.
 
 It is no longer limited to the KernelSU family:
 
@@ -55,7 +57,9 @@ Upgrade by flashing the new zip over the old one; `config/` and `state/` are pre
 - **KernelPatch runtime probe**: reads the `KernelPatch Version:` dmesg banner; reports `unknown` when dmesg is unavailable instead of guessing.
 - **Boot guard / pstore crash pause / half-load protection**: avoids bootloops after a bad LKM.
 - **Rules and hiding**: `sus_path`, `sus_mount`, `try_umount`, `hide_modules`, AVC spoofing, optional extra hiding.
-- **WebUI**: status / config / logs / about; APatch environments get an extra APatch card.
+- **WebUI**: status / config / PID hiding / logs / about; APatch environments get an extra APatch card.
+- **Probe PID Guard (Beta, optional)**: self-developed `generic_pid_guard` LKM using `kretprobe __arm64_sys_getppid` to spoof `getppid` for matching UID ranges / comm prefixes; six KMIs bundled (5.10/5.15/6.1/6.6/6.12/6.18); enabled by default, can be turned off on the PID hiding page; after loading it registers itself in `/proc/susfs_hide_modules` alongside `kernelsu`.
+- **First-class "PID hiding" page**: six status cards (enabled / kernel module / visible in kernel / hide list / last result / matched processes) plus independent save; parameter changes reload the module, disabling unloads it.
 
 ## APatch (experimental)
 
@@ -119,6 +123,7 @@ Please include `load.log`, `apply.log` and `ctl.sh status`. For APatch, also inc
 
 - Scripts/installer/WebUI: **GPL-2.0** (`LICENSE`)
 - Third-party binaries: `lib/susfs_guard_lkm-*.ko`, `bin/susfs_insmod` (GPL-2.0), `bin/ksu_susfs_good` (AGPL-3.0)
+- Self-developed kernel module: `lib/pid_guard/<kmi>/generic_pid_guard.ko` (GPL-2.0), source `source/generic_pid_guard/`
 - Copyright and licenses remain with the original authors; see [UPSTREAM.md](docs/UPSTREAM.md), `NOTICE` and `provenance.json`
 
 ---

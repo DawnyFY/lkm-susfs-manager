@@ -17,7 +17,9 @@
 
 ---
 
-一个**多管理器**的 SUSFS LKM 模块：自动匹配 KMI → 加载 SUSFS LKM → 下发规则 → 状态写回模块描述，附带中文 MIUIX WebUI。
+一个**多管理器**的 SUSFS LKM 管理器：自动匹配 KMI → 加载 SUSFS LKM → 下发规则 → 状态写回模块描述，附带中文/英文 MIUIX WebUI。
+
+1.2.7 起除上游 SUSFS LKM 外，还自带一个**自研内核模块** Probe PID Guard（`generic_pid_guard`，GPL-2.0，源码在 `source/generic_pid_guard/`），按 UID/comm 伪装 `getppid`。
 
 不再只适用于 KernelSU 系：
 
@@ -53,13 +55,38 @@
 - **KernelPatch 运行时探测**：读 dmesg banner；不可读显示 `unknown`，不误报。
 - **启动守卫 / pstore 崩溃暂停 / 半加载保护**：避免错误 LKM 导致反复 bootloop。
 - **规则与隐藏**：`sus_path`、`sus_mount`、`try_umount`、`hide_modules`、AVC 伪装、扩展隐藏项。
-- **WebUI**：状态 / 配置 / 日志 / 关于；APatch 环境额外显示 APatch 卡片。
+- **WebUI**：状态 / 配置 / PID 隐藏 / 日志 / 关于；APatch 环境额外显示 APatch 卡片。
+- **Probe PID Guard（Beta，可选）**：自研 `generic_pid_guard` LKM，`kretprobe __arm64_sys_getppid`，按 UID 范围 / comm 前缀伪装 `getppid`；随包 6 套 KMI（5.10/5.15/6.1/6.6/6.12/6.18），默认开启、可在「PID 隐藏」页关闭；装载后自动写入 `/proc/susfs_hide_modules`，与 `kernelsu` 同级隐藏。
+- **「PID 隐藏」一级页**：六张状态卡（已启用 / 内核模块 / 内核可见 / 隐藏列表 / 最近结果 / 命中进程）+ 独立保存；改参数即时 `rmmod`+`insmod`，关闭立即卸载。
 
 ## APatch（实验性）
 
 APatch/KernelPatch 下默认**不自动加载** SUSFS LKM；需要外挂时，先确认内核没有内置 SUSFS，再执行 `ctl.sh allow_lkm` 或 WebUI 放行。QEMU 已验证模块路径 14/14，但真机安装、ABI、WebUI 卡片均未验收。
 
 详见 [APatch 实验性支持](docs/APATCH.md)。
+
+## 自研内核模块（1.2.7+）
+
+模块现在包含两个内核侧组件，来源不同，请分开看待：
+
+| 组件 | 来源 | 许可证 | 说明 |
+|---|---|---|---|
+| `lib/susfs_guard_lkm-*.ko`、`bin/susfs_insmod` | 上游 inforcqb/susfs4ksu-lkm | GPL-2.0 | 未修改，sha256 与上游 Release 一致 |
+| `lib/pid_guard/<kmi>/generic_pid_guard.ko` | **本项目自研** | GPL-2.0 | 源码随仓库分发：`source/generic_pid_guard/` |
+
+Probe PID Guard 是本项目自行编写并编译的：`kretprobe __arm64_sys_getppid`，命中目标后改写返回值；
+参数在 insmod 时传入（`target_uids` / `target_comms` / `exclude_comms`），
+sysfs 侧权限为 `0440`，只有 root 可读。它是可选组件，默认开启，关闭即卸载。
+
+```
+source/generic_pid_guard/
+├── generic_pid_guard.c     # 唯一源文件
+├── generic_pid_guard.lds
+├── Makefile
+├── build_one.sh            # 在 DDK 容器里编单个 KMI
+├── build_inside.sh
+└── README.md               # KMI 表、编译命令、产物 sha256
+```
 
 ## 安全
 
@@ -90,7 +117,8 @@ APatch/KernelPatch 下默认**不自动加载** SUSFS LKM；需要外挂时，�
 - QEMU GKI：SUSFS LKM 加载/隐藏/恢复；模块级 APatch 路径 14/14。
 - 离线：35/35 测试通过。
 - 未验证：Magisk 真机冷启动、APatch 真机全链路、其余 7 个 KMI。
-- 已知缺口：`sus_path` 目标目录删除重建后旧 inode 规则失效（重新挂接原型未合并）。
+- PID Guard：真机仅 6.6.77 验证装载 / 隐藏 / 参数即时重载 / 关闭卸载；其余 5 套 KMI 只编译未运行。
+- `sus_path` 目录重建：1.2.7 起普通规则也按 inode 比对，下次 apply 会撤销旧规则并按新 inode 重加；即时恢复仍需内核事件钩子（原型未合并）。
 - 默认隐藏 `/data/adb`：NeoZygisk 用户必须删除该行；模块/SUSFS 不支持从已隐藏父目录中排除子目录（外部反馈的 zygote 循环风险）。
 
 详见 [验证记录与限制](docs/VERIFICATION.md)。
@@ -109,6 +137,7 @@ APatch/KernelPatch 下默认**不自动加载** SUSFS LKM；需要外挂时，�
 
 - 本项目脚本/安装器/WebUI：**GPL-2.0**（`LICENSE`）
 - 第三方二进制：`lib/susfs_guard_lkm-*.ko`、`bin/susfs_insmod`（GPL-2.0）、`bin/ksu_susfs_good`（AGPL-3.0）
+- 自研内核模块：`lib/pid_guard/<kmi>/generic_pid_guard.ko`（GPL-2.0），源码 `source/generic_pid_guard/`
 - 版权与许可证归原作者所有，详见 [上游关系与许可](docs/UPSTREAM.md)、`NOTICE`、`provenance.json`
 
 ---

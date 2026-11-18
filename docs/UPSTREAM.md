@@ -2,13 +2,18 @@
 
 ## 依赖关系
 
-本项目**不包含任何自研内核代码**。全部 SUSFS 能力来自上游项目，本仓库只做集成与适配：
+**1.2.6 及更早**：本项目不包含自研内核代码，SUSFS 能力全部来自上游，仓库只做集成与适配。
+
+**1.2.7 起变更**：新增一个自研内核模块 Probe PID Guard（`lib/pid_guard/<kmi>/generic_pid_guard.ko`，GPL-2.0），
+源码随仓库分发（`source/generic_pid_guard/`）。它与 SUSFS 无关、不修改上游代码，只额外提供 `getppid` 伪装能力。
+SUSFS 部分仍然完全来自上游。
 
 ```
 ├─ simonpunk / susfs4ksu        原始 SUSFS 内核补丁（GPL-2.0）
 │    └─ inforcqb / susfs4ksu-lkm    SUSFS 的 LKM 移植，产出 8 个 KMI 的 .ko + susfs_insmod
 │         ├─ 上游自带 loader        susfs_guard_lkm-module-<tag>-arm64.zip（只加载，无规则）
 │         └─ 本项目  ← 在本仓库     加载 + 规则下发 + WebUI + 多管理器阶段适配
+├─ 本项目自研（1.2.7+）         Probe PID Guard：generic_pid_guard.ko（6 KMI，GPL-2.0）
 └─ sidex15 / ksu_module_susfs    ksu_susfs 用户态工具（AGPL-3.0）
 ```
 
@@ -32,6 +37,8 @@
 ## 许可证
 
 - 本项目脚本、安装器与 WebUI：**GPL-2.0**（`LICENSE`）；
+- 自研内核模块（1.2.7+）：
+  - `lib/pid_guard/<kmi>/generic_pid_guard.ko` — 本项目作者，GPL-2.0，源码在 `source/generic_pid_guard/`；
 - 第三方二进制：
   - `lib/susfs_guard_lkm-*.ko`、`bin/susfs_insmod` — inforcqb / `susfs4ksu-for-lkm` `v2.3.0-r18.9-1`，GPL-2.0，未修改；
   - `bin/ksu_susfs_good` — sidex15 & simonpunk / `susfs4ksu-module` `v1.5.2+_R28`，AGPL-3.0，未修改；
