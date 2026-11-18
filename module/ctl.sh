@@ -375,8 +375,12 @@ case "$1" in
         exit "$_arc"
         ;;
     pid_guard_reload)
-        # 只重载可选的 PID 隐藏组件：不碰 SUSFS 规则、不触发 LKM 加载
-        sh "$MODDIR/pid_guard.sh" "$KMI"
+        # 只重载可选的 PID 隐藏组件：不碰 SUSFS 规则、不触发 LKM 加载。
+        # KMI 必须用 select_kmi 现算（$KMI 只在 status() 内部赋值，这里为空会掉进
+        # pid_guard.sh 的 uname -r 兜底，而 osrelease 可能已被本模块伪装）
+        _pg_rel=$(real_kernel_release 2>/dev/null)
+        _pg_kmi=$(select_kmi "$_pg_rel" "$MODDIR" 2>/dev/null)
+        sh "$MODDIR/pid_guard.sh" "${_pg_kmi:-unknown}"
         _prc=$?
         echo "pid_guard_result=$(grep -m1 '^result=' "$STATE/pid_guard.status" 2>/dev/null | cut -d= -f2)"
         exit "$_prc"

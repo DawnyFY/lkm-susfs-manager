@@ -295,6 +295,10 @@ rm -f "$STATE/sus_mount_added.txt" "$STATE/sus_mount_added.txt.boot" \
       "$STATE/try_umount_added.txt" "$STATE/try_umount_added.txt.boot" 2>/dev/null
 set_description "✅ LKM 已加载 | $KMI | ${VERSION:-unknown}"
 # 可选组件：单独限时，避免把 load.sh 顶过外层 timeout 30 而误判加载失败
-timeout 8 sh "$MODDIR/pid_guard.sh" "$KMI" 2>/dev/null || true
+if command -v timeout >/dev/null 2>&1; then
+    timeout 8 sh "$MODDIR/pid_guard.sh" "$KMI" 2>/dev/null || true
+else
+    sh "$MODDIR/pid_guard.sh" "$KMI" 2>/dev/null || true
+fi
 echo "=== load ok ==="
 exit 0

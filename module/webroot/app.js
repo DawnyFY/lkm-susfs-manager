@@ -488,6 +488,8 @@ const PG_RESULT_TEXT = {
   stale: "未知",
   no_ko: "未知",
   skipped: "未知",
+  bad_conf: "配置无效",
+  unsupported: "当前管理器不支持",
 };
 
 async function loadPidGuardStatus() {

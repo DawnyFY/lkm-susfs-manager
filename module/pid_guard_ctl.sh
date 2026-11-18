@@ -15,6 +15,23 @@ value_ok() {
     return 0
 }
 
+# UID 只接受数字或数字-数字
+uids_ok() {
+    [ -n "$1" ] || return 0
+    _r=$1
+    while :; do
+        case "$_r" in
+            *,*) _t=${_r%%,*}; _r=${_r#*,} ;;
+            *) _t=$_r; _r="" ;;
+        esac
+        case "$_t" in
+            ''|*[!0-9-]*|*-*-*|-*|*-) return 1 ;;
+        esac
+        [ -n "$_r" ] || break
+    done
+    return 0
+}
+
 fail() { echo "rejected: $1" >&2; exit 1; }
 
 validate() {
@@ -25,8 +42,10 @@ validate() {
     [ -n "$_v_en" ] || fail "missing enabled"
     case "$_v_en" in 0|1) ;; *) fail "enabled must be 0 or 1" ;; esac
     value_ok "$_v_uids"  || fail "target_uids illegal char / empty item / space"
+    uids_ok "$_v_uids"   || fail "target_uids must be digits or digits-digits"
     value_ok "$_v_comms" || fail "target_comms illegal char / empty item / space"
     value_ok "$_v_exc"   || fail "exclude_comms illegal char / empty item / space"
+    [ -n "$_v_uids$_v_comms" ] || fail "target_uids and target_comms cannot both be empty"
     case "$_v_uids$_v_exc" in *'*'*) fail "wildcard * not allowed in uid/exclude" ;; esac
     case ",$_v_comms," in
         *",*,"*|*",**,"*) fail "comm wildcard * must be a suffix; bare * hits every process" ;;

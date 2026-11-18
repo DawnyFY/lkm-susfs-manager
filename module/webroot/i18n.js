@@ -187,6 +187,8 @@
     "未隐藏": "Not hidden",
     "失败": "Failed",
     "已卸载": "Unloaded",
+    "配置无效": "Invalid config",
+    "当前管理器不支持": "Not supported here",
     "可选组件，不影响 SUSFS 规则。保存后立即生效，参数变更会重新加载内核模块；关闭会立即卸载内核模块，不残留到重启；装载或卸载失败会写入「最近结果」。": "Optional component; it never affects SUSFS rules. Takes effect immediately after saving, and changing the parameters reloads the kernel module; disabling unloads it right away instead of waiting for a reboot; load or unload failures appear in Last result.",
     "PID 隐藏配置已保存并应用。": "PID hiding settings saved and applied.",
     "PID 隐藏配置已保存并应用": "PID hiding settings saved and applied",

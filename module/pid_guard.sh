@@ -75,11 +75,8 @@ unload() {
 # 赋值规则把整个字段截断成空——insmod 仍成功、状态仍 ok，功能静默消失。
 conf_get() { grep -m1 "^$1=" "$CONF" 2>/dev/null | cut -d= -f2-; }
 
-pg_reject() {
-    log "[!] pid_guard 配置被拒绝：$1（本次不加载，修好保存后自动重试）"
-    write_status bad_conf "" "" 2
-    exit 0
-}
+PG_BAD=""
+pg_reject() { PG_BAD=$1; }
 
 # 允许字符：字母数字与 _,.:/@+- ；comm 额外允许 * 但只能作后缀
 pg_value_ok() {
@@ -87,6 +84,24 @@ pg_value_ok() {
         *[!A-Za-z0-9_,.:/@+*-]*) return 1 ;;
         *,|,*|*,,*|*" "*) return 1 ;;
     esac
+    return 0
+}
+
+# UID 只接受数字或数字-数字（99000 / 99000-99999）
+pg_uids_ok() {
+    [ -n "$1" ] || return 0
+    _pu=""
+    _pr=$1
+    while :; do
+        case "$_pr" in
+            *,*) _pt=${_pr%%,*}; _pr=${_pr#*,} ;;
+            *) _pt=$_pr; _pr="" ;;
+        esac
+        case "$_pt" in
+            ''|*[!0-9-]*|*-*-*|-*|*-) return 1 ;;
+        esac
+        [ -n "$_pr" ] || break
+    done
     return 0
 }
 
@@ -99,12 +114,24 @@ EXCLUDES=$(conf_get exclude_comms)
 case "$ENABLED" in 1) ;; *) ENABLED=0 ;; esac
 
 pg_value_ok "$UIDS"     || pg_reject "target_uids 含非法字符/空项/空格"
+pg_uids_ok "$UIDS"      || pg_reject "target_uids 只能是数字或 数字-数字"
 pg_value_ok "$COMMS"    || pg_reject "target_comms 含非法字符/空项/空格"
 pg_value_ok "$EXCLUDES" || pg_reject "exclude_comms 含非法字符/空项/空格"
 case "$UIDS$EXCLUDES" in *'*'*) pg_reject "UID/排除项不允许 *" ;; esac
 case ",$COMMS," in
     *",*,"*|*",**,"*) pg_reject "目标 comm 的 * 只能作后缀，不能是裸 *" ;;
 esac
+[ -n "$UIDS$COMMS" ] || pg_reject "target_uids 与 target_comms 不能同时为空"
+
+if [ -n "$PG_BAD" ]; then
+    log "[!] pid_guard 配置被拒绝：$PG_BAD（本次不加载，修好保存后自动重试）"
+    write_status bad_conf "" "" 2
+    # 即便配置无效，enabled=0 的意图仍然要执行（关掉就该卸载）
+    if [ "$ENABLED" != "1" ]; then
+        unload || true
+    fi
+    exit 0
+fi
 
 if [ "$ENABLED" != "1" ]; then
     unload || exit 1

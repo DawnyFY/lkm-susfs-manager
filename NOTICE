@@ -34,7 +34,8 @@ LKM SUSFS管理器（susfs_allinone）— 第三方组件声明 / Third-Party No
    文件   : lib/pid_guard/<kmi>/generic_pid_guard.ko（5.10 / 5.15 / 6.1 / 6.6 / 6.12 / 6.18）
    作者   : 本项目作者（1stDawn）
    许可证 : GNU General Public License v2.0（全文见 LICENSE）
-   本包内源码：source/generic_pid_guard/（generic_pid_guard.c、链接脚本、Makefile、编译脚本、README）
+   源码   : 项目仓库内的 source/generic_pid_guard/（generic_pid_guard.c、链接脚本、Makefile、
+            编译脚本、README）；zip 内仅含编译产物，源码按下方「书面要约」提供
    修改   : 自研代码，非上游派生；使用 DDK 镜像按各 KMI 独立编译
    校验   : 各 ko 的 sha256 见 provenance.json 的 assets_sha256（合规门禁逐一比对）
 
