@@ -329,10 +329,11 @@ if [ -f "$CONFIG/sus_path.txt" ]; then
                 *pending*) : ;;
                 *dev=*ino=*)
                     if [ -e "$path" ]; then
-                        _sp_dev=$(stat -c %d "$path" 2>/dev/null)
                         _sp_ino=$(stat -c %i "$path" 2>/dev/null)
+                        # 只比 ino：SUSFS 输出的 dev 是 major<<20|minor，与 stat -c %d 的原始
+                        # st_dev 编码不同，比 dev 会永远不相等、导致每次 apply 撤旧重加
                         case "$_sp_line" in
-                            *"dev=$_sp_dev ino=$_sp_ino "*) ;;
+                            *" ino=$_sp_ino "*) ;;
                             *)
                                 if susfs_path_del "$path"; then
                                     _sp_present=0
@@ -401,10 +402,9 @@ if [ -f "$CONFIG/sus_path_loop.txt" ]; then
                     _spl_should_add=0
                 fi
             elif [ -e "$path" ]; then
-                _spl_dev=$(stat -c %d "$path" 2>/dev/null)
                 _spl_ino=$(stat -c %i "$path" 2>/dev/null)
                 case "$_spl_line" in
-                    *"dev=$_spl_dev ino=$_spl_ino "*) _spl_should_add=0 ;;
+                    *" ino=$_spl_ino "*) _spl_should_add=0 ;;
                 esac
             else
                 _spl_should_add=0

@@ -5,7 +5,11 @@
 # 幂等：enabled=1 且已加载时只补隐藏；enabled=0 时主动卸载（不必重启）。
 # 本脚本的失败只写 state/pid_guard.status 与 load.log，不动 state/fail_count：
 # 可选的 PID 隐藏失败不应该触发 SUSFS 自动加载暂停。
-MODDIR=${0%/*}
+# 无路径调用（sh pid_guard.sh）时 ${0%/*} 会退化成脚本名，这里兜底到模块目录
+case "$0" in
+    */*) MODDIR=${0%/*} ;;
+    *) MODDIR=/data/adb/modules/susfs_allinone ;;
+esac
 MODNAME=generic_pid_guard
 CONF="$MODDIR/config/pid_guard.conf"
 STATE="$MODDIR/state"
