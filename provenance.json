@@ -21,7 +21,13 @@
     "susfs_guard_lkm-android15-6.6.ko": "a6ecb1331fc5baf1d4f82b60ab09736b3c3d391112ed5b9a1f1b9b36ca4e19ed",
     "susfs_guard_lkm-android16-6.12.ko": "404dad69109af3debf6b5b2234ff059016262fafa84711863c9b99e67f15d71b",
     "susfs_guard_lkm-android17-6.18.ko": "691ef01c95402846fe0df51989789c0a5349677c691ef844af69d6485ba3ff86",
-    "susfs_insmod": "0dbd44178aee66128ffdd33e30c91bc0ffdce01397def8f993aa6075d4adc316"
+    "susfs_insmod": "0dbd44178aee66128ffdd33e30c91bc0ffdce01397def8f993aa6075d4adc316",
+    "lib/pid_guard/5.10/generic_pid_guard.ko": "cd5d5351014e7f8ba63b8797851f1cc1dfcec899ce4db54630d0d4b3d88c2781",
+    "lib/pid_guard/5.15/generic_pid_guard.ko": "5cc5b69b4298b9f89bb45d18b6cb8528c616198680feef997310033bff27e06e",
+    "lib/pid_guard/6.1/generic_pid_guard.ko": "c36f084d4189a0d846945c38adaaf66ddc1248a2d88a78a4bac3dc8230bc2148",
+    "lib/pid_guard/6.6/generic_pid_guard.ko": "5878c01a484b528f18ab432b57f01da46848be9c95a24dcab329b42008608149",
+    "lib/pid_guard/6.12/generic_pid_guard.ko": "3fb239abc96f12134c3b83e4c1b125460502b123fa1e8a573f887cf3337fc0dd",
+    "lib/pid_guard/6.18/generic_pid_guard.ko": "0973a7578089e0beb389010bf41a8ddaec4fc140d922638f51cafb030b8f6512"
   },
   "license": "GPL-2.0",
   "components": [
@@ -55,6 +61,16 @@
       "sha256": "8B9FA0174AB9BC95910258F935628DFB9B551AE9B5074BA0EB1FA85E06590641",
       "size": 43588,
       "source_offer": "https://github.com/sidex15/susfs4ksu-module/tree/v1.5.2%2B"
+    },
+    {
+      "name": "Probe PID Guard LKM",
+      "files": [
+        "lib/pid_guard/<kmi>/generic_pid_guard.ko"
+      ],
+      "author": "1stDawn (this project)",
+      "repository": "bundled: source/generic_pid_guard/",
+      "license": "GPL-2.0",
+      "modified": "self-developed, not derived from upstream; built per KMI with DDK images"
     }
   ],
   "source_offer": "See NOTICE for the written offer; upstream source tarballs are published with each GitHub release referenced above, or available on request for three years.",

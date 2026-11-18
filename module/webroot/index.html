@@ -25,6 +25,7 @@
   <nav class="tabs" aria-label="页面导航">
     <button class="tab active" data-tab="status" type="button">状态</button>
     <button class="tab" data-tab="config" type="button">配置</button>
+    <button class="tab" data-tab="pidguard" type="button">PID 隐藏</button>
     <button class="tab" data-tab="log" type="button">日志</button>
     <button class="tab" data-tab="about" type="button">关于</button>
   </nav>
@@ -54,7 +55,7 @@
           <h2>公告 <span class="badge">发布</span></h2>
           <button id="btnAnnounce" class="btn small" type="button">查看详情</button>
         </div>
-        <p id="announceSummary" class="hint">1.2.5 临时修复版已发布；1.2.6 候选正在准备 updateJson、sus_path_loop 和日志导出。</p>
+        <p id="announceSummary" class="hint">1.2.7 已发布：Probe PID Guard（可选，Beta）、匿名安装统计与失败尾段上传、一级 PID 隐藏页。</p>
       </div>
 
       <div class="grid stats">
@@ -310,6 +311,66 @@
       </div>
     </section>
 
+    <section id="tab-pidguard" class="tab-panel">
+      <div class="card hero">
+        <div class="hero-main">
+          <p class="eyebrow">Probe PID Guard</p>
+          <div id="pgState" class="mono kernel">读取中…</div>
+          <div class="chips">
+            <span class="chip mono" id="pgUidChip">目标 UID —</span>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <button id="btnPgRefresh" class="btn ghost" type="button">刷新状态</button>
+          <button id="btnPgApply" class="btn primary" type="button">保存并应用</button>
+        </div>
+      </div>
+
+      <div class="grid stats">
+        <div class="card stat">
+          <span class="stat-label">已启用</span>
+          <strong id="pgStatEnabled" data-state="bad">—</strong>
+        </div>
+        <div class="card stat">
+          <span class="stat-label">内核模块</span>
+          <strong id="pgStatLoaded" data-state="bad">—</strong>
+        </div>
+        <div class="card stat">
+          <span class="stat-label">内核可见</span>
+          <strong id="pgStatVisible">—</strong>
+        </div>
+        <div class="card stat">
+          <span class="stat-label">隐藏列表</span>
+          <strong id="pgStatHidden" data-state="bad">—</strong>
+        </div>
+        <div class="card stat">
+          <span class="stat-label">最近结果</span>
+          <strong id="pgStatResult">—</strong>
+        </div>
+        <div class="card stat">
+          <span class="stat-label">命中进程</span>
+          <strong id="pgStatComms" class="mono">—</strong>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>getppid 隐藏规则 <span class="badge badge-beta">Beta</span></h2>
+        <label class="switch-row">
+          <span>启用 PID 隐藏（开机加载）</span>
+          <input type="checkbox" id="pidGuardEnabled" checked>
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <p class="row-hint">只对匹配的 UID/comm 进程伪装 getppid。默认只覆盖 isolated probe（99000-99999），不会 hook 普通主进程；主 App 被 hook 可能触发完整性自检崩溃。</p>
+        <label class="switch-row"><span>目标 UID / 范围</span><input type="text" id="pidGuardUids" spellcheck="false" placeholder="99000-99999"></label>
+        <p class="row-hint">逗号分隔，支持 <code>99000-99999</code> 范围。</p>
+        <label class="switch-row"><span>目标 comm（* 后缀）</span><input type="text" id="pidGuardComms" spellcheck="false" placeholder="probe-*,canProbe*,ivecheck*"></label>
+        <p class="row-hint">逗号分隔；例如 <code>probe-*,canProbe*</code>。</p>
+        <label class="switch-row"><span>排除 comm</span><input type="text" id="pidGuardExcludes" spellcheck="false" placeholder="nqiunativecheck"></label>
+        <p class="row-hint">永远不匹配这些进程；主 App 建议保留排除。保存后立即生效，参数变更会重新加载内核模块。</p>
+        <p class="pg-notes">可选组件，不影响 SUSFS 规则。保存后立即生效，参数变更会重新加载内核模块；关闭会立即卸载内核模块，不残留到重启；装载或卸载失败会写入「最近结果」。</p>
+      </div>
+    </section>
+
     <section id="tab-log" class="tab-panel">
       <div class="card">
         <div class="row log-head">
@@ -399,7 +460,7 @@
     <h3 id="announceTitle">公告</h3>
     <div id="announceBody">
       <p>1.2.5 已发布：kallsyms 回退、boot guard 自愈、超时与升级状态修复。</p>
-      <p>1.2.6 候选：管理器更新提示、sus_path_loop、手动日志导出。</p>
+      <p>1.2.7：新增 PID 隐藏页与 Probe PID Guard；保存即生效，关闭即卸载。</p>
       <p>APatch 仍为实验性，未做真机验收。</p>
     </div>
     <div class="modal-actions">

@@ -30,6 +30,22 @@ mkdir -p "$TMP/Download"
 ( MODDIR="$M"; CONFIG="$M/config"; STATE="$M/state"; FAILURE_LOCAL_DIR="$TMP/Download"; STATS_CURL="$TMP/fake-curl.off"; STATS_URL="https://example.invalid/api"; . "$REPO/module/common.sh"; report_failure apply_failed )
 chk "失败时写本地快照" "$(ls "$TMP/Download"/susfs_allinone-failure-*.txt 2>/dev/null | wc -l | tr -d " ")" "1"
 chk "失败时写上传标记" "$(grep -c 'apply_failed' "$M/state/failure_reported" 2>/dev/null)" "1"
+
+# 首次请求失败、第二次成功：必须还能拿到 token（锁住“一次重试”）
+rm -f "$M/state/server_token"
+cat > "$TMP/flaky-curl" <<'EOF'
+#!/bin/sh
+if [ ! -e "__FLAKY__" ]; then : > "__FLAKY__"; exit 7; fi
+cat <<'JSON'
+{"token":"RkxBS1kuVE9LRU4.c2ln","version":"1.2.7","version_code":19,"expires_at":"2027-01-01T00:00:00Z"}
+JSON
+EOF
+sed -i "s#__FLAKY__#$TMP/flaky.state#g" "$TMP/flaky-curl"
+chmod +x "$TMP/flaky-curl"
+( MODDIR="$M"; CONFIG="$M/config"; STATE="$M/state"; STATS_CURL="$TMP/flaky-curl"; STATS_URL="https://example.invalid/api"; . "$REPO/module/common.sh"; report_install )
+chk "首次失败后重试成功仍写 token" "$(grep -c '^token=RkxBS1kuVE9LRU4.c2ln$' "$M/state/server_token" 2>/dev/null)" "1"
+chk "确实请求了两次" "$([ -e "$TMP/flaky.state" ] && echo yes || echo no)" "yes"
+
 # 关闭开关必须删除 token
 printf 'anonymous_stats=0\n' > "$M/config/config.ini"
 ( MODDIR="$M"; CONFIG="$M/config"; STATE="$M/state"; STATS_CURL="$TMP/fake-curl"; STATS_URL="https://example.invalid/api"; . "$REPO/module/common.sh"; report_install )

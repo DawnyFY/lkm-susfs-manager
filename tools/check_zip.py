@@ -41,8 +41,18 @@ REQUIRED = {
     "webroot/app.js",
     "webroot/style.css",
     "config/sus_path_loop.txt",
+    "pid_guard.sh",
+    "pid_guard_ctl.sh",
+    "config/pid_guard.conf",
+    "lib/pid_guard/5.10/generic_pid_guard.ko",
+    "lib/pid_guard/5.15/generic_pid_guard.ko",
+    "lib/pid_guard/6.1/generic_pid_guard.ko",
+    "lib/pid_guard/6.6/generic_pid_guard.ko",
+    "lib/pid_guard/6.12/generic_pid_guard.ko",
+    "lib/pid_guard/6.18/generic_pid_guard.ko",
 }
-EXEC_REQUIRED = {"load.sh", "apply.sh", "ctl.sh", "action.sh", "customize.sh", "service.sh"}
+EXEC_REQUIRED = {"load.sh", "apply.sh", "ctl.sh", "action.sh", "customize.sh", "service.sh",
+                 "pid_guard.sh", "pid_guard_ctl.sh"}
 
 
 def fail(message: str) -> None:

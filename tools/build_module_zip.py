@@ -36,6 +36,8 @@ EXEC_NAMES = {
     "post-fs-data.sh",
     "boot-completed.sh",
     "service.sh",
+    "pid_guard.sh",
+    "pid_guard_ctl.sh",
     "customize.sh",
     "bin/susfs_insmod",
     "bin/ksu_susfs_good",

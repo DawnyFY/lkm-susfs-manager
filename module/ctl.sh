@@ -94,6 +94,30 @@ status() {
     _AF=${_AF:-0}
     case "$_AF" in ''|*[!0-9]*) _AF=0 ;; esac
     printf 'apply_fails=%s\n' "$_AF"
+
+    # Probe PID Guard（可选组件）：配置、驻留、可见性、最近一次结果
+    _PG_EN=0
+    [ -f "$CONFIG/pid_guard.conf" ] && _PG_EN=$(grep -m1 '^enabled=' "$CONFIG/pid_guard.conf" 2>/dev/null | cut -d= -f2)
+    case "$_PG_EN" in 0|1) ;; *) _PG_EN=0 ;; esac
+    _PG_LOADED=0
+    [ -d /sys/module/generic_pid_guard ] && _PG_LOADED=1
+    _PG_VISIBLE=0
+    grep -qw generic_pid_guard /proc/modules 2>/dev/null && _PG_VISIBLE=1
+    _PG_HIDDEN=0
+    # 只有真的加载了才算「已隐藏」：卸载后残留的名字不该让页面显示已隐藏
+    if [ "$_PG_LOADED" = "1" ]; then
+        grep -qw generic_pid_guard /proc/susfs_hide_modules 2>/dev/null && _PG_HIDDEN=1
+    fi
+    _PG_RES=$(grep -m1 '^result=' "$STATE/pid_guard.status" 2>/dev/null | cut -d= -f2)
+    printf 'pid_guard_enabled=%s\n' "$_PG_EN"
+    printf 'pid_guard_loaded=%s\n' "$_PG_LOADED"
+    printf 'pid_guard_visible=%s\n' "$_PG_VISIBLE"
+    printf 'pid_guard_hidden=%s\n' "$_PG_HIDDEN"
+    printf 'pid_guard_result=%s\n' "${_PG_RES:-unknown}"
+    _PG_UIDS=$(grep -m1 '^target_uids=' "$CONFIG/pid_guard.conf" 2>/dev/null | cut -d= -f2-)
+    _PG_COMMS=$(grep -m1 '^target_comms=' "$CONFIG/pid_guard.conf" 2>/dev/null | cut -d= -f2-)
+    printf 'pid_guard_uids=%s\n' "$_PG_UIDS"
+    printf 'pid_guard_comms=%s\n' "$_PG_COMMS"
     if kernelpatch_present; then _KP=1; else _KP=0; fi
     printf 'kernelpatch=%s\n' "$_KP"
     printf 'apatch_userland=%s\n' "$_KP"
@@ -349,6 +373,13 @@ case "$1" in
         esac
         if [ "$_arc" != "0" ]; then ( report_failure "apply_failed" >> "$STATE/stats.log" 2>&1 & ) 2>/dev/null || true; fi
         exit "$_arc"
+        ;;
+    pid_guard_reload)
+        # 只重载可选的 PID 隐藏组件：不碰 SUSFS 规则、不触发 LKM 加载
+        sh "$MODDIR/pid_guard.sh" "$KMI"
+        _prc=$?
+        echo "pid_guard_result=$(grep -m1 '^result=' "$STATE/pid_guard.status" 2>/dev/null | cut -d= -f2)"
+        exit "$_prc"
         ;;
     allow_lkm)
         _cf_gate || { echo "文件与发布包不一致，拒绝执行"; exit 1; }

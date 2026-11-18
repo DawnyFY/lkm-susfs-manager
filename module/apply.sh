@@ -794,6 +794,11 @@ RULES=$(grep '^path=' /proc/susfs_path 2>/dev/null | grep -v '\[ours:' | sed 's/
 RULES=${RULES:-0}
 echo "[i] 当前用户 sus_path 唯一规则数: $RULES"
 printf '%s\n' "${_rule_fails:-0}" > "$STATE/apply_fails" 2>/dev/null
+
+# 8c. Probe PID Guard：配置改了就就地重载/卸载，不必重启
+# 可选组件，成败不影响本次 apply 的结果（自己写 state/pid_guard.status）
+sh "$MODDIR/pid_guard.sh" "$KMI" >/dev/null 2>&1 || true
+
 if [ "${_rule_fails:-0}" -gt 0 ] 2>/dev/null; then
     echo "[!] 本次有 $_rule_fails 条规则下发失败，详见 apply.log"
     set_description "⚠️ 运行中 | $RULES 条规则 | $KMI | $_rule_fails 条失败（见 apply.log）"

@@ -460,6 +460,87 @@ async function loadConfig() {
   const saveBtn = $("btnSave");
   if (saveBtn) saveBtn.disabled = !filesOk;
   if (!filesOk) showBanner("规则文件读取失败，已禁用保存以免覆盖现有内容", "error", 6000);
+  await loadPidGuardConfig();
+}
+
+async function loadPidGuardConfig() {
+  const enabled = $("pidGuardEnabled");
+  if (!enabled) return;
+  try {
+    const raw = await exec("sh /data/adb/modules/susfs_allinone/pid_guard_ctl.sh get");
+    const cfg = parseKV(raw);
+    enabled.checked = (cfg.enabled === undefined ? "0" : cfg.enabled) === "1";
+    $("pidGuardUids").value = cfg.target_uids || "";
+    $("pidGuardComms").value = cfg.target_comms || "";
+    $("pidGuardExcludes").value = cfg.exclude_comms || "";
+  } catch (e) {
+    // 旧版管理器没有该配置；保持默认，不阻塞配置页
+  }
+}
+
+// ---- PID 隐藏页：状态与保存 ----
+// 结果码 → 文案；ok/unloaded/failed 由 pid_guard.sh 写入 state/pid_guard.status
+const PG_RESULT_TEXT = {
+  ok: "正常",
+  unloaded: "已卸载",
+  failed: "失败",
+  unload_failed: "失败",
+  stale: "未知",
+  no_ko: "未知",
+  skipped: "未知",
+};
+
+async function loadPidGuardStatus() {
+  if (!$("pgState")) return;
+  try {
+    const st = parseKV(await exec(CTL + " status"));
+    const on = st.pid_guard_enabled === "1";
+    const loaded = st.pid_guard_loaded === "1";
+    const visible = st.pid_guard_visible === "1";
+    const hidden = st.pid_guard_hidden === "1";
+    setText("pgState", !on ? "已关闭" : loaded ? "运行中" : "未加载");
+    setText("pgStatEnabled", on ? "是" : "否");
+    setState("pgStatEnabled", on);
+    setText("pgStatLoaded", loaded ? "已加载" : "未加载");
+    setState("pgStatLoaded", loaded);
+    setText("pgStatVisible", visible ? "是" : "否");
+    setState("pgStatVisible", !visible);
+    setText("pgStatHidden", hidden ? "已隐藏" : "未隐藏");
+    setState("pgStatHidden", hidden);
+    setText("pgStatResult", PG_RESULT_TEXT[st.pid_guard_result] || "未知");
+    setText("pgStatComms", st.pid_guard_comms || "—");
+    const chip = $("pgUidChip");
+    if (chip) chip.textContent = tr("目标 UID") + " " + (st.pid_guard_uids || "—");
+  } catch (e) {
+    setText("pgState", "未知");
+  }
+}
+
+async function savePidGuard() {
+  const pg = "# Probe PID Guard\n" +
+    "enabled=" + ($("pidGuardEnabled") && $("pidGuardEnabled").checked ? 1 : 0) + "\n" +
+    "target_uids=" + ($("pidGuardUids") ? $("pidGuardUids").value.trim() : "") + "\n" +
+    "target_comms=" + ($("pidGuardComms") ? $("pidGuardComms").value.trim() : "") + "\n" +
+    "exclude_comms=" + ($("pidGuardExcludes") ? $("pidGuardExcludes").value.trim() : "") + "\n";
+  try {
+    await exec("sh /data/adb/modules/susfs_allinone/pid_guard_ctl.sh set_b64 '" + b64EncodeUnicode(pg) + "'");
+    // 只重载可选组件，不跑整条 apply（避免顺带触发 SUSFS LKM 加载这类副作用）
+    const r = await execCode(CTL + " pid_guard_reload");
+    if (r.code !== 0) {
+      throw new Error((r.stderr || r.stdout || ("命令失败 (" + r.code + ")")).trim());
+    }
+    await loadPidGuardStatus();
+    const res = $("#pgStatResult") ? $("#pgStatResult").textContent : "";
+    if (res && res !== tr("正常")) {
+      showBanner("配置已保存，但组件状态：" + res + "（详见 load.log）", "warn", 7000);
+      toast("已保存，组件状态异常");
+    } else {
+      showBanner("PID 隐藏配置已保存并应用。", "ok", 5000);
+      toast("PID 隐藏配置已保存并应用");
+    }
+  } catch (e) {
+    showBanner("PID Guard 配置保存失败：" + e.message, "error", 6000);
+  }
 }
 
 function renderAnnouncement(data) {
@@ -818,6 +899,16 @@ async function saveConfig() {
   ];
   const bundle = b64EncodeUnicode(bundleOrder.map((v) => b64EncodeUnicode(v)).join("|"));
   await exec(CTL + " set_bundle '" + bundle + "'");
+  try {
+    const pg = "# Probe PID Guard\n" +
+      "enabled=" + ($("pidGuardEnabled") && $("pidGuardEnabled").checked ? 1 : 0) + "\n" +
+      "target_uids=" + ($("pidGuardUids") ? $("pidGuardUids").value.trim() : "") + "\n" +
+      "target_comms=" + ($("pidGuardComms") ? $("pidGuardComms").value.trim() : "") + "\n" +
+      "exclude_comms=" + ($("pidGuardExcludes") ? $("pidGuardExcludes").value.trim() : "") + "\n";
+    await exec("sh /data/adb/modules/susfs_allinone/pid_guard_ctl.sh set_b64 '" + b64EncodeUnicode(pg) + "'");
+  } catch (e) {
+    showBanner("PID Guard 配置保存失败：" + e.message, "error", 6000);
+  }
   const r = await execCode(CTL + " apply");
   if (r.code !== 0 && r.code !== 5) {
     throw new Error((r.stderr || r.stdout || ("命令失败 (" + r.code + ")")).trim());
@@ -901,6 +992,12 @@ function initTabs() {
           $("log").textContent = `读取日志失败：${e.message}`;
         });
       }
+      if (btn.dataset.tab === "pidguard") {
+        loadPidGuardConfig();
+        loadPidGuardStatus();
+      }
+      // 页签条可横向滑动：切页后把当前页签滚进可视区
+      if (btn.scrollIntoView) btn.scrollIntoView({ inline: "nearest", block: "nearest" });
     });
   });
 }
@@ -967,6 +1064,13 @@ function bind() {
   }));
 
   $("btnSave").addEventListener("click", (e) => withBusy(e.currentTarget, saveConfig));
+  const pgApply = $("btnPgApply");
+  if (pgApply) pgApply.addEventListener("click", (e) => withBusy(e.currentTarget, savePidGuard));
+  const pgRefresh = $("btnPgRefresh");
+  if (pgRefresh) pgRefresh.addEventListener("click", (e) => withBusy(e.currentTarget, async () => {
+    await loadPidGuardConfig();
+    await loadPidGuardStatus();
+  }));
   $("btnPreset").addEventListener("click", (e) => withBusy(e.currentTarget, openPresetModal));
   $("btnRescanScene").addEventListener("click", (e) => withBusy(e.currentTarget, rescanScene));
   $("presetCancel").addEventListener("click", closePresetModal);

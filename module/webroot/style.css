@@ -177,8 +177,8 @@ button {
   position: sticky;
   top: 10px;
   z-index: 20;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: nowrap;
   gap: 4px;
   margin: 0 0 18px;
   padding: 4px;
@@ -188,18 +188,31 @@ button {
   box-shadow: var(--shadow-soft);
   -webkit-backdrop-filter: saturate(180%) blur(18px);
   backdrop-filter: saturate(180%) blur(18px);
+  /* 页签多于一屏时横向滑动，而不是换行成两排 */
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .tab {
   appearance: none;
   border: 0;
   border-radius: 14px;
-  padding: 9px 6px;
+  padding: 9px 14px;
   background: transparent;
   color: var(--text-2);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
+  flex: 1 0 auto;
+  min-width: 0;
+  white-space: nowrap;
   transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.12s ease;
 }
 
@@ -511,6 +524,21 @@ h2 {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0;
+}
+
+/* 实验性标记：橙色描边，和普通 badge 区分开 */
+.badge-beta {
+  color: #8a4b00;
+  background: var(--warning-soft);
+  border: 1px solid rgba(255, 149, 0, 0.38);
+}
+
+@media (prefers-color-scheme: dark) {
+  .badge-beta {
+    color: #ffb340;
+    background: rgba(255, 149, 0, 0.16);
+    border-color: rgba(255, 149, 0, 0.32);
+  }
 }
 
 .hint {
@@ -1166,6 +1194,16 @@ footer {
   color: var(--text-3);
   font-weight: 400;
 }
+/* PID 页底部说明：灰色整段文字，不用分割线 */
+.pg-notes {
+  margin: 16px 0 0;
+  padding: 0 2px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text-3);
+  font-weight: 400;
+}
+
 /* 下拉框与文本框保持一致的观感 */
 .switch-row select {
   flex: 0 1 58%;

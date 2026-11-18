@@ -872,14 +872,19 @@ report_failure() {
     _rf_kind=${1:-failed}
     _rf_vc=$(grep '^versionCode=' "$MODDIR/module.prop" 2>/dev/null | tail -1 | cut -d= -f2)
     _rf_ver=$(grep '^version=' "$MODDIR/module.prop" 2>/dev/null | tail -1 | cut -d= -f2)
-    [ "$_rf_vc" = "19" ] || return 0
+    # 版本下界而不是写死：换版本时不必改这里（服务端仍按当前版本校验）
+    case "$_rf_vc" in ''|*[!0-9]*) return 0 ;; esac
+    [ "$_rf_vc" -ge 19 ] || return 0
     _rf_boot=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
     _rf_sig="${_rf_boot:-boot}|${_rf_kind}|${_rf_vc}"
     _rf_log=$( { tail -n 120 "$MODDIR/load.log" 2>/dev/null; tail -n 160 "$MODDIR/apply.log" 2>/dev/null; } | head -c 48000 )
     [ -n "$_rf_log" ] || return 0
 
     # 先在手机本地留一份，服务端 7 天清理后仍可查。
-    _rf_dir="${FAILURE_LOCAL_DIR:-/sdcard/Download}"
+    # 默认落模块私有 state/failures（0700 / 文件 0600），不再自动写共享存储：
+    # /sdcard 是 FUSE，chmod 600 不生效，而这份快照含隐藏路径与模块挂载点。
+    _rf_dir="${FAILURE_LOCAL_DIR:-$STATE/failures}"
+    mkdir -p "$_rf_dir" 2>/dev/null && chmod 700 "$_rf_dir" 2>/dev/null
     [ -d "$_rf_dir" ] || _rf_dir=/data/local/tmp
     _rf_local_marker="$STATE/failure_saved"
     if ! grep -Fqx -- "$_rf_sig" "$_rf_local_marker" 2>/dev/null; then
@@ -911,13 +916,23 @@ report_failure() {
     _rf_url="${STATS_URL:-https://susfs.stdawns.top/api/v1/install}"
     _rf_url="${_rf_url%/install}/failure"
     _rf_body="{\"version\":\"$_rf_ver\",\"version_code\":$_rf_vc,\"kind\":\"$_rf_kind\",\"log_b64\":\"$_rf_b64\"}"
-    if "$_rf_curl" -fsS --connect-timeout 8 --max-time 20 \
-        -H "authorization: Bearer $_rf_tok" \
-        -H 'content-type: application/json' -X POST --data "$_rf_body" "$_rf_url" >/dev/null 2>&1; then
+    # 这条网络到服务端的往返可能 >20s，重试一次再放弃（调用方都是后台子 shell）
+    _rf_ok=0
+    for _rf_try in 1 2; do
+        if "$_rf_curl" -fsS --connect-timeout 10 --max-time 30 \
+            -A "LKM-SUSFS/${_rf_ver:-unknown}" \
+            -H "authorization: Bearer $_rf_tok" \
+            -H 'content-type: application/json' -X POST --data "$_rf_body" "$_rf_url" >/dev/null 2>&1; then
+            _rf_ok=1
+            break
+        fi
+        [ "$_rf_try" = "1" ] && sleep 2
+    done
+    if [ "$_rf_ok" = "1" ]; then
         printf '%s\n' "$_rf_sig" >> "$_rf_marker" 2>/dev/null
-        echo "failure report: uploaded kind=$_rf_kind" >> "$STATE/stats.log" 2>/dev/null
+        echo "failure report: uploaded kind=$_rf_kind try=$_rf_try" >> "$STATE/stats.log" 2>/dev/null
     else
-        echo "failure report: upload failed kind=$_rf_kind" >> "$STATE/stats.log" 2>/dev/null
+        echo "failure report: upload failed kind=$_rf_kind tries=$_rf_try" >> "$STATE/stats.log" 2>/dev/null
     fi
 }
 
@@ -933,7 +948,17 @@ report_install() {
     if [ -s "$_st_f" ]; then
         _st_saved_vc=$(grep '^version_code=' "$_st_f" 2>/dev/null | cut -d= -f2)
         _st_saved_tk=$(grep '^token=' "$_st_f" 2>/dev/null | cut -d= -f2-)
-        [ "$_st_saved_vc" = "$_st_vc" ] && [ -n "$_st_saved_tk" ] && return 0
+        _st_exp=$(grep '^expires_at=' "$_st_f" 2>/dev/null | cut -d= -f2-)
+        # token 180 天到期；剩不足 7 天就重签一次，否则到期后失败上报会永久 401
+        _st_stale=0
+        case "$_st_exp" in
+            ????-??-??T*)
+                _st_exp_s=$(date -d "$_st_exp" +%s 2>/dev/null)
+                [ -n "$_st_exp_s" ] || _st_exp_s=0
+                [ "$_st_exp_s" -gt 0 ] && [ "$((_st_exp_s - $(date +%s)))" -lt 604800 ] && _st_stale=1
+                ;;
+        esac
+        [ "$_st_saved_vc" = "$_st_vc" ] && [ -n "$_st_saved_tk" ] && [ "$_st_stale" = "0" ] && return 0
     fi
     _st_id=$(install_id 2>/dev/null)
     case "$_st_id" in *[!0-9a-f]*) echo "stats: install_id unavailable" >> "$STATE/stats.log" 2>/dev/null; return 1 ;; esac
@@ -941,13 +966,26 @@ report_install() {
     [ -x "$_st_curl" ] || _st_curl=$(command -v curl 2>/dev/null)
     [ -x "$_st_curl" ] || { echo "stats: curl unavailable" >> "$STATE/stats.log" 2>/dev/null; return 1; }
     _st_url="${STATS_URL:-https://susfs.stdawns.top/api/v1/install}"
-    _st_body="{\"install_id\":\"$_st_id\",\"version\":\"$_st_ver\",\"version_code\":$_st_vc}"
-    _st_resp=$("$_st_curl" -fsS --connect-timeout 8 --max-time 15 \
-        -A "LKM-SUSFS/${_st_ver:-unknown}" \
-        -H 'content-type: application/json' -X POST --data "$_st_body" "$_st_url" 2>/dev/null) || {
-        echo "stats: request failed" >> "$STATE/stats.log" 2>/dev/null
+    _st_krel=$(real_kernel_release 2>/dev/null)
+    [ -n "$_st_krel" ] || _st_krel=$(cat /proc/sys/kernel/osrelease 2>/dev/null)
+    _st_kver=$(awk '{print $3}' /proc/version 2>/dev/null)
+    # JSON 字符串里只保留可打印字符：引号/反斜杠/控制字符会产出非法 JSON
+    _st_krel=$(printf '%s' "$_st_krel" | tr -d '"\\' | tr -d '[:cntrl:]')
+    _st_kver=$(printf '%s' "$_st_kver" | tr -d '"\\' | tr -d '[:cntrl:]')
+    _st_body="{\"install_id\":\"$_st_id\",\"version\":\"$_st_ver\",\"version_code\":$_st_vc,\"kernel_release\":\"$_st_krel\",\"kernel_version\":\"$_st_kver\"}"
+    # 首次请求可能超时（这条网络往返可达 25s），重试一次再放弃
+    _st_resp=""
+    for _st_try in 1 2; do
+        _st_resp=$("$_st_curl" -fsS --connect-timeout 10 --max-time 30 \
+            -A "LKM-SUSFS/${_st_ver:-unknown}" \
+            -H 'content-type: application/json' -X POST --data "$_st_body" "$_st_url" 2>/dev/null) && break
+        _st_resp=""
+        [ "$_st_try" = "1" ] && sleep 2
+    done
+    if [ -z "$_st_resp" ]; then
+        echo "stats: request failed tries=$_st_try" >> "$STATE/stats.log" 2>/dev/null
         return 1
-    }
+    fi
     _st_token=$(printf '%s' "$_st_resp" | sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
     _st_exp=$(printf '%s' "$_st_resp" | sed -n 's/.*"expires_at"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
     case "$_st_token" in *[!A-Za-z0-9._-]*|'') echo "stats: invalid token" >> "$STATE/stats.log" 2>/dev/null; return 1 ;; esac
@@ -1440,7 +1478,7 @@ kernel_release_spoofed() {
 backup_config() {
     [ -d "$CONFIG" ] || return 0
     mkdir -p "$STATE/config_backup" 2>/dev/null || return 0
-    for _f in config.ini sus_path.txt sus_path_loop.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt; do
+    for _f in config.ini pid_guard.conf sus_path.txt sus_path_loop.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt; do
         [ -f "$CONFIG/$_f" ] && cp -f "$CONFIG/$_f" "$STATE/config_backup/$_f" 2>/dev/null
     done
     # 带时间戳的历史副本，保留最近 3 份（防止当前配置被默认值覆盖后备份也跟着丢）
@@ -1463,7 +1501,7 @@ restore_config_if_missing() {
     mkdir -p "$CONFIG" 2>/dev/null || return 0
     # 只补缺失的文件：已有的规则文件可能是更新的，不能被旧备份覆盖
     _restored=0
-    for _f in config.ini config.ini.default sus_path.txt sus_path_loop.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt; do
+    for _f in config.ini config.ini.default pid_guard.conf sus_path.txt sus_path_loop.txt sus_mount.txt try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt; do
         [ -f "$CONFIG/$_f" ] && continue
         [ -f "$STATE/config_backup/$_f" ] || continue
         cp -f "$STATE/config_backup/$_f" "$CONFIG/$_f" 2>/dev/null && _restored=$((_restored + 1))
