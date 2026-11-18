@@ -16,6 +16,7 @@
   --accent-2: #5b9dff;
   --accent-strong: #1f6fff;
   --accent-soft: rgba(52, 130, 255, 0.11);
+  --accent-border: rgba(52, 130, 255, 0.38);
   --success: #2bbd5a;
   --success-soft: rgba(43, 189, 90, 0.12);
   --danger: #ff3b30;
@@ -52,6 +53,7 @@
     --accent-2: #78b0ff;
     --accent-strong: #69a4ff;
     --accent-soft: rgba(75, 145, 255, 0.16);
+    --accent-border: rgba(120, 176, 255, 0.45);
     --success: #32d74b;
     --success-soft: rgba(50, 215, 75, 0.15);
     --danger: #ff453a;
@@ -377,9 +379,21 @@ main {
   background: var(--accent-strong);
 }
 
+/* 「刷新 / 刷新状态」这类次要按钮：透明底 + 可见描边，避免在浅底卡片上看起来像纯文字 */
 .btn.ghost {
   color: var(--accent);
   background: transparent;
+  border: 1px solid var(--accent-border);
+}
+
+.btn.ghost:active {
+  background: var(--accent-soft);
+}
+
+@media (prefers-color-scheme: dark) {
+  .btn.ghost {
+    border-color: var(--accent-border);
+  }
 }
 
 .btn.danger {

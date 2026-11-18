@@ -318,7 +318,37 @@ if [ -f "$CONFIG/sus_path.txt" ]; then
             echo "[i] 跳过检测类应用数据目录: $path"
             continue
         fi
-        if grep -F -q "path=$path " /proc/susfs_path 2>/dev/null; then
+        # 陈旧 inode 检测：目录被删除重建后，/proc/susfs_path 里那行还在但 dev/ino 已失效。
+        # 只判「行是否存在」会让它永远显示「已存在」、永不重加（loop 规则早已按 dev/ino 判，
+        # 普通规则此前没有，这里补齐）。路径当前不存在时保留旧规则，交给 sus_path_loop 处理。
+        _sp_line=$(grep -F "path=$path " /proc/susfs_path 2>/dev/null | head -n 1)
+        _sp_present=0
+        if [ -n "$_sp_line" ]; then
+            _sp_present=1
+            case "$_sp_line" in
+                *pending*) : ;;
+                *dev=*ino=*)
+                    if [ -e "$path" ]; then
+                        _sp_dev=$(stat -c %d "$path" 2>/dev/null)
+                        _sp_ino=$(stat -c %i "$path" 2>/dev/null)
+                        case "$_sp_line" in
+                            *"dev=$_sp_dev ino=$_sp_ino "*) ;;
+                            *)
+                                if susfs_path_del "$path"; then
+                                    _sp_present=0
+                                    echo "[i] sus_path $path (inode 已变，撤销旧规则后重加)"
+                                else
+                                    echo "[!] sus_path $path (inode 已变，但旧规则无法撤销)"
+                                    _rule_fails=$((_rule_fails + 1))
+                                fi
+                                ;;
+                        esac
+                    fi
+                    ;;
+                *) : ;;  # 老版本不报 dev/ino，无从判断，维持原行为
+            esac
+        fi
+        if [ "$_sp_present" = "1" ]; then
             echo "[=] sus_path $path (已存在)"
         elif "$BIN" add_sus_path "$path" >/dev/null 2>&1; then
             record_our_path "$path"
