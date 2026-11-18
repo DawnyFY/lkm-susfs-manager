@@ -260,16 +260,6 @@
       </div>
 
       <div class="card">
-        <h2>隐私 <span class="badge">匿名统计</span></h2>
-        <label class="switch-row">
-          <span>匿名安装统计</span>
-          <input type="checkbox" id="anonymousStats">
-          <span class="switch" aria-hidden="true"></span>
-        </label>
-        <p class="row-hint">只发送随机 install_id 和模块版本，用于统计安装量；不发送设备型号、序列号、路径或日志。关闭会删除本地 token，并且不再请求。只有加载/应用失败时会先在设备本地保存快照，再自动上传 load.log/apply.log 尾段用于定位；成功时不上传。</p>
-      </div>
-
-      <div class="card">
         <h2>sus_path <span class="badge">隐藏路径</span></h2>
         <p class="hint">每行一个路径，支持 <code>#</code> 注释。建议保留 <code>/data/adb</code>；隐藏后 SukiSU 与本 WebUI 仍可正常使用。保存时是否先清空旧规则，由上方“清空旧规则”开关决定。</p>
         <textarea id="susPath" spellcheck="false" rows="10" placeholder="/data/adb"></textarea>
@@ -409,6 +399,16 @@
           <button id="langEn" class="btn small" type="button">English</button>
         </div>
       </div>
+      <div class="card about reveal">
+        <h2>隐私 <span class="badge">匿名统计</span></h2>
+        <label class="switch-row">
+          <span>匿名安装统计</span>
+          <input type="checkbox" id="anonymousStats">
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+        <p class="row-hint">只发送随机 install_id 和模块版本，用于统计安装量；不发送设备型号、序列号、路径或日志。关闭会删除本地 token，并且不再请求。只有加载/应用失败时会先在设备本地保存快照，再自动上传 load.log/apply.log 尾段用于定位；成功时不上传。</p>
+      </div>
+
       <div class="card about reveal">
         <h2>贡献者</h2>
         <ul class="contributor-list">
