@@ -987,6 +987,12 @@ report_install() {
     _st_token=$(printf '%s' "$_st_resp" | sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
     _st_exp=$(printf '%s' "$_st_resp" | sed -n 's/.*"expires_at"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
     case "$_st_token" in *[!A-Za-z0-9._-]*|'') echo "stats: invalid token" >> "$STATE/stats.log" 2>/dev/null; return 1 ;; esac
+    # 开关可能在请求在途时被关掉：此时不能再把 token 落盘，否则失败上报会继续
+    if ! anonymous_stats_enabled; then
+        echo "stats: switch turned off during request, token discarded" >> "$STATE/stats.log" 2>/dev/null
+        rm -f "$_st_f" 2>/dev/null
+        return 0
+    fi
     mkdir -p "$STATE" 2>/dev/null
     ( umask 077; {
         printf 'version_code=%s\n' "$_st_vc"

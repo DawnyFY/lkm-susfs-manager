@@ -378,6 +378,7 @@ case "$1" in
         # 只重载可选的 PID 隐藏组件：不碰 SUSFS 规则、不触发 LKM 加载。
         # KMI 必须用 select_kmi 现算（$KMI 只在 status() 内部赋值，这里为空会掉进
         # pid_guard.sh 的 uname -r 兜底，而 osrelease 可能已被本模块伪装）
+        [ -f "$MODDIR/kmi.sh" ] && . "$MODDIR/kmi.sh"
         _pg_rel=$(real_kernel_release 2>/dev/null)
         _pg_kmi=$(select_kmi "$_pg_rel" "$MODDIR" 2>/dev/null)
         sh "$MODDIR/pid_guard.sh" "${_pg_kmi:-unknown}"
@@ -610,6 +611,32 @@ case "$1" in
             0) touch "$MODDIR/disable_autoload" 2>/dev/null ;;
             1) rm -f "$MODDIR/disable_autoload" 2>/dev/null ;;
         esac
+        echo "saved"
+        ;;
+    set_stats)
+        # 关于页的匿名统计开关：单独入口，切换即生效（无需再点「保存并应用」）
+        case "${2:-}" in 0|1) ;; *) echo "bad value"; exit 1 ;; esac
+        mkdir -p "$CONFIG" 2>/dev/null
+        _ss="$CONFIG/config.ini"
+        cfg_ensure 2>/dev/null
+        [ -f "$_ss" ] || : > "$_ss"
+        sed -i "/^anonymous_stats=/d" "$_ss" 2>/dev/null
+        # 末行没有换行符时先补一个，否则新键会黏到上一行（config.ini 可能被手改过）
+        if [ -s "$_ss" ] && [ -n "$(tail -c 1 "$_ss" 2>/dev/null)" ]; then
+            printf '\n' >> "$_ss" 2>/dev/null
+        fi
+        printf 'anonymous_stats=%s\n' "$2" >> "$_ss" 2>/dev/null || { echo "write failed"; exit 1; }
+        if [ "$2" = "0" ]; then
+            # 关闭立即撤销本地 token，之后不再请求
+            rm -f "$(stats_token_file)" 2>/dev/null
+        else
+            # setsid 脱离当前会话，避免父 shell 退出时被 SIGHUP 打断（实测会 Hangup）
+            if [ -x /system/bin/setsid ]; then
+                setsid sh "$MODDIR/ctl.sh" report_install >> "$STATE/stats.log" 2>&1 &
+            else
+                ( report_install >> "$STATE/stats.log" 2>&1 & ) 2>/dev/null || true
+            fi
+        fi
         echo "saved"
         ;;
     set_flag)

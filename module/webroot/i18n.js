@@ -16,7 +16,7 @@
     "隐私": "Privacy",
     "匿名统计": "Anonymous stats",
     "匿名安装统计": "Anonymous install stats",
-    "只发送随机 install_id 和模块版本，用于统计安装量；同时会发送内核版本（release / version）用于兼容性排查，服务端不保存这两项。不发送设备型号、序列号与应用列表。关闭会删除本地 token，并且不再请求。只有加载/应用失败时会先在设备本地保存快照，再自动上传 load.log/apply.log 尾段（可能含隐藏路径）用于定位；成功时不上传。": "Only a random install_id and the module version are sent for install counts; the kernel release/version is also sent for compatibility triage, and the server does not store those two. No device model, serial, or app list is sent. Turning this off deletes the local token and stops requests. Only on load/apply failure is a local snapshot saved and the tails of load.log/apply.log (which may contain hidden paths) uploaded automatically; nothing is uploaded on success.",
+    "只发送随机 install_id 和模块版本，用于统计安装量；同时会发送内核版本（release / version）用于兼容性排查，服务端不保存这两项。不发送设备型号、序列号与应用列表。关闭会删除本地 token（令牌），并且不再请求。只有加载/应用失败时会先在设备本地保存快照，再自动上传 load.log/apply.log 尾段（可能含隐藏路径）用于定位；成功时不上传。": "Only a random install_id and the module version are sent for install counts; the kernel release/version is also sent for compatibility triage, and the server does not store those two. No device model, serial, or app list is sent. Turning this off deletes the local token and stops requests. Only on load/apply failure is a local snapshot saved and the tails of load.log/apply.log (which may contain hidden paths) uploaded automatically; nothing is uploaded on success.",
     "导出文件包含隐藏路径、模块挂载点和 install_id，分享前请检查，用完建议删除。继续导出？": "The export contains hidden paths, module mounts, and the install_id. Review it before sharing and delete it afterwards. Continue?",
     "日志已导出：%s": "Logs exported: %s",
     "配置": "Config",
@@ -197,6 +197,11 @@
     "已保存，组件状态异常": "Saved, component state abnormal",
     "1.2.7 已发布：Probe PID Guard（可选，Beta）、匿名安装统计与失败尾段上传、一级 PID 隐藏页。": "1.2.7 released: Probe PID Guard (optional, Beta), anonymous install stats with failure-tail upload, and a first-class PID hiding page.",
     "1.2.7：新增 PID 隐藏页与 Probe PID Guard；保存即生效，关闭即卸载。": "1.2.7: new PID hiding page and Probe PID Guard; saves apply immediately and disabling unloads.",
+    "匿名安装统计已开启。": "Anonymous install stats enabled.",
+    "匿名安装统计已关闭，本地 token 已删除。": "Anonymous install stats disabled; the local token was deleted.",
+    "已开启匿名统计": "Anonymous stats enabled",
+    "已关闭匿名统计": "Anonymous stats disabled",
+    "匿名统计保存失败：": "Failed to save anonymous stats setting: ",
 
     /* ---------- BL 确认块 ---------- */
     "仅用于": "For ",

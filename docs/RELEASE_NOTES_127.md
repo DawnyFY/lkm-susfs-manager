@@ -8,7 +8,7 @@
 
 客户端在该请求里还会带上 `kernel_release` / `kernel_version`（内核构建串）用于兼容性排查——**服务端当前不保存这两个字段**，只做入库前的校验与丢弃。设备型号、序列号、应用列表一律不发送。
 
-仅加载/应用失败时：先在 `/sdcard/Download` 留一份快照，再把 `load.log` / `apply.log` 尾段自动上传到 `/api/v1/failure`（服务端保留 7 天）；成功时不上传。
+仅加载/应用失败时：先在模块私有目录 `state/failures`（0700 / 文件 0600）留一份快照，再把 `load.log` / `apply.log` 尾段自动上传到 `/api/v1/failure`（服务端保留 7 天）；成功时不上传。不再自动写入 `/sdcard/Download`。
 
 ## Probe PID Guard
 

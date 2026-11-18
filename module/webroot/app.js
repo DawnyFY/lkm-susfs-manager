@@ -1073,6 +1073,27 @@ function bind() {
     await loadPidGuardConfig();
     await loadPidGuardStatus();
   }));
+
+  // 关于页的匿名统计开关：切换即保存（该页没有「保存并应用」按钮）
+  const statsBox = $("anonymousStats");
+  if (statsBox) {
+    statsBox.addEventListener("change", async () => {
+      const on = statsBox.checked;
+      try {
+        const out = (await exec(CTL + " set_stats " + (on ? "1" : "0"))).trim();
+        if (!out.includes("saved")) throw new Error(out || "set_stats failed");
+        if (on) {
+          // 开启后立刻申请 token；不 await，避免开关卡住（由 ctl.sh 侧 setsid 兜底）
+          exec(CTL + " report_install").catch(() => {});
+        }
+        showBanner(on ? "匿名安装统计已开启。" : "匿名安装统计已关闭，本地 token 已删除。", "ok", 5000);
+        toast(on ? "已开启匿名统计" : "已关闭匿名统计");
+      } catch (e) {
+        statsBox.checked = !on;  // 回滚 UI，避免界面与配置不一致
+        showBanner("匿名统计保存失败：" + e.message, "error", 6000);
+      }
+    });
+  }
   $("btnPreset").addEventListener("click", (e) => withBusy(e.currentTarget, openPresetModal));
   $("btnRescanScene").addEventListener("click", (e) => withBusy(e.currentTarget, rescanScene));
   $("presetCancel").addEventListener("click", closePresetModal);
