@@ -6,6 +6,8 @@
 
 首次开机/保存配置时向 `https://susfs.stdawns.top/api/v1/install` 申请一次版本绑定 token（`install_id` + versionCode，180 天），同版本复用。服务端只记录 `install_id` / 版本 / 首次与最近时间。关闭开关会删除本地 token 并停止请求。
 
+客户端在该请求里还会带上 `kernel_release` / `kernel_version`（内核构建串）用于兼容性排查——**服务端当前不保存这两个字段**，只做入库前的校验与丢弃。设备型号、序列号、应用列表一律不发送。
+
 仅加载/应用失败时：先在 `/sdcard/Download` 留一份快照，再把 `load.log` / `apply.log` 尾段自动上传到 `/api/v1/failure`（服务端保留 7 天）；成功时不上传。
 
 ## Probe PID Guard
