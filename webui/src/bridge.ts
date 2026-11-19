@@ -38,7 +38,7 @@ export function execCode(cmd: string): Promise<ExecResult> {
     }
     const name = "susfs_allinone_cb_" + Date.now() + "_" + seq++;
     let settled = false;
-    let timer = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const finish = (fn: (v: unknown) => void, value: unknown) => {
       if (settled) return;
       settled = true;

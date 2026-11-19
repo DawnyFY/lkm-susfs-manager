@@ -11,7 +11,19 @@ export function isTheme(v: unknown): v is ThemeName {
   return v === "cool" || v === "warm";
 }
 
+// URL 参数优先（?theme=warm）：用于临时预览另一套主题，且不写 localStorage
+export function themeFromQuery(): ThemeName | null {
+  try {
+    const q = new URLSearchParams(location.search).get("theme");
+    return isTheme(q) ? q : null;
+  } catch {
+    return null;
+  }
+}
+
 export function currentTheme(): ThemeName {
+  const q = themeFromQuery();
+  if (q) return q;
   try {
     const v = localStorage.getItem(KEY);
     if (isTheme(v)) return v;
