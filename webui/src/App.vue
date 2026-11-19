@@ -91,6 +91,10 @@ onMounted(async () => {
       {{ state.banner.text }}
     </div>
 
+    <main class="content">
+      <component :is="current" v-if="!noKsu" />
+    </main>
+
     <nav class="tabs">
       <button
         v-for="item in TABS"
@@ -103,7 +107,5 @@ onMounted(async () => {
         <span>{{ t(item.key) }}</span>
       </button>
     </nav>
-
-    <component :is="current" v-if="!noKsu" />
   </div>
 </template>

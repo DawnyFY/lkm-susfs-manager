@@ -134,13 +134,23 @@ body {
 }
 
 .app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
   max-width: 760px;
   margin: 0 auto;
   padding: 18px 14px 40px;
 }
 
+.content {
+  order: 2;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 /* ---------------- 顶栏 ---------------- */
 .topbar {
+  order: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -181,6 +191,7 @@ body {
 
 /* ---------------- 页签 ---------------- */
 .tabs {
+  order: 1;
   position: sticky;
   top: 8px;
   z-index: 20;
@@ -192,8 +203,6 @@ body {
   border: 1px solid var(--line);
   border-radius: var(--tabs-radius);
   background: var(--tabs-bg);
-  -webkit-backdrop-filter: saturate(170%) blur(18px);
-  backdrop-filter: saturate(170%) blur(18px);
   box-shadow: var(--shadow);
 }
 
@@ -768,21 +777,22 @@ details summary {
   }
 }
 
-/* 暖灰窄屏：固定底部导航（原版行为） */
+/* 暖灰窄屏：页签排到内容下、吸底（用 sticky + order，不用 fixed：
+   老 WebView 里 fixed 元素配合毛玻璃会被撑成整屏，盖住页面内容） */
 @media (max-width: 580px) {
   html[data-theme="warm"] .tabs {
-    position: fixed;
-    left: 12px;
-    right: 12px;
-    bottom: calc(10px + env(safe-area-inset-bottom));
-    margin: 0;
+    order: 3;
+    position: sticky;
+    top: auto;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    margin: 12px 0 0;
     padding: 5px;
     border-radius: var(--tabs-radius);
-    background: var(--tabs-bg);
+    background: var(--card);
     box-shadow: 0 6px 24px rgba(24, 24, 27, 0.14);
   }
 
-  html[data-theme="warm"] .app {
-    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  html[data-theme="warm"] .content {
+    order: 2;
   }
 }

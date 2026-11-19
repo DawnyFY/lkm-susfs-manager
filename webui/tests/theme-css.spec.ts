@@ -56,8 +56,12 @@ describe("主题 token 与原版一致", () => {
     expect(css).toMatch(/html\[data-theme="warm"\] \.grid-stats \{[^}]*gap: 1px/);
   });
 
-  it("暖灰窄屏用固定底部导航", () => {
-    expect(css).toMatch(/html\[data-theme="warm"\] \.tabs \{[^}]*position: fixed/);
+  it("暖灰窄屏页签吸底：用 order + sticky，不用 fixed", () => {
+    // 老 WebView 里 position: fixed 配合 backdrop-filter 会被撑成整屏，盖住内容
+    expect(css).toMatch(/html\[data-theme="warm"\] \.tabs \{[^}]*order: 3/);
+    expect(css).toMatch(/html\[data-theme="warm"\] \.tabs \{[^}]*position: sticky/);
+    expect(css).not.toContain("position: fixed");
+    expect(css).not.toContain("backdrop-filter");
   });
 
   it("暖灰的通用 .btn 不能覆盖主按钮（否则白底白字）", () => {
