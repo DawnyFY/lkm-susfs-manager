@@ -124,8 +124,13 @@ html[data-theme="warm"] {
 }
 
 html,
-body {
+body,
+#app {
   height: 100%;
+}
+
+body {
+  overflow: hidden;
 }
 
 body {
@@ -141,31 +146,26 @@ body {
 .app {
   display: flex;
   flex-direction: column;
-  /* 100vh 在老 WebView 里可能大于可视区，用 dvh 优先、vh 兜底 */
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100%;
   max-width: 760px;
   margin: 0 auto;
-  padding: 18px 14px 40px;
+  padding: 18px 14px 0;
 }
 
 .content {
   order: 2;
   flex: 1 1 auto;
+  min-height: 0;
   min-width: 0;
-  /* 内容再少也撑满剩余高度：否则吸底页签会先贴在内容下方（屏幕中间），
-     等数据到达把内容撑高后才掉到底部，看起来就是「跳一下」 */
-  display: flex;
-  flex-direction: column;
-}
-
-.content > * {
-  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 16px;
 }
 
 /* ---------------- 顶栏 ---------------- */
 .topbar {
   order: 0;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -207,13 +207,12 @@ body {
 /* ---------------- 页签 ---------------- */
 .tabs {
   order: 1;
-  position: sticky;
-  top: 8px;
+  flex: 0 0 auto;
+  margin-bottom: 14px;
   z-index: 20;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 3px;
-  margin: 0 0 16px;
   padding: 4px;
   border: 1px solid var(--line);
   border-radius: var(--tabs-radius);
@@ -797,17 +796,10 @@ details summary {
 @media (max-width: 580px) {
   html[data-theme="warm"] .tabs {
     order: 3;
-    position: sticky;
-    top: auto;
-    bottom: calc(8px + env(safe-area-inset-bottom));
-    margin: 12px 0 0;
+    margin: 0 0 calc(8px + env(safe-area-inset-bottom));
     padding: 5px;
     border-radius: var(--tabs-radius);
     background: var(--card);
     box-shadow: 0 6px 24px rgba(24, 24, 27, 0.14);
-  }
-
-  html[data-theme="warm"] .content {
-    order: 2;
   }
 }

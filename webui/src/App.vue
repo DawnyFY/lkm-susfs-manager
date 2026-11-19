@@ -29,6 +29,7 @@ const TABS: { id: TabId; key: string; comp: unknown; icon: string }[] = [
 ];
 
 const tab = ref<TabId>(tabFromHash());
+const contentEl = ref<HTMLElement | null>(null);
 
 function tabFromHash(): TabId {
   const h = (location.hash || "").replace("#", "");
@@ -53,6 +54,8 @@ const pillText = computed(() => {
 
 function pick(id: TabId): void {
   tab.value = id;
+  // 切页后滚动位置必须归零：继承上一页的 scrollTop 会让新页面看起来「跳」一下
+  if (contentEl.value) contentEl.value.scrollTop = 0;
   try {
     history.replaceState(null, "", "#" + id);
   } catch {
@@ -91,7 +94,7 @@ onMounted(async () => {
       {{ state.banner.text }}
     </div>
 
-    <main class="content">
+    <main ref="contentEl" class="content">
       <component :is="current" v-if="!noKsu" />
     </main>
 
