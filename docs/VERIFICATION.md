@@ -31,6 +31,18 @@
 - 35/35 测试通过；1.2.5 的 kallsyms 零地址回退已验证（1.2.4/r18.9 冷启动已验证）。
 - `check_zip` / `check_no_crlf` 通过。
 
+## 1.2.8（2026-11-19）
+
+构建：13,190,738 B，sha256 `ca1fca98b1c497194eea94ce6bd2770f43f532cc9eea2bd4804b7c032d15509f`，manifest `c3487cdb…`。
+离线 35/35、门禁 5/5、`I18N_OK`。
+
+- 界面：两套主题（`style.css` 冷蓝 `#2b7cff`/22px 圆角、`style-alt.css` 暖灰 `#4f46e5`/18px 圆角），关于页「主题 / Theme」切换，写 localStorage；页头图标已移除
+- 实测：两套 CSS 变量探针分别为 `accent=#2b7cff bg=#f2f4f8` 与 `accent=#4f46e5 bg=#f3f3f0`；设备安装后 `webroot/` 两套 CSS 齐全、`brand-icon` 计数 0、`themeWarm` 存在、`integrity=ok`
+- 上报：`kernel_version` 改为取 `/proc/version` 的构建 banner（此前与 `kernel_release` 重复）；服务端落库 `kernel_release` / `kernel_version`
+- 服务端版本白名单：19/1.2.7 与 20/1.2.8 同时接受（实测两版均返回 token）
+- 前端：Vite+Vue+TS 构建产物 166 KB（app.js 99.7 KB/gzip 36.9 KB）；Vitest 25/25；离线套件 36/36；门禁 5/5；产物指纹与源码一致（改源码后门禁会失败，已做反证）；设备侧 webroot 5 个文件齐全、index.html 引用全部可解析
+- 未验证：其余 5 套 KMI；冷启动首次装载；真机 WebView 内的 Vue 运行时（需人眼确认一次）
+
 ## 1.2.7（已发布，2026-11-18）
 
 构建：13,183,411 B，sha256 `574a466357ff698d2cbee635fa3ffa08330b12837dadc0d6cd949cd24099dd5e`，

@@ -56,7 +56,9 @@
 - **启动守卫 / pstore 崩溃暂停 / 半加载保护**：避免错误 LKM 导致反复 bootloop。
 - **规则与隐藏**：`sus_path`、`sus_mount`、`try_umount`、`hide_modules`、AVC 伪装、扩展隐藏项。
 - **WebUI**：状态 / 配置 / PID 隐藏 / 日志 / 关于；APatch 环境额外显示 APatch 卡片。
-- **Probe PID Guard（Beta，可选）**：自研 `generic_pid_guard` LKM，`kretprobe __arm64_sys_getppid`，按 UID 范围 / comm 前缀伪装 `getppid`；随包 6 套 KMI（5.10/5.15/6.1/6.6/6.12/6.18），默认开启、可在「PID 隐藏」页关闭；装载后自动写入 `/proc/susfs_hide_modules`，与 `kernelsu` 同级隐藏。
+- **两套主题**（1.2.8+）：冷蓝圆角（默认）/ 暖灰极简，在关于页切换，选择存本地。
+- **前端技术栈**（1.2.8+）：Vite + Vue 3 + TypeScript 构建，Vitest 单测；产物打成 IIFE 经典脚本（不用 ESM），兼容 `ksu://` 加载方式；多语言改为 JSON 词典 + `template.json`，社区可直接提交翻译。
+- **Probe PID Guard（Beta，可选）**：自研 `generic_pid_guard` LKM，`kretprobe __arm64_sys_getppid`，按 UID 范围 / comm 前缀伪装 `getppid`；随包 6 套 KMI（5.10/5.15/6.1/6.6/6.12/6.18），默认关闭、需要时在「PID 隐藏」页开启；装载后自动写入 `/proc/susfs_hide_modules`，与 `kernelsu` 同级隐藏。
 - **「PID 隐藏」一级页**：六张状态卡（已启用 / 内核模块 / 内核可见 / 隐藏列表 / 最近结果 / 命中进程）+ 独立保存；改参数即时 `rmmod`+`insmod`，关闭立即卸载。
 
 ## APatch（实验性）
@@ -76,7 +78,7 @@ APatch/KernelPatch 下默认**不自动加载** SUSFS LKM；需要外挂时，�
 
 Probe PID Guard 是本项目自行编写并编译的：`kretprobe __arm64_sys_getppid`，命中目标后改写返回值；
 参数在 insmod 时传入（`target_uids` / `target_comms` / `exclude_comms`），
-sysfs 侧权限为 `0440`，只有 root 可读。它是可选组件，默认开启，关闭即卸载。
+sysfs 侧权限为 `0440`，只有 root 可读。它是可选组件，1.2.8 起默认关闭；开启后开机自动加载，关闭即卸载。
 
 ```
 source/generic_pid_guard/
@@ -87,6 +89,17 @@ source/generic_pid_guard/
 ├── build_inside.sh
 └── README.md               # KMI 表、编译命令、产物 sha256
 ```
+
+## 构建前端
+
+WebUI 源码在 `webui/`，构建产物落在 `module/webroot/`（已随仓库提交，用户不需要 node）：
+
+```sh
+sh tools/build_webui.sh          # npm ci（首次）+ 类型检查 + vite build + 写源码指纹
+```
+
+`module/webroot/.build.json` 记录源码指纹；`tools/check_zip.py` 会复算比对，
+改了 `webui/src` 却忘记重建时门禁直接失败。
 
 ## 安全
 

@@ -58,6 +58,10 @@ elif [ -n "$MAGISK_VER" ]; then
 fi
 
 # 升级时保留用户配置与规则清单：安装包里的 config 只是默认值，不能覆盖已改过的配置
+# 先备份出厂模板：下面「保留配置」会用用户旧配置覆盖 config/pid_guard.conf，
+# 而 1.2.8 的默认值迁移需要用到新模板本身
+_pg_tpl_bak="$MODPATH/config/.pid_guard.conf.new"
+[ -f "$MODPATH/config/pid_guard.conf" ] && cp -f "$MODPATH/config/pid_guard.conf" "$_pg_tpl_bak" 2>/dev/null
 INSTALLED=/data/adb/modules/susfs_allinone
 COPIED_CONFIG=0
 if [ -d "$INSTALLED/config" ]; then
@@ -66,6 +70,25 @@ if [ -d "$INSTALLED/config" ]; then
             cp -f "$INSTALLED/config/$_f" "$MODPATH/config/$_f" 2>/dev/null && COPIED_CONFIG=1 && ui_print "- 保留配置: $_f"
         fi
     done
+    # 1.2.8：Probe PID Guard 默认改为关闭。只有旧配置仍是 1.2.7 出厂原样才迁移；
+    # 用户改过的（改过 UID/comm 或显式设过 enabled）一律不动，避免把已开启的人悄悄关掉
+    _pg="$MODPATH/config/pid_guard.conf"
+    if [ -f "$_pg" ] && [ -f "$INSTALLED/config/pid_guard.conf" ]; then
+        _pg_old="# Probe PID Guard
+enabled=1
+# comma-separated UID ranges
+target_uids=99000-99999
+# comma-separated comm prefixes, * suffix allowed
+target_comms=probe-*,canProbe*,ivecheck*
+# never match these comms
+exclude_comms=nqiunativecheck"
+        if [ "$(cat "$INSTALLED/config/pid_guard.conf" 2>/dev/null)" = "$_pg_old" ] && [ -f "$_pg_tpl_bak" ]; then
+            cp -f "$_pg_tpl_bak" "$_pg" 2>/dev/null || true
+            ui_print "- Probe PID Guard 默认已改为关闭（旧配置为出厂原样，已迁移）"
+        fi
+    fi
+    rm -f "$_pg_tpl_bak" 2>/dev/null
+
     # 旧版只有 config.sh：安装时先迁移到 config.ini（只提取 KEY=VALUE，绝不 source）
     if [ ! -f "$INSTALLED/config/config.ini" ] && [ -f "$INSTALLED/config/config.sh" ]; then
         _dst="$MODPATH/config/config.ini"

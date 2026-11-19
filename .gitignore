@@ -22,6 +22,11 @@ handoff/
 dist/
 *.zip
 
+# Frontend deps / caches (built output goes to module/webroot and IS committed)
+webui/node_modules/
+webui/.vite/
+webui/dist/
+
 # OS/editor
 .DS_Store
 Thumbs.db

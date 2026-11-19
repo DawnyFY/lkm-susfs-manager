@@ -966,7 +966,7 @@ report_install() {
     _st_url="${STATS_URL:-https://susfs.stdawns.top/api/v1/install}"
     _st_krel=$(real_kernel_release 2>/dev/null)
     [ -n "$_st_krel" ] || _st_krel=$(cat /proc/sys/kernel/osrelease 2>/dev/null)
-    _st_kver=$(awk '{print $3}' /proc/version 2>/dev/null)
+    _st_kver=$(sed -n 's/^Linux version [^ ]* //p' /proc/version 2>/dev/null)
     # JSON 字符串里只保留可打印字符：引号/反斜杠/控制字符会产出非法 JSON
     _st_krel=$(printf '%s' "$_st_krel" | tr -d '"\\' | tr -d '[:cntrl:]')
     _st_kver=$(printf '%s' "$_st_kver" | tr -d '"\\' | tr -d '[:cntrl:]')

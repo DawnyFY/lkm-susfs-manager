@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 SUFFIXES = {".sh", ".prop", ".js", ".css", ".html", ".json", ".txt", ".md"}
-SKIP_DIRS = {".git", "dist", "__pycache__", ".github"}
+SKIP_DIRS = {".git", "dist", "__pycache__", ".github", "node_modules", ".vite"}
 
 base = Path(__file__).resolve().parent.parent
 bad = []

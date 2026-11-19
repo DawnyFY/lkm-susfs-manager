@@ -51,8 +51,8 @@ KSU / Magisk 环境不显示该卡片。
 WebUI「PID 隐藏」页可视化编辑，等价的配置文件是 `config/pid_guard.conf`：
 
 ```ini
-# Probe PID Guard
-enabled=1
+# Probe PID Guard（默认关闭）
+enabled=0
 # comma-separated UID ranges
 target_uids=99000-99999
 # comma-separated comm prefixes, * suffix allowed

@@ -58,7 +58,8 @@ Upgrade by flashing the new zip over the old one; `config/` and `state/` are pre
 - **Boot guard / pstore crash pause / half-load protection**: avoids bootloops after a bad LKM.
 - **Rules and hiding**: `sus_path`, `sus_mount`, `try_umount`, `hide_modules`, AVC spoofing, optional extra hiding.
 - **WebUI**: status / config / PID hiding / logs / about; APatch environments get an extra APatch card.
-- **Probe PID Guard (Beta, optional)**: self-developed `generic_pid_guard` LKM using `kretprobe __arm64_sys_getppid` to spoof `getppid` for matching UID ranges / comm prefixes; six KMIs bundled (5.10/5.15/6.1/6.6/6.12/6.18); enabled by default, can be turned off on the PID hiding page; after loading it registers itself in `/proc/susfs_hide_modules` alongside `kernelsu`.
+- **Two themes** (1.2.8+): cool blue with rounded cards (default) and warm gray minimal; switch on the About page, remembered locally.
+- **Probe PID Guard (Beta, optional)**: self-developed `generic_pid_guard` LKM using `kretprobe __arm64_sys_getppid` to spoof `getppid` for matching UID ranges / comm prefixes; six KMIs bundled (5.10/5.15/6.1/6.6/6.12/6.18); disabled by default since 1.2.8; enable it on the PID hiding page; after loading it registers itself in `/proc/susfs_hide_modules` alongside `kernelsu`.
 - **First-class "PID hiding" page**: six status cards (enabled / kernel module / visible in kernel / hide list / last result / matched processes) plus independent save; parameter changes reload the module, disabling unloads it.
 
 ## APatch (experimental)
@@ -72,6 +73,20 @@ su -c "sh /data/adb/modules/susfs_allinone/ctl.sh allow_lkm"
 Or use the APatch card in the WebUI. A QEMU module-level path has passed 14/14 assertions, but real-device install, ABI, and WebUI interaction are not verified.
 
 Read [APatch experimental support](docs/APATCH.md) (Chinese) before enabling it.
+
+## Self-developed kernel module (1.2.7+)
+
+The module carries two kernel-side components with different origins:
+
+| Component | Origin | License | Notes |
+|---|---|---|---|
+| `lib/susfs_guard_lkm-*.ko`, `bin/susfs_insmod` | upstream inforcqb/susfs4ksu-lkm | GPL-2.0 | unmodified; sha256 matches the upstream release |
+| `lib/pid_guard/<kmi>/generic_pid_guard.ko` | **developed in this project** | GPL-2.0 | source ships in the repository: `source/generic_pid_guard/` |
+
+Probe PID Guard is written and built here: `kretprobe __arm64_sys_getppid`, rewriting the return value for matched
+targets; parameters are passed at insmod time (`target_uids` / `target_comms` / `exclude_comms`) and the sysfs
+parameters are `0440` (root only). It is optional and **disabled by default since 1.2.8**; on upgrade, a config that
+is still the 1.2.7 factory default is migrated to disabled, while modified configs are left untouched.
 
 ## Safety
 

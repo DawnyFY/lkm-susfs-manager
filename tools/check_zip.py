@@ -38,8 +38,8 @@ REQUIRED = {
     "post-fs-data.sh",
     "boot-completed.sh",
     "webroot/index.html",
-    "webroot/app.js",
-    "webroot/style.css",
+    "webroot/assets/app.js",
+    "webroot/assets/app.css",
     "config/sus_path_loop.txt",
     "pid_guard.sh",
     "pid_guard_ctl.sh",
@@ -54,6 +54,22 @@ REQUIRED = {
 EXEC_REQUIRED = {"load.sh", "apply.sh", "ctl.sh", "action.sh", "customize.sh", "service.sh",
                  "pid_guard.sh", "pid_guard_ctl.sh"}
 
+
+def _webui_fingerprint() -> str:
+    """调用统一的指纹实现（tools/webui_fingerprint.py），保证与 build_webui.sh 一致。"""
+    import importlib.util
+    import os
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    target = os.path.join(here, "webui_fingerprint.py")
+    if not os.path.isfile(target):
+        return ""
+    spec = importlib.util.spec_from_file_location("webui_fingerprint", target)
+    if spec is None or spec.loader is None:
+        return ""
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.fingerprint(os.path.join(os.path.dirname(here), "webui"))
 
 def fail(message: str) -> None:
     print(f"FAIL: {message}")
@@ -153,14 +169,20 @@ def main() -> int:
                 fail(f"customize.sh missing branch token {token}")
 
         html = z.read("webroot/index.html").decode("utf-8")
-        for token in ("<title>LKM SUSFS管理器</title>", "rootManager", "binPath", "footerVersion"):
+        for token in ("<title>LKM SUSFS管理器</title>", "assets/app.js", "assets/app.css"):
             if token not in html:
                 fail(f"webroot/index.html missing {token}")
+        # WebUI 必须相对路径加载资源：ksu:// 与 file:// 下绝对路径会 404
+        if 'src="/' in html or 'href="/' in html:
+            fail("webroot/index.html uses absolute asset paths")
 
-        app = z.read("webroot/app.js").decode("utf-8")
-        for token in ("root_manager", "ksu_bin_path", "footerVersion"):
+        app = z.read("webroot/assets/app.js").decode("utf-8")
+        for token in ("ctl.sh", "root_manager", "pid_guard_reload", "set_stats"):
             if token not in app:
-                fail(f"webroot/app.js missing {token}")
+                fail(f"webroot/assets/app.js missing {token}")
+        for token in ("/data/adb/modules/susfs_allinone/ctl.sh",):
+            if token not in app:
+                fail(f"webroot/assets/app.js missing control path {token}")
 
         for name in sorted(EXEC_REQUIRED):
             mode = (z.getinfo(name).external_attr >> 16) & 0o777
@@ -169,6 +191,18 @@ def main() -> int:
         common_mode = (z.getinfo("common.sh").external_attr >> 16) & 0o777
         if common_mode != 0o644:
             fail(f"common.sh mode is {oct(common_mode)}, expected 0o644")
+
+        # WebUI 产物必须与源码一致：改 webui/src 后忘了 rebuild，这里会拦下来
+        if "webroot/.build.json" not in names:
+            fail("missing webroot/.build.json (run tools/build_webui.sh)")
+        import json as _json
+        stamp = _json.loads(z.read("webroot/.build.json").decode("utf-8"))
+        want = stamp.get("source_sha256") or ""
+        proc = _webui_fingerprint()
+        if not want:
+            fail("webroot/.build.json missing source_sha256")
+        if proc != want:
+            fail("webroot is stale: source_sha256 mismatch (rerun tools/build_webui.sh)")
 
         verify_manifest(z, names)
 
