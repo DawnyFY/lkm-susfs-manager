@@ -1,13 +1,33 @@
 <!-- SPDX-License-Identifier: GPL-2.0-only -->
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import avatarUrl from "../assets/contributor.jpg";
+import { computed, reactive, ref } from "vue";
+import avatarHhgbmh from "../assets/contributor.jpg";
 import { reportInstall, setStats } from "../api";
 import { locale, setLocale, t, type Locale } from "../i18n";
 import { refreshStatus, setBanner, state, withBusy } from "../store";
 import { currentTheme, setTheme, type ThemeName } from "../theme";
 
 const theme = ref<ThemeName>(currentTheme());
+
+// 第一位贡献者用随包的图片（离线也稳），其余用 GitHub 头像链接（不进包）；
+// 链接加载失败（离线 / 被管理器 CSP 拦）时回退首字母，避免出现破图图标。
+const CREDITS = [
+  {
+    name: "旧梦一场雨",
+    handle: "hhgbmh8-ux",
+    url: avatarHhgbmh,
+    initials: "旧",
+    what: "about.credit.what",
+  },
+  {
+    name: "dhc2082",
+    handle: "dhc2082",
+    url: "https://github.com/dhc2082.png?size=96",
+    initials: "dh",
+    what: "about.credit.ui",
+  },
+];
+const avatarFailed = reactive<Record<string, boolean>>({});
 const statsOn = computed(() => (state.status.anonymous_stats ?? "1") === "1");
 
 function pickTheme(v: ThemeName): void {
@@ -83,20 +103,21 @@ async function toggleStats(v: boolean): Promise<void> {
 
     <p class="section-label">{{ t("about.thanks") }}</p>
     <div class="card">
-      <div class="credits">
-        <img :src="avatarUrl" alt="contributor" width="44" height="44" />
+      <div v-for="c in CREDITS" :key="c.handle" class="credits">
+        <img
+          v-if="!avatarFailed[c.handle]"
+          :src="c.url"
+          :alt="c.handle"
+          width="44"
+          height="44"
+          referrerpolicy="no-referrer"
+          @error="avatarFailed[c.handle] = true"
+        />
+        <span v-else class="avatar-initials" aria-hidden="true">{{ c.initials }}</span>
         <span>
-          旧梦一场雨
-          <a class="gh" href="https://github.com/hhgbmh8-ux" rel="noopener noreferrer">@hhgbmh8-ux</a>
-          <span class="hint" style="display: block">{{ t("about.credit.what") }}</span>
-        </span>
-      </div>
-      <div class="credits">
-        <span class="avatar-initials" aria-hidden="true">dh</span>
-        <span>
-          dhc2082
-          <a class="gh" href="https://github.com/dhc2082" rel="noopener noreferrer">@dhc2082</a>
-          <span class="hint" style="display: block">{{ t("about.credit.ui") }}</span>
+          {{ c.name }}
+          <a class="gh" :href="'https://github.com/' + c.handle" rel="noopener noreferrer">@{{ c.handle }}</a>
+          <span class="hint" style="display: block">{{ t(c.what) }}</span>
         </span>
       </div>
       <p class="hint">simonpunk · inforcqb · sidex15 · SukiSU Ultra</p>
