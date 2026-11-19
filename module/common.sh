@@ -105,6 +105,24 @@ susfs_bin_runnable() {
     return 0
 }
 
+# 只挑路径、不执行二进制：status 这类只想知道「有没有」的场景用它，
+# 避免每页首屏都 spawn 好几次 ksu_susfs（每次几十到几百毫秒）
+select_susfs_bin_fast() {
+    _fb_active=$(find_susfs_bin)
+    _fb_backup=$(find_susfs_backup)
+    if [ -n "$_fb_active" ] && [ -x "$_fb_active" ]; then
+        echo "$_fb_active"
+        return 0
+    fi
+    if [ -n "$_fb_backup" ] && [ -x "$_fb_backup" ]; then
+        echo "$_fb_backup"
+        return 0
+    fi
+    [ -n "$_fb_active" ] && { echo "$_fb_active"; return 0; }
+    [ -n "$_fb_backup" ] && { echo "$_fb_backup"; return 0; }
+    return 1
+}
+
 select_susfs_bin() {
     _active=$(find_susfs_bin)
     _backup=$(find_susfs_backup)

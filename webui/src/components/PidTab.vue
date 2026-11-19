@@ -1,10 +1,11 @@
 <!-- SPDX-License-Identifier: GPL-2.0-only -->
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { pgGet, pgReload, pgSave } from "../api";
+import { getPidBundle, pgReload, pgSave } from "../api";
 import { t } from "../i18n";
+import { parseKV } from "../bridge";
 import { pidConfBuild } from "../ini";
-import { refreshStatus, runSerial, setBanner, state, withBusy } from "../store";
+import { mergeStatus, runSerial, setBanner, state, withBusy } from "../store";
 
 const form = reactive({ enabled: false, uids: "", comms: "", excludes: "" });
 const ready = ref(false);
@@ -28,12 +29,14 @@ async function bootstrap(): Promise<void> {
   ready.value = false;
   try {
     await runSerial(async () => {
-      const conf = await pgGet();
-      form.enabled = (conf.enabled ?? "0") === "1";
-      form.uids = conf.target_uids || "";
-      form.comms = conf.target_comms || "";
-      form.excludes = conf.exclude_comms || "";
-      await refreshStatus();
+      // 一次命令取回配置 + 状态字段；不再为这一页跑完整 status
+      const { conf, status } = await getPidBundle();
+      const kv = parseKV(conf);
+      form.enabled = (kv.enabled ?? "0") === "1";
+      form.uids = kv.target_uids || "";
+      form.comms = kv.target_comms || "";
+      form.excludes = kv.exclude_comms || "";
+      mergeStatus(status);
     });
   } catch (e) {
     err.value = (e as Error).message;
@@ -58,7 +61,10 @@ async function doSave(): Promise<void> {
       const out = await pgSave(text);
       if (!out.includes("saved")) throw new Error(out.trim() || "save failed");
       await pgReload();
-      await refreshStatus();
+      {
+        const { status } = await getPidBundle();
+        mergeStatus(status);
+      }
       const res = (state.status.pid_guard_result || "").trim();
       if (res && res !== "ok" && res !== "unloaded") setBanner("info", res);
       else setBanner("ok", form.enabled ? t("msg.pg_on") : t("msg.pg_off"));
@@ -71,12 +77,13 @@ async function doSave(): Promise<void> {
 async function doRefresh(): Promise<void> {
   await withBusy(async () => {
     try {
-      const conf = await pgGet();
-      form.enabled = (conf.enabled ?? "0") === "1";
-      form.uids = conf.target_uids || "";
-      form.comms = conf.target_comms || "";
-      form.excludes = conf.exclude_comms || "";
-      await refreshStatus();
+      const { conf, status } = await getPidBundle();
+      const kv = parseKV(conf);
+      form.enabled = (kv.enabled ?? "0") === "1";
+      form.uids = kv.target_uids || "";
+      form.comms = kv.target_comms || "";
+      form.excludes = kv.exclude_comms || "";
+      mergeStatus(status);
     } catch (e) {
       setBanner("err", (e as Error).message);
     }

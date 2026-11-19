@@ -33,6 +33,12 @@ export function clearBanner(): void {
   state.banner = { kind: "", text: "" };
 }
 
+// 只更新部分字段（例如 PID 页只关心 pid_guard_*），避免为了一页跑完整 status
+export function mergeStatus(patch: Record<string, string>): void {
+  state.status = { ...state.status, ...patch };
+  state.loaded = true;
+}
+
 export async function refreshStatus(): Promise<void> {
   const s = await getStatus();
   state.status = s;

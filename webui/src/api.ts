@@ -133,6 +133,36 @@ export async function pgGet(): Promise<Record<string, string>> {
   return parseKV(await exec(`${PG_CTL} get`));
 }
 
+// ctl.sh pid_guard_bundle 的输出：首行 conf:<b64>，其后是 pid_guard_* 状态字段
+export function parsePidBundle(raw: string): { conf: string; status: Record<string, string> } {
+  const lines = splitLines(raw);
+  let conf = "";
+  const rest: string[] = [];
+  for (const line of lines) {
+    if (line.startsWith("conf:")) {
+      const b64 = line.slice(5).trim();
+      if (b64) {
+        try {
+          const bin = atob(b64);
+          const bytes = new Uint8Array(bin.length);
+          for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+          conf = new TextDecoder().decode(bytes);
+        } catch {
+          conf = "";
+        }
+      }
+      continue;
+    }
+    rest.push(line);
+  }
+  return { conf, status: parseKV(rest.join(String.fromCharCode(10))) };
+}
+
+// PID 隐藏页原来要 2 次往返（pid_guard_ctl get + 完整 status），且 status 很重
+export async function getPidBundle(): Promise<{ conf: string; status: Record<string, string> }> {
+  return parsePidBundle(await exec(`${CTL} pid_guard_bundle`));
+}
+
 export async function pgSave(confText: string): Promise<string> {
   return exec(`${PG_CTL} set_b64 '${b64Encode(confText)}'`);
 }

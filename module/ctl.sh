@@ -18,6 +18,33 @@ valid_b64() {
     esac
 }
 
+# Probe PID Guard 的状态字段：status 与 pid_guard_bundle 共用，避免两处逻辑漂移
+pg_status_fields() {
+# Probe PID Guard（可选组件）：配置、驻留、可见性、最近一次结果
+_PG_EN=0
+[ -f "$CONFIG/pid_guard.conf" ] && _PG_EN=$(grep -m1 '^enabled=' "$CONFIG/pid_guard.conf" 2>/dev/null | cut -d= -f2)
+case "$_PG_EN" in 0|1) ;; *) _PG_EN=0 ;; esac
+_PG_LOADED=0
+[ -d /sys/module/generic_pid_guard ] && _PG_LOADED=1
+_PG_VISIBLE=0
+grep -qw generic_pid_guard /proc/modules 2>/dev/null && _PG_VISIBLE=1
+_PG_HIDDEN=0
+# 只有真的加载了才算「已隐藏」：卸载后残留的名字不该让页面显示已隐藏
+if [ "$_PG_LOADED" = "1" ]; then
+    grep -qw generic_pid_guard /proc/susfs_hide_modules 2>/dev/null && _PG_HIDDEN=1
+fi
+_PG_RES=$(grep -m1 '^result=' "$STATE/pid_guard.status" 2>/dev/null | cut -d= -f2)
+printf 'pid_guard_enabled=%s\n' "$_PG_EN"
+printf 'pid_guard_loaded=%s\n' "$_PG_LOADED"
+printf 'pid_guard_visible=%s\n' "$_PG_VISIBLE"
+printf 'pid_guard_hidden=%s\n' "$_PG_HIDDEN"
+printf 'pid_guard_result=%s\n' "${_PG_RES:-unknown}"
+_PG_UIDS=$(grep -m1 '^target_uids=' "$CONFIG/pid_guard.conf" 2>/dev/null | cut -d= -f2-)
+_PG_COMMS=$(grep -m1 '^target_comms=' "$CONFIG/pid_guard.conf" 2>/dev/null | cut -d= -f2-)
+printf 'pid_guard_uids=%s\n' "$_PG_UIDS"
+printf 'pid_guard_comms=%s\n' "$_PG_COMMS"
+}
+
 status() {
     REL=$(real_kernel_release 2>/dev/null)
     [ -n "$REL" ] || REL=$(cat /proc/sys/kernel/osrelease 2>/dev/null)
@@ -33,13 +60,32 @@ status() {
     [ "$SUSFS_KIND" != "none" ] && PRESENT=1
     LKM_PRESENT=0
     [ "$SUSFS_KIND" = "lkm" ] && LKM_PRESENT=1
-    BIN=$(select_susfs_bin 2>/dev/null)
+    BIN=$(select_susfs_bin_fast 2>/dev/null)
 
+    # 只 spawn 一次取 version，KSSTAT 直接复用结果。
+    # 之前这里是 select_susfs_bin（内部会试跑 show version）+ variant + version + 再跑一次
+    # version 判 KSSTAT，一共 5 次进程启动，是 status 慢的主因。
     VARIANT=""
     VERSION=""
-    if [ "$LKM_PRESENT" = "1" ] && [ -n "$BIN" ]; then
-        VARIANT=$("$BIN" show variant 2>/dev/null)
-        VERSION=$("$BIN" show version 2>/dev/null)
+    _BIN_OK=0
+    if [ -n "$BIN" ] && [ -x "$BIN" ]; then
+        # version 与 variant 各要 ~0.5s（每次都要起一个进程读内核侧信息），
+        # 并行跑把这一段从 1s 压到 0.5s
+        _tmpv="$STATE/.binver.$$"
+        _tmpa="$STATE/.binvar.$$"
+        mkdir -p "$STATE" 2>/dev/null
+        "$BIN" show version >"$_tmpv" 2>/dev/null &
+        _pidv=$!
+        _pida=""
+        if [ "$LKM_PRESENT" = "1" ]; then
+            "$BIN" show variant >"$_tmpa" 2>/dev/null &
+            _pida=$!
+        fi
+        wait "$_pidv" 2>/dev/null && _BIN_OK=1
+        [ -n "$_pida" ] && wait "$_pida" 2>/dev/null
+        [ -s "$_tmpv" ] && VERSION=$(cat "$_tmpv" 2>/dev/null)
+        [ -s "$_tmpa" ] && VARIANT=$(cat "$_tmpa" 2>/dev/null)
+        rm -f "$_tmpv" "$_tmpa" 2>/dev/null
     fi
 
     RULES=$(grep '^path=' /proc/susfs_path 2>/dev/null | grep -v '\[ours:' | sed 's/^path=//' | awk '{print $1}' | sort -u | wc -l | tr -d ' ')
@@ -58,11 +104,7 @@ status() {
     KSSTAT=missing
     if [ -n "$BIN" ] && [ -x "$BIN" ]; then
         if [ "$PRESENT" = "1" ]; then
-            if "$BIN" show version >/dev/null 2>&1; then
-                KSSTAT=ok
-            else
-                KSSTAT=incompatible
-            fi
+            [ "$_BIN_OK" = "1" ] && KSSTAT=ok || KSSTAT=incompatible
         else
             KSSTAT=ok
         fi
@@ -95,29 +137,7 @@ status() {
     case "$_AF" in ''|*[!0-9]*) _AF=0 ;; esac
     printf 'apply_fails=%s\n' "$_AF"
 
-    # Probe PID Guard（可选组件）：配置、驻留、可见性、最近一次结果
-    _PG_EN=0
-    [ -f "$CONFIG/pid_guard.conf" ] && _PG_EN=$(grep -m1 '^enabled=' "$CONFIG/pid_guard.conf" 2>/dev/null | cut -d= -f2)
-    case "$_PG_EN" in 0|1) ;; *) _PG_EN=0 ;; esac
-    _PG_LOADED=0
-    [ -d /sys/module/generic_pid_guard ] && _PG_LOADED=1
-    _PG_VISIBLE=0
-    grep -qw generic_pid_guard /proc/modules 2>/dev/null && _PG_VISIBLE=1
-    _PG_HIDDEN=0
-    # 只有真的加载了才算「已隐藏」：卸载后残留的名字不该让页面显示已隐藏
-    if [ "$_PG_LOADED" = "1" ]; then
-        grep -qw generic_pid_guard /proc/susfs_hide_modules 2>/dev/null && _PG_HIDDEN=1
-    fi
-    _PG_RES=$(grep -m1 '^result=' "$STATE/pid_guard.status" 2>/dev/null | cut -d= -f2)
-    printf 'pid_guard_enabled=%s\n' "$_PG_EN"
-    printf 'pid_guard_loaded=%s\n' "$_PG_LOADED"
-    printf 'pid_guard_visible=%s\n' "$_PG_VISIBLE"
-    printf 'pid_guard_hidden=%s\n' "$_PG_HIDDEN"
-    printf 'pid_guard_result=%s\n' "${_PG_RES:-unknown}"
-    _PG_UIDS=$(grep -m1 '^target_uids=' "$CONFIG/pid_guard.conf" 2>/dev/null | cut -d= -f2-)
-    _PG_COMMS=$(grep -m1 '^target_comms=' "$CONFIG/pid_guard.conf" 2>/dev/null | cut -d= -f2-)
-    printf 'pid_guard_uids=%s\n' "$_PG_UIDS"
-    printf 'pid_guard_comms=%s\n' "$_PG_COMMS"
+    pg_status_fields
     if kernelpatch_present; then _KP=1; else _KP=0; fi
     printf 'kernelpatch=%s\n' "$_KP"
     printf 'apatch_userland=%s\n' "$_KP"
@@ -374,6 +394,15 @@ case "$1" in
         if [ "$_arc" != "0" ]; then ( report_failure "apply_failed" >> "$STATE/stats.log" 2>&1 & ) 2>/dev/null || true; fi
         exit "$_arc"
         ;;
+    pid_guard_bundle)
+        # PID 隐藏页一次性取回：配置（b64 一行）+ 7 个状态字段。
+        # 不走完整 status：那里要算 kallsyms / 规则数 / 管理器探测，对这一个页面没必要。
+        printf 'conf:'
+        [ -f "$CONFIG/pid_guard.conf" ] && base64 < "$CONFIG/pid_guard.conf" 2>/dev/null | tr -d '\n'
+        printf '\n'
+        pg_status_fields
+        ;;
+
     pid_guard_reload)
         # 只重载可选的 PID 隐藏组件：不碰 SUSFS 规则、不触发 LKM 加载。
         # KMI 必须用 select_kmi 现算（$KMI 只在 status() 内部赋值，这里为空会掉进
