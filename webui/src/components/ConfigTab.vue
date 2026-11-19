@@ -3,8 +3,7 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import {
   RULE_ORDER,
-  getConfigText,
-  getRuleText,
+  getBundle,
   importLegacy,
   presetPaths,
   resetDefaults,
@@ -73,13 +72,15 @@ const currentCount = computed(() => {
 });
 
 async function loadAll(): Promise<void> {
-  const text = await getConfigText();
+  // 一次命令取回 8 份内容：原来逐个 await 要 8 次 WebView→shell 往返，明显偏慢
+  const bundle = await getBundle();
+  const text = bundle.config;
   raws.config = text;
   for (const k of [...BOOL_KEYS, ...PATH_KEYS, "replace_rules", "fake_cmdline", "fake_cmdline_value", "force_kmi", "spoof_uname", "spoof_uname_release", "spoof_uname_version", "hide_vendor_sepolicy", "vold_isolation"]) {
     cfg[k] = getIni(text, k, k === "replace_rules" ? "0" : "");
   }
   for (const name of RULE_ORDER) {
-    rules[name] = await getRuleText(name);
+    rules[name] = bundle.rules[name] ?? "";
   }
   ready.value = true;
 }

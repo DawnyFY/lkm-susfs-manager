@@ -39,6 +39,46 @@ export async function getRuleText(name: RuleName): Promise<string> {
   return exec(`${CTL} get_file ${name}`);
 }
 
+const EMPTY_RULES = (): Record<RuleName, string> => ({
+  sus_path: "",
+  sus_path_loop: "",
+  hide_modules: "",
+  skip_hide: "",
+  sus_mount: "",
+  try_umount: "",
+  sus_map: "",
+});
+
+// ctl.sh get_bundle 的输出：每行 name:b64（base64 去掉了换行）
+export function parseBundle(raw: string): { config: string; rules: Record<RuleName, string> } {
+  const rules: Record<RuleName, string> = EMPTY_RULES();
+  let config = "";
+  for (const line of splitLines(raw)) {
+    const i = line.indexOf(":");
+    if (i <= 0) continue;
+    const name = line.slice(0, i).trim();
+    const b64 = line.slice(i + 1).trim();
+    let text = "";
+    if (b64) {
+      try {
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+        text = new TextDecoder().decode(bytes);
+      } catch {
+        text = "";
+      }
+    }
+    if (name === "config") config = text;
+    else if (name in rules) rules[name as RuleName] = text;
+  }
+  return { config, rules };
+}
+
+export async function getBundle(): Promise<{ config: string; rules: Record<RuleName, string> }> {
+  return parseBundle(await exec(`${CTL} get_bundle`));
+}
+
 export async function saveBundle(configText: string, rules: Record<RuleName, string>): Promise<string> {
   const joined = [configText, ...RULE_ORDER.map((r) => rules[r] ?? "")].join("|");
   return exec(`${CTL} set_bundle '${b64Encode(joined)}'`);

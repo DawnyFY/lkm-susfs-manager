@@ -499,6 +499,24 @@ case "$1" in
     get_config)
         cat "$CONFIG/config.ini" 2>/dev/null
         ;;
+    get_bundle)
+        # 一次调用取回 config.ini + 7 个规则文件：WebUI 配置页原来要 8 次往返，
+        # 每次都要经过 WebView 桥接 + 起一个 shell，加起来一两秒。
+        # 输出：每行 name:b64（base64 去掉换行），顺序固定，缺文件给空串。
+        _gb_emit() {
+            printf '%s:' "$1"
+            [ -f "$CONFIG/$2" ] && base64 < "$CONFIG/$2" 2>/dev/null | tr -d '\n'
+            printf '\n'
+        }
+        _gb_emit config config.ini
+        _gb_emit sus_path sus_path.txt
+        _gb_emit sus_path_loop sus_path_loop.txt
+        _gb_emit hide_modules hide_modules.txt
+        _gb_emit skip_hide skip_hide.txt
+        _gb_emit sus_mount sus_mount.txt
+        _gb_emit try_umount try_umount.txt
+        _gb_emit sus_map sus_map.txt
+        ;;
     get_file)
         case "$2" in
             sus_path|sus_path_loop|sus_mount|try_umount|hide_modules|skip_hide|sus_map)
