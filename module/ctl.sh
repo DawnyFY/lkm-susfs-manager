@@ -88,6 +88,21 @@ status() {
         rm -f "$_tmpv" "$_tmpa" 2>/dev/null
     fi
 
+    # 活动二进制存在但跑不起来时，回退到模块自带备份：
+    # 1.2.7 的 select_susfs_bin 就是这么做的（bin/ksu_susfs_good 存在的意义），
+    # 只用 fast 选择器会停在坏的那支，导致 ksu_bin=incompatible、版本号为空。
+    if [ "$_BIN_OK" = "0" ] && [ "$LKM_PRESENT" = "1" ]; then
+        _bk=$(find_susfs_backup 2>/dev/null)
+        if [ -n "$_bk" ] && [ "$_bk" != "$BIN" ] && [ -x "$_bk" ]; then
+            if _vb=$("$_bk" show version 2>/dev/null); then
+                BIN=$_bk
+                VERSION=$_vb
+                _BIN_OK=1
+                VARIANT=$("$_bk" show variant 2>/dev/null)
+            fi
+        fi
+    fi
+
     RULES=$(grep '^path=' /proc/susfs_path 2>/dev/null | grep -v '\[ours:' | sed 's/^path=//' | awk '{print $1}' | sort -u | wc -l | tr -d ' ')
     RULES=${RULES:-0}
     HIDE=0
@@ -626,6 +641,18 @@ case "$1" in
             if [ -n "$_seg" ] && [ ! -s "$_dir/$_n" ]; then
                 _bad="decode $_n (空输出)"
                 break
+            fi
+            # 段级完整性：解出来的内容重新编码必须与原始段一致。
+            # 只看「非空/非空」抓不到 ARG_MAX 之类导致的末段截断（截断后仍能解出内容）。
+            if [ -n "$_seg" ]; then
+                _reenc=$(base64 < "$_dir/$_n" 2>/dev/null | tr -d '
+')
+                _orig=$(printf '%s' "$_seg" | tr -d '
+')
+                if [ "$_reenc" != "$_orig" ]; then
+                    _bad="decode $_n (内容不完整)"
+                    break
+                fi
             fi
         done
         if [ -z "$_bad" ] && [ ! -s "$_dir/config.ini" ]; then

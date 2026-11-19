@@ -69,8 +69,27 @@ hide_sus_mnts=1
 single=$(printf "%s" "$raw_bad" | base64 | tr -d "
 ")
 out=$(run_bundle "$single")
+
+# 平台差异：GNU 的 base64 -d 对垃圾输入返回非 0，toybox 返回 0。
+# - GNU 下由 base64 自己拒绝，测不出新防线 → 只断言"被拒绝且文件完好"（回归价值仍在）
+# - toybox 下必须命中 1.2.8 新增的防线文案，否则等于空转
+if printf 'not-base64!!' | base64 -d >/dev/null 2>&1; then
+    BASE64_LENIENT=1
+else
+    BASE64_LENIENT=0
+fi
+
 case "$out" in
-    rejected*) echo "PASS  单层编码被拒绝（$out）" ;;
+    rejected*)
+        if [ "$BASE64_LENIENT" = "1" ]; then
+            case "$out" in
+                *"(空输出)"*|*"config.ini 为空"*|*"内容不完整"*)
+                    echo "PASS  单层编码被新防线拒绝（toybox 语义：$out）" ;;
+                *) echo "FAIL  toybox 语义下未命中新防线 got=[$out]"; fail=1 ;;
+            esac
+        else
+            echo "PASS  单层编码被拒绝（GNU base64 自身拒绝：$out）"
+        fi ;;
     *) echo "FAIL  单层编码未被拒绝 got=[$out]"; fail=1 ;;
 esac
 chk "单层编码后 config 未被清空" "$(grep -c "^auto_load=1$" "$MOD/config/config.ini")" "1"

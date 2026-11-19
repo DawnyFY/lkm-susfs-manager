@@ -33,7 +33,7 @@
 
 ## 1.2.8（2026-11-19）
 
-构建：13,185,596 B，sha256 `4286a5d2253ead9dd207a8b1caf05dc2c1f3cb5111e378957fafd625a3fa5bdf`，manifest `0afc8a6c…`。
+构建：13,186,088 B，sha256 `0a7557cb85de3a4cb861df5197ceb43d14332bd40de6a714ad4a8b6136475258`，manifest `97b570cd…`。
 离线 **37/37**、Vitest **44/44**、门禁 **5/5**、`I18N_OK keys=141`；两次构建字节一致（zip 重建哈希相同）。
 
 **前端（Vite + Vue 3 + TS 重写）**
@@ -44,6 +44,7 @@
 - 布局：固定高度 + 内容区内部滚动，页签静态定位（无 `position: fixed` / `sticky` / `backdrop-filter`）
 - 设置持久化：`localStorage` 存主题与语言；`?theme=cool|warm` 可临时预览且不落盘
 - 设置保存：双层 base64 线格式（每段 b64 → `|` 连接 → 整体 b64），与 `ctl.sh set_bundle` 严格对应；
+  三道防线（段数=8 / 非空段解出 0 字节 / 重编码一致）拦非法与半截编码；4 字节边界截断检测不到（见 BACKLOG ISS-008）；
   单层编码会被拒绝（`rejected: decode config.ini (空输出)`），不再出现 1.2.8 早期的「保存即清空配置」回归
 - 无 `eval` / `new Function`；`v-html` 只绑定硬编码 SVG 图标；外链仅头像（失败回退首字母）与公告 JSON（6 s 超时、静默失败）
 

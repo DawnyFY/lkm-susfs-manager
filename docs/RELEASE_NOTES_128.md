@@ -10,8 +10,8 @@
 - 构建产物打成 **IIFE 经典脚本**（不是 ESM），兼容 KernelSU 用 `ksu://` 加载页面的老 WebView
 - 多语言改为 JSON 词典（`zh-CN.json` / `en-US.json` / `template.json`），社区可直接提交翻译
 - 主题用 `data-theme` + CSS 变量切换，不再需要两份完整样式表
-- 体积 166 KB（`app.js` 99.7 KB / gzip 36.9 KB，`app.css` 6.3 KB），比 1.2.7 的 240 KB 更小
-- 新增 `webui/tests/`（Vitest 25 个断言）覆盖 ini 文本改写、词典一致性、主题、ksu 桥接
+- 体积：`webroot/` 合计 175,650 B（`app.js` 109,085 B / `app.css` 11,714 B + 头像 54,062 B），比 1.2.7 的 240 KB 更小
+- 新增 `webui/tests/`（Vitest 44 个断言）覆盖 ini 文本改写、词典一致性、主题、ksu 桥接、bundle 线格式
 - 门禁新增「产物与源码指纹一致」检查，改了前端忘记重建会被拦下
 
 ## 旧界面
@@ -47,4 +47,4 @@
 
 - **@dhc2082** — 1.2.8 两版 UI（冷蓝圆角 / 暖灰极简）的设计与实现
 
-**产物**：`susfs_allinone-1.2.8.zip`，13,185,596 B，sha256 `4286a5d2253ead9dd207a8b1caf05dc2c1f3cb5111e378957fafd625a3fa5bdf`
+**产物**：`susfs_allinone-1.2.8.zip`，13,186,088 B，sha256 `0a7557cb85de3a4cb861df5197ceb43d14332bd40de6a714ad4a8b6136475258`

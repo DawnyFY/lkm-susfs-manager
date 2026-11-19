@@ -222,7 +222,8 @@ fi
 #    它曾在 if [ -d "$INSTALLED/config" ] 内，全新安装会残留）
 #  - pid_guard.conf.tmp.* 是 1.2.7 时代写配置失败留下的残留
 rm -f "$_pg_tpl_bak" "$MODPATH/config/.pid_guard.conf.new" 2>/dev/null
-for _tmp in "$MODPATH"/config/pid_guard.conf.tmp.*; do
+# 新旧两个目录都要清：保留配置只复制白名单文件，旧目录里的 tmp 不会进 $MODPATH
+for _tmp in "$MODPATH"/config/pid_guard.conf.tmp.* "$INSTALLED"/config/pid_guard.conf.tmp.*; do
     [ -e "$_tmp" ] || continue
     rm -f "$_tmp" 2>/dev/null
 done

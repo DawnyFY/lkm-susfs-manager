@@ -45,6 +45,15 @@ APatch 卡片：
 
 KSU / Magisk 环境不显示该卡片。
 
+## WebUI 保存的容量上限
+
+WebUI 保存通过 `ctl.sh set_bundle` 一次写入 `config.ini` + 7 个规则文件，
+参数经由命令行传递，受内核 `ARG_MAX` 限制：
+
+- 原始内容合计约 **70 KB** 以内安全（base64 双层编码约 1.78× 膨胀）
+- 超出后 `exec` 直接失败（`Argument list too long`），**不会写入半截文件**
+- 单个规则文件写得很大时，建议改用命令行（`ctl.sh set_file <name> <b64>`）或分文件编辑
+
 ## Probe PID Guard（1.2.7+，可选）
 
 自研内核模块 `generic_pid_guard`，用 `kretprobe __arm64_sys_getppid` 对匹配进程伪装 `getppid`。

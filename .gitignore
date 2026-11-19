@@ -26,6 +26,7 @@ dist/
 webui/node_modules/
 webui/.vite/
 webui/dist/
+.webui-backup.*
 
 # OS/editor
 .DS_Store
