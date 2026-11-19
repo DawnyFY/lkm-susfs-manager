@@ -72,7 +72,7 @@ pid_guard_hidden pid_guard_result pid_guard_uids pid_guard_comms kernelpatch
 apatch_userland kernelpatch_kernel kernelpatch_version coexist_mode allow_lkm
 config_ksu config_ksu_susfs apply_result boot_stage_completed backend_kind
 backend_interface_detected abi_match integrity lkm_size sus_mount try_umount
-autoload bootloader crash_evidence effect_verified fail_count force_bl_unlocked
+autoload bootloader crash_evidence effect_verified force_bl_unlocked
 tool_query
 ```
 

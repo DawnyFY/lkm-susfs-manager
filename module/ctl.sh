@@ -621,7 +621,17 @@ case "$1" in
                 _bad="decode $_n"
                 break
             fi
+            # toybox 的 base64 -d 对非法输入也会返回 0：非空段解出 0 字节必然有问题，
+            # 这正是「WebUI 保存把配置写空」那次回归的形态，必须拒绝而不是静默接受
+            if [ -n "$_seg" ] && [ ! -s "$_dir/$_n" ]; then
+                _bad="decode $_n (空输出)"
+                break
+            fi
         done
+        if [ -z "$_bad" ] && [ ! -s "$_dir/config.ini" ]; then
+            # 0 字节 config.ini 不可能是有意保存的结果，直接拒绝（旧的 validate 会放行空文件）
+            _bad="config.ini 为空"
+        fi
         if [ -z "$_bad" ]; then
             _err=$(validate_config_file "$_dir/config.ini") || _bad="config: $_err"
         fi

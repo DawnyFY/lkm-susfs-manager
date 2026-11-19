@@ -79,9 +79,17 @@ export async function getBundle(): Promise<{ config: string; rules: Record<RuleN
   return parseBundle(await exec(`${CTL} get_bundle`));
 }
 
+// 线格式必须是双层编码：每段先 base64（得到不含换行的单行），再用 | 拼接，最后整体 base64。
+// ctl.sh 那边是「整体解码 → cut -d| 取段 → 每段再 base64 -d」，而 cut 是行敏感的：
+// 若只做单层编码，config 里的换行会把 bundle 拆成多行，cut 逐行取段 → 每段都是垃圾，
+// toybox 的 base64 -d 对垃圾输入仍返回 0 → 8 个文件全被写成 0 字节（1.2.8 曾出现此回归）。
+export function buildBundlePayload(configText: string, rules: Record<RuleName, string>): string {
+  const inner = [configText, ...RULE_ORDER.map((r) => rules[r] ?? "")].map((v) => b64Encode(v)).join("|");
+  return b64Encode(inner);
+}
+
 export async function saveBundle(configText: string, rules: Record<RuleName, string>): Promise<string> {
-  const joined = [configText, ...RULE_ORDER.map((r) => rules[r] ?? "")].join("|");
-  return exec(`${CTL} set_bundle '${b64Encode(joined)}'`);
+  return exec(`${CTL} set_bundle '${buildBundlePayload(configText, rules)}'`);
 }
 
 export async function getLogs(): Promise<string> {

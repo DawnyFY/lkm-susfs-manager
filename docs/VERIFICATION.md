@@ -33,15 +33,37 @@
 
 ## 1.2.8（2026-11-19）
 
-构建：13,190,738 B，sha256 `ca1fca98b1c497194eea94ce6bd2770f43f532cc9eea2bd4804b7c032d15509f`，manifest `c3487cdb…`。
-离线 35/35、门禁 5/5、`I18N_OK`。
+构建：13,185,596 B，sha256 `4286a5d2253ead9dd207a8b1caf05dc2c1f3cb5111e378957fafd625a3fa5bdf`，manifest `0afc8a6c…`。
+离线 **37/37**、Vitest **44/44**、门禁 **5/5**、`I18N_OK keys=141`；两次构建字节一致（zip 重建哈希相同）。
 
-- 界面：两套主题（`style.css` 冷蓝 `#2b7cff`/22px 圆角、`style-alt.css` 暖灰 `#4f46e5`/18px 圆角），关于页「主题 / Theme」切换，写 localStorage；页头图标已移除
-- 实测：两套 CSS 变量探针分别为 `accent=#2b7cff bg=#f2f4f8` 与 `accent=#4f46e5 bg=#f3f3f0`；设备安装后 `webroot/` 两套 CSS 齐全、`brand-icon` 计数 0、`themeWarm` 存在、`integrity=ok`
-- 上报：`kernel_version` 改为取 `/proc/version` 的构建 banner（此前与 `kernel_release` 重复）；服务端落库 `kernel_release` / `kernel_version`
-- 服务端版本白名单：19/1.2.7 与 20/1.2.8 同时接受（实测两版均返回 token）
-- 前端：Vite+Vue+TS 构建产物 166 KB（app.js 99.7 KB/gzip 36.9 KB）；Vitest 25/25；离线套件 36/36；门禁 5/5；产物指纹与源码一致（改源码后门禁会失败，已做反证）；设备侧 webroot 5 个文件齐全、index.html 引用全部可解析
-- 未验证：其余 5 套 KMI；冷启动首次装载；真机 WebView 内的 Vue 运行时（需人眼确认一次）
+**前端（Vite + Vue 3 + TS 重写）**
+
+- 产物：`webroot/` 合计 175,650 B（`assets/app.js` 109,085 B、`assets/app.css` 11,714 B、`contributor.jpg` 54,062 B、
+  `index.html`、`.build.json`）；打成 IIFE 经典脚本，产物内无 `type="module"` / `import` / `import.meta`
+- 主题：`data-theme="cool|warm"` + CSS 变量两套；数值取自社区原版（cool 22/14、warm 18/10，按钮 999/11，开关 48×26 / 44×26）
+- 布局：固定高度 + 内容区内部滚动，页签静态定位（无 `position: fixed` / `sticky` / `backdrop-filter`）
+- 设置持久化：`localStorage` 存主题与语言；`?theme=cool|warm` 可临时预览且不落盘
+- 设置保存：双层 base64 线格式（每段 b64 → `|` 连接 → 整体 b64），与 `ctl.sh set_bundle` 严格对应；
+  单层编码会被拒绝（`rejected: decode config.ini (空输出)`），不再出现 1.2.8 早期的「保存即清空配置」回归
+- 无 `eval` / `new Function`；`v-html` 只绑定硬编码 SVG 图标；外链仅头像（失败回退首字母）与公告 JSON（6 s 超时、静默失败）
+
+**PID 隐藏页与默认值**
+
+- 出厂 `enabled=0`；`customize.sh` 仅在「旧配置与 1.2.7 出厂原样逐字节相同」时迁移，用户改过的不动
+- 安装期临时文件（`.pid_guard.conf.new`、1.2.7 遗留 `pid_guard.conf.tmp.*`）在 `customize.sh` 末尾统一清理
+
+**接口性能（设备实测，`time` 内建）**
+
+| 命令 | 之前 | 现在 |
+|---|---|---|
+| 配置页数据 `get_bundle` | 8 次往返 | **0.18–0.29 s**（1 次） |
+| PID 页数据 `pid_guard_bundle` | ~2.3 s（含完整 status） | **0.12–0.19 s**（1 次） |
+| `ctl.sh status` | 2.06 s | 1.64–1.77 s（仍偏慢，见 `docs/BACKLOG.md` ISS-001） |
+
+**未验证**
+
+- 其余 5 套 KMI；冷启动首次装载（临时 root 重启即失效）
+- 真机 WebView 内的极端窄屏（&lt;360px）与深色模式组合
 
 ## 1.2.7（已发布，2026-11-18）
 

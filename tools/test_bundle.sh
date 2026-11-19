@@ -52,6 +52,30 @@ chk "段数不足被拒绝" "$(run_bundle "$short")" "rejected: expect 8 segment
 # 非 base64
 chk "非法 base64 被拒" "$(run_bundle "!!!notbase64!!!")" "invalid base64"
 
+# 回归（1.2.8 曾出现）：单层编码 —— 原文直接 join 后整体 base64。
+# ctl.sh 用 cut -d'|' 逐行取段，多行原文会被切碎，toybox 的 base64 -d 对垃圾输入仍返回 0，
+# 结果 8 个文件全被写成 0 字节却回 "saved"。这里断言它必须被拒绝且不破坏现有文件。
+raw_bad=$(printf "# 注释
+auto_load=1
+hide_sus_mnts=1
+|/data/adb
+|/loop
+|kernelsu
+|skip
+|mount
+|umount
+|map
+")
+single=$(printf "%s" "$raw_bad" | base64 | tr -d "
+")
+out=$(run_bundle "$single")
+case "$out" in
+    rejected*) echo "PASS  单层编码被拒绝（$out）" ;;
+    *) echo "FAIL  单层编码未被拒绝 got=[$out]"; fail=1 ;;
+esac
+chk "单层编码后 config 未被清空" "$(grep -c "^auto_load=1$" "$MOD/config/config.ini")" "1"
+chk "单层编码后 sus_path 未被清空" "$(cat "$MOD/config/sus_path.txt")" "/data/adb"
+
 rm -rf "$TMP"
 [ "$fail" = 0 ] && echo "ALL PASS" || echo "HAS FAILURE"
 exit "$fail"

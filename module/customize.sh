@@ -87,7 +87,6 @@ exclude_comms=nqiunativecheck"
             ui_print "- Probe PID Guard 默认已改为关闭（旧配置为出厂原样，已迁移）"
         fi
     fi
-    rm -f "$_pg_tpl_bak" 2>/dev/null
 
     # 旧版只有 config.sh：安装时先迁移到 config.ini（只提取 KEY=VALUE，绝不 source）
     if [ ! -f "$INSTALLED/config/config.ini" ] && [ -f "$INSTALLED/config/config.sh" ]; then
@@ -217,3 +216,14 @@ if [ "$COPIED_CONFIG" = "1" ]; then
 else
     ui_print "- 首次安装；可在 WebUI 中导入旧 susfs4ksu 配置"
 fi
+
+# 安装期临时文件统一清理：
+#  - .pid_guard.conf.new 是默认值迁移用的模板备份（全新安装时同样要清掉；
+#    它曾在 if [ -d "$INSTALLED/config" ] 内，全新安装会残留）
+#  - pid_guard.conf.tmp.* 是 1.2.7 时代写配置失败留下的残留
+rm -f "$_pg_tpl_bak" "$MODPATH/config/.pid_guard.conf.new" 2>/dev/null
+for _tmp in "$MODPATH"/config/pid_guard.conf.tmp.*; do
+    [ -e "$_tmp" ] || continue
+    rm -f "$_tmp" 2>/dev/null
+done
+true

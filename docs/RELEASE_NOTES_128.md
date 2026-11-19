@@ -47,4 +47,4 @@
 
 - **@dhc2082** — 1.2.8 两版 UI（冷蓝圆角 / 暖灰极简）的设计与实现
 
-**产物**：`susfs_allinone-1.2.8.zip`，13,190,738 B，sha256 `ca1fca98b1c497194eea94ce6bd2770f43f532cc9eea2bd4804b7c032d15509f`
+**产物**：`susfs_allinone-1.2.8.zip`，13,185,596 B，sha256 `4286a5d2253ead9dd207a8b1caf05dc2c1f3cb5111e378957fafd625a3fa5bdf`
