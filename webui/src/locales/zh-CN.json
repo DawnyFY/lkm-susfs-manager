@@ -138,5 +138,6 @@
   "status.module_version": "模块版本",
   "status.running": "运行中",
   "common.load_failed": "加载失败",
-  "common.retry": "重试"
+  "common.retry": "重试",
+  "about.credit.ui": "1.2.8 两版 UI（冷蓝圆角 / 暖灰极简）的设计与实现"
 }

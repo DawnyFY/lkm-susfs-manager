@@ -85,7 +85,19 @@ async function toggleStats(v: boolean): Promise<void> {
     <div class="card">
       <div class="credits">
         <img :src="avatarUrl" alt="contributor" width="44" height="44" />
-        <span>旧梦一场雨 <span class="hint" style="display: block">{{ t("about.credit.what") }}</span></span>
+        <span>
+          旧梦一场雨
+          <a class="gh" href="https://github.com/hhgbmh8-ux" rel="noopener noreferrer">@hhgbmh8-ux</a>
+          <span class="hint" style="display: block">{{ t("about.credit.what") }}</span>
+        </span>
+      </div>
+      <div class="credits">
+        <span class="avatar-initials" aria-hidden="true">dh</span>
+        <span>
+          dhc2082
+          <a class="gh" href="https://github.com/dhc2082" rel="noopener noreferrer">@dhc2082</a>
+          <span class="hint" style="display: block">{{ t("about.credit.ui") }}</span>
+        </span>
       </div>
       <p class="hint">simonpunk · inforcqb · sidex15 · SukiSU Ultra</p>
     </div>

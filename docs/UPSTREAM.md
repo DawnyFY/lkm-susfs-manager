@@ -52,3 +52,4 @@ SUSFS 部分仍然完全来自上游。
 - **sidex15** — ksu_module_susfs，`ksu_susfs` 实现
 - **SukiSU Ultra 团队** — 管理器与 late-load 机制
 - **旧梦一场雨**（[@hhgbmh8-ux](https://github.com/hhgbmh8-ux)）— 帮忙测试模块
+- **dhc2082**（[@dhc2082](https://github.com/dhc2082)）— 1.2.8 两版 UI（冷蓝圆角 / 暖灰极简）的设计与实现

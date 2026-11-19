@@ -138,5 +138,6 @@
   "status.module_version": "",
   "status.running": "",
   "common.load_failed": "",
-  "common.retry": ""
+  "common.retry": "",
+  "about.credit.ui": ""
 }

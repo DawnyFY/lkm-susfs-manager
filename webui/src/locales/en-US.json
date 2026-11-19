@@ -138,5 +138,6 @@
   "status.module_version": "Module version",
   "status.running": "Running",
   "common.load_failed": "Failed to load",
-  "common.retry": "Retry"
+  "common.retry": "Retry",
+  "about.credit.ui": "Designed and implemented both 1.2.8 UI themes (cool blue / warm gray)"
 }

@@ -759,6 +759,38 @@ details summary {
   border-radius: 50%;
 }
 
+.credits + .credits {
+  margin-top: 12px;
+}
+
+.avatar-initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.gh {
+  margin-left: 6px;
+  color: var(--text-3);
+  font-family: var(--mono);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.gh:hover {
+  color: var(--accent);
+}
+
 .footer {
   color: var(--text-3);
   font-size: 12px;
