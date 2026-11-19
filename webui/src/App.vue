@@ -10,14 +10,22 @@ import { hasKsu } from "./bridge";
 import { t } from "./i18n";
 import { clearBanner, refreshStatus, state, withBusy } from "./store";
 
+const ICONS = {
+  status: '<path d="M22 12h-4l-3 7-4-14-3 7H2"/>',
+  config: '<line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/>',
+  pidguard: '<path d="M12 3l7.5 3.2v5.4c0 4.6-3.2 8.7-7.5 9.9-4.3-1.2-7.5-5.3-7.5-9.9V6.2L12 3z"/>',
+  log: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3"/><path d="M13 15h4"/>',
+  about: '<circle cx="12" cy="12" r="9"/><path d="M12 10v6"/>',
+};
+
 type TabId = "status" | "config" | "pidguard" | "log" | "about";
 
-const TABS: { id: TabId; key: string; comp: unknown }[] = [
-  { id: "status", key: "nav.status", comp: StatusTab },
-  { id: "config", key: "nav.config", comp: ConfigTab },
-  { id: "pidguard", key: "nav.pidguard", comp: PidTab },
-  { id: "log", key: "nav.log", comp: LogTab },
-  { id: "about", key: "nav.about", comp: AboutTab },
+const TABS: { id: TabId; key: string; comp: unknown; icon: string }[] = [
+  { id: "status", key: "nav.status", comp: StatusTab, icon: ICONS.status },
+  { id: "config", key: "nav.config", comp: ConfigTab, icon: ICONS.config },
+  { id: "pidguard", key: "nav.pidguard", comp: PidTab, icon: ICONS.pidguard },
+  { id: "log", key: "nav.log", comp: LogTab, icon: ICONS.log },
+  { id: "about", key: "nav.about", comp: AboutTab, icon: ICONS.about },
 ];
 
 const tab = ref<TabId>(tabFromHash());
@@ -40,7 +48,7 @@ const pillText = computed(() => {
   if (!state.loaded) return t("app.detecting");
   const s = state.status;
   if (s.susfs_kernel === "none" || s.lkm_present === "0") return t("common.off");
-  return "OK";
+  return t("status.running");
 });
 
 function pick(id: TabId): void {
@@ -91,7 +99,8 @@ onMounted(async () => {
         :class="['tab', { active: tab === item.id }]"
         @click="pick(item.id)"
       >
-        {{ t(item.key) }}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" v-html="item.icon" />
+        <span>{{ t(item.key) }}</span>
       </button>
     </nav>
 

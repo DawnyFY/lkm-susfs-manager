@@ -100,3 +100,48 @@ export async function pgSave(confText: string): Promise<string> {
 export async function pgReload(): Promise<ExecResult> {
   return execCode(`${CTL} pid_guard_reload`);
 }
+
+export async function loadAndApply(): Promise<ExecResult> {
+  // 「加载并应用」= 先 load 再 apply；load 的失败不回滚，交给 apply 的结果表达
+  await execCode(`${CTL} load`);
+  return execCode(`${CTL} apply`);
+}
+
+export interface Announcement {
+  summary?: string;
+  items?: string[];
+  updated?: string;
+  link?: string;
+}
+
+// 公告：60 秒缓存 + 静默失败（离线/无网时不影响任何功能）
+const ANNOUNCE_URL = "https://susfs.stdawns.top/announcement.json";
+const ANNOUNCE_TTL = 60 * 1000;
+
+export async function getAnnouncement(): Promise<Announcement | null> {
+  try {
+    const raw = localStorage.getItem("announce_cache");
+    if (raw) {
+      const cached = JSON.parse(raw) as { at: number; data: Announcement };
+      if (Date.now() - cached.at < ANNOUNCE_TTL) return cached.data;
+    }
+  } catch {
+    /* 缓存损坏就重新拉 */
+  }
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    const res = await fetch(ANNOUNCE_URL, { cache: "no-store", signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const data = (await res.json()) as Announcement;
+    try {
+      localStorage.setItem("announce_cache", JSON.stringify({ at: Date.now(), data }));
+    } catch {
+      /* 存不下就算了 */
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
