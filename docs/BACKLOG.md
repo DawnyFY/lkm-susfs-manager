@@ -7,6 +7,8 @@
 
 ## ISS-001 · `ctl.sh status` 耗时 2 秒（下一次更新修）
 
+> Issue: [#9](https://github.com/DawnyFY/lkm-susfs-manager/issues/9)
+
 **状态**：已定位，未修（1.2.8 不含）
 **影响**：状态页首屏、`status` 相关的所有脚本调用
 **优先级**：中（用户可感知，但不影响正确性）
@@ -88,6 +90,8 @@ tool_query
 ---
 
 ## ISS-008 · `set_bundle` 无法检测「4 字节边界截断」
+
+> Issue: [#10](https://github.com/DawnyFY/lkm-susfs-manager/issues/10)
 
 **状态**：已知未修（1.2.8 不含），定级 minor
 **影响**：仅当调用方把 payload 截在 base64 的 4 字符边界上时
