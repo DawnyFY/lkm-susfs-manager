@@ -15,7 +15,7 @@ import {
 } from "../api";
 import { t } from "../i18n";
 import { countRules, getIni, setIni } from "../ini";
-import { refreshStatus, setBanner, state, withBusy } from "../store";
+import { refreshStatus, runSerial, setBanner, state, withBusy } from "../store";
 
 const BOOL_KEYS = [
   "auto_load",
@@ -84,15 +84,27 @@ async function loadAll(): Promise<void> {
   ready.value = true;
 }
 
-onMounted(async () => {
-  await withBusy(async () => {
-    try {
-      await loadAll();
-    } catch (e) {
-      setBanner("err", (e as Error).message);
-    }
-  });
-});
+const err = ref("");
+
+// 首屏加载走串行队列（不占用全局 busy），并且无论如何都要结束「读取中」
+async function bootstrap(): Promise<void> {
+  err.value = "";
+  ready.value = false;
+  try {
+    await runSerial(loadAll);
+  } catch (e) {
+    err.value = (e as Error).message;
+    setBanner("err", err.value);
+  } finally {
+    ready.value = true;
+  }
+}
+
+onMounted(bootstrap);
+
+function retry(): void {
+  void bootstrap();
+}
 
 function buildConfig(): string {
   let out = raws.config;
@@ -184,6 +196,10 @@ async function doReset(): Promise<void> {
 <template>
   <div>
     <div v-if="!ready" class="card"><p class="hint">{{ t("common.loading") }}</p></div>
+    <div v-else-if="err" class="card">
+      <p class="hint">{{ t("common.load_failed") }}：{{ err }}</p>
+      <div class="btn-row"><button class="btn" type="button" @click="retry">{{ t("common.retry") }}</button></div>
+    </div>
 
     <template v-else>
       <div class="card">

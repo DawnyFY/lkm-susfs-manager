@@ -39,12 +39,25 @@ export async function refreshStatus(): Promise<void> {
   state.loaded = true;
 }
 
-// 单一出口：所有按钮共用一个 busy 标记，避免并发命令把设备上的锁打满
-export async function withBusy<T>(fn: () => Promise<T>): Promise<T | undefined> {
-  if (state.busy) return undefined;
+// 串行队列：并发调用排队执行，绝不丢弃。
+// 之前这里是「busy 时直接 return」，导致切页签时 onMounted 的加载被悄悄丢掉，
+// 组件永远停在「读取中…」。
+let queue: Promise<unknown> = Promise.resolve();
+
+export function runSerial<T>(fn: () => Promise<T>): Promise<T> {
+  const next = queue.then(fn, fn);
+  queue = next.then(
+    () => undefined,
+    () => undefined
+  );
+  return next;
+}
+
+// 用户主动操作（按钮）：串行 + 全局 busy 用于禁用按钮
+export async function withBusy<T>(fn: () => Promise<T>): Promise<T> {
   state.busy = true;
   try {
-    return await fn();
+    return await runSerial(fn);
   } finally {
     state.busy = false;
   }

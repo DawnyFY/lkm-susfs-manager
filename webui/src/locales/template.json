@@ -136,5 +136,7 @@
   "status.not_created": "",
   "status.fail_count": "",
   "status.module_version": "",
-  "status.running": ""
+  "status.running": "",
+  "common.load_failed": "",
+  "common.retry": ""
 }

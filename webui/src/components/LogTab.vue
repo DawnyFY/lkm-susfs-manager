@@ -3,20 +3,25 @@
 import { onMounted, ref } from "vue";
 import { exportLog, getLogs } from "../api";
 import { t } from "../i18n";
-import { setBanner, state, withBusy } from "../store";
+import { runSerial, setBanner, state, withBusy } from "../store";
 
 const text = ref("");
 const ready = ref(false);
 
+const err = ref("");
+
 async function load(): Promise<void> {
-  await withBusy(async () => {
-    try {
+  err.value = "";
+  try {
+    await runSerial(async () => {
       text.value = await getLogs();
-      ready.value = true;
-    } catch (e) {
-      setBanner("err", (e as Error).message);
-    }
-  });
+    });
+  } catch (e) {
+    err.value = (e as Error).message;
+    setBanner("err", err.value);
+  } finally {
+    ready.value = true;
+  }
 }
 
 onMounted(load);
@@ -38,6 +43,7 @@ async function doExport(): Promise<void> {
   <div class="card">
     <h2>{{ t("log.title") }}</h2>
     <div v-if="!ready" class="hint">{{ t("common.loading") }}</div>
+    <div v-else-if="err" class="hint">{{ t("common.load_failed") }}：{{ err }}</div>
     <template v-else>
       <pre v-if="text.trim()" class="mono" style="white-space: pre-wrap; word-break: break-all; margin: 0;">{{ text }}</pre>
       <p v-else class="hint">{{ t("log.empty") }}</p>

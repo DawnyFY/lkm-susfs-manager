@@ -4,7 +4,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { pgGet, pgReload, pgSave } from "../api";
 import { t } from "../i18n";
 import { pidConfBuild } from "../ini";
-import { refreshStatus, setBanner, state, withBusy } from "../store";
+import { refreshStatus, runSerial, setBanner, state, withBusy } from "../store";
 
 const form = reactive({ enabled: false, uids: "", comms: "", excludes: "" });
 const ready = ref(false);
@@ -21,21 +21,29 @@ const RESULT: Record<string, string> = {
   unsupported: "unsupported",
 };
 
-onMounted(async () => {
-  await withBusy(async () => {
-    try {
+const err = ref("");
+
+async function bootstrap(): Promise<void> {
+  err.value = "";
+  ready.value = false;
+  try {
+    await runSerial(async () => {
       const conf = await pgGet();
       form.enabled = (conf.enabled ?? "0") === "1";
       form.uids = conf.target_uids || "";
       form.comms = conf.target_comms || "";
       form.excludes = conf.exclude_comms || "";
-      ready.value = true;
       await refreshStatus();
-    } catch (e) {
-      setBanner("err", (e as Error).message);
-    }
-  });
-});
+    });
+  } catch (e) {
+    err.value = (e as Error).message;
+    setBanner("err", err.value);
+  } finally {
+    ready.value = true;
+  }
+}
+
+onMounted(bootstrap);
 
 async function doSave(): Promise<void> {
   await withBusy(async () => {
@@ -102,6 +110,7 @@ async function doRefresh(): Promise<void> {
     <div class="card">
       <h2>{{ t("pid.rules") }} <span class="hint">Beta</span></h2>
       <div v-if="!ready" class="hint">{{ t("common.loading") }}</div>
+      <div v-else-if="err" class="hint">{{ t("common.load_failed") }}：{{ err }}</div>
       <template v-else>
         <label class="row">
           <span>{{ t("pid.rules.enable") }}</span>

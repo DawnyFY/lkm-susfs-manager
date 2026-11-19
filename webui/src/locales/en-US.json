@@ -136,5 +136,7 @@
   "status.not_created": "Not created",
   "status.fail_count": "Consecutive failures",
   "status.module_version": "Module version",
-  "status.running": "Running"
+  "status.running": "Running",
+  "common.load_failed": "Failed to load",
+  "common.retry": "Retry"
 }

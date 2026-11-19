@@ -123,6 +123,11 @@ html[data-theme="warm"] {
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -136,7 +141,9 @@ body {
 .app {
   display: flex;
   flex-direction: column;
+  /* 100vh 在老 WebView 里可能大于可视区，用 dvh 优先、vh 兜底 */
   min-height: 100vh;
+  min-height: 100dvh;
   max-width: 760px;
   margin: 0 auto;
   padding: 18px 14px 40px;
@@ -146,6 +153,14 @@ body {
   order: 2;
   flex: 1 1 auto;
   min-width: 0;
+  /* 内容再少也撑满剩余高度：否则吸底页签会先贴在内容下方（屏幕中间），
+     等数据到达把内容撑高后才掉到底部，看起来就是「跳一下」 */
+  display: flex;
+  flex-direction: column;
+}
+
+.content > * {
+  flex: 1 1 auto;
 }
 
 /* ---------------- 顶栏 ---------------- */

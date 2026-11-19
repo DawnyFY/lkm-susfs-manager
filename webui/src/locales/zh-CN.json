@@ -136,5 +136,7 @@
   "status.not_created": "未创建",
   "status.fail_count": "连续失败次数",
   "status.module_version": "模块版本",
-  "status.running": "运行中"
+  "status.running": "运行中",
+  "common.load_failed": "加载失败",
+  "common.retry": "重试"
 }
