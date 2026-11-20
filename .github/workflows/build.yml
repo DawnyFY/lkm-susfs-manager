@@ -15,6 +15,36 @@ jobs:
         with:
           python-version: "3.x"
 
+      # 前端：类型检查 + 单测。缺了这两步，组件漏 import、类型错误这类问题只能靠人肉发现
+      #（1.2.9 的 Sheet 漏 import 就是这样漏过去的）。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+
+      - name: Install WebUI deps
+        working-directory: webui
+        run: npm ci --no-audit --no-fund
+
+      - name: WebUI typecheck
+        working-directory: webui
+        run: npx vue-tsc --noEmit
+
+      - name: WebUI unit tests
+        working-directory: webui
+        run: npx vitest run
+
+      # 构建产物必须与源码一致：tools/webui_fingerprint.py 的 sha256 写在 webroot/.build.json，
+      # check_zip 会比对；这里额外做一次「重建后仍一致」，防止改了前端忘重建就提交
+      - name: Rebuild WebUI (must match committed webroot)
+        run: |
+          sh tools/build_webui.sh "$PWD"
+          git diff --exit-code -- module/webroot || {
+            echo "::error::module/webroot 与源码不一致：本地跑 sh tools/build_webui.sh 后重新提交"
+            exit 1
+          }
+
       - name: Check text files for CR bytes
         run: python tools/check_no_crlf.py
 
