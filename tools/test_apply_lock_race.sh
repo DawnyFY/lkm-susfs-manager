@@ -1,15 +1,18 @@
 #!/bin/sh
 # 并发接管的回归：多个进程同时抢一把「持有者已死」的锁。
-# 关键：获取 / 持锁 / 释放必须发生在同一个进程里，否则持有者一退出锁就该被接管，
-# 测出来的「多个赢家」是测试假象而非竞态。
+# 关键两点：
+#  1) 获取 / 持锁 / 释放必须发生在同一个进程里，否则持有者一退出锁就该被接管，
+#     测出来的「多个赢家」是测试假象；
+#  2) common.sh 的 STATE 由 MODDIR 推导，测试用临时 MODDIR，不能直接覆盖 STATE。
 set -u
 REPO="$1"
 ROOT="$REPO"
 if [ -f "$REPO/module/module.prop" ]; then REPO="$REPO/module"; fi
 
 TMP=$(mktemp -d)
-STATE="$TMP/state"
-mkdir -p "$STATE"
+MOD="$TMP/mod"
+STATE="$MOD/state"
+mkdir -p "$STATE" "$MOD/config"
 BID="$TMP/boot_id"
 echo "boot-A" > "$BID"
 LOCK="$STATE/apply.lock"
@@ -21,7 +24,7 @@ rm -rf "$LOCK"; mkdir -p "$LOCK"; echo "999999 boot-A" > "$LOCK/pid"
 i=0
 while [ $i -lt 8 ]; do
     (
-        PROC_BOOT_ID_FILE="$BID" STATE="$STATE" HELD="$HELD" LOCK="$LOCK" REPO="$REPO" sh -c '
+        MODDIR="$MOD" PROC_BOOT_ID_FILE="$BID" HELD="$HELD" LOCK="$LOCK" REPO="$REPO" sh -c '
             . "$REPO/common.sh" >/dev/null 2>&1
             lock_acquire "$LOCK" 180 || exit 1
             _s=$(date +%s%N)
