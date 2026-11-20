@@ -13,7 +13,7 @@ if [ -f "$LOG" ] && [ "$(wc -c < "$LOG" 2>/dev/null)" -gt 65536 ]; then
     tail -n 200 "$LOG" > "$LOG.tmp" 2>/dev/null && mv -f "$LOG.tmp" "$LOG"
 fi
 exec >>"$LOG" 2>&1
-echo "=== SUSFS 管理器 load $(date '+%F %T') ==="
+echo "=== SUSFS 管理器 load $(now_stamp) ==="
 echo "[i] root: $(root_family)"
 
 # 加载前校验：文件被改过就不注入内核

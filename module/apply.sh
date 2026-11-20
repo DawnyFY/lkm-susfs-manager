@@ -12,7 +12,7 @@ if [ -f "$LOG" ] && [ "$(wc -c < "$LOG" 2>/dev/null)" -gt 262144 ]; then
 fi
 exec >>"$LOG" 2>&1
 echo ""
-echo "=== apply $(date '+%F %T') ==="
+echo "=== apply $(now_stamp) ==="
 echo "[i] root: $(root_family)"
 
 set_description() {

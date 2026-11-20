@@ -102,7 +102,8 @@ chk "首次加载 结果 ok" "$(status)" "ok"
 chk "首次加载 走 6.6 的 ko" "$(grep -c 'lib/pid_guard/6.6/generic_pid_guard.ko' "$ARGS")" "1"
 chk "首次加载 传递三个参数" "$(grep -c 'target_uids=99000-99999 target_comms=probe-\*,canProbe\*,ivecheck\* exclude_comms=nqiunativecheck' "$ARGS")" "1"
 chk "首次加载 写隐藏列表" "$(hide_has)" "yes"
-chk "首次加载 日志有 Loaded kernel module" "$(loghas 'Loaded kernel module')" "yes"
+chk "首次加载 日志记录已加载" "$(loghas 'pid_guard 已加载')" "yes"
+chk "首次加载 不再重复 ksud 的原话" "$(loghas 'Loaded kernel module')" "no"
 
 # 6. 同一份配置再次 apply：幂等，不重复 insmod
 reset

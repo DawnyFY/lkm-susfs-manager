@@ -23,6 +23,21 @@ KSUD=${PG_KSUD:-/data/adb/ksu/bin/ksud}
 mkdir -p "$STATE" 2>/dev/null
 
 log() { echo "$1" >> "$LOG"; }
+# 本脚本不 source common.sh（保持独立可测），时间戳逻辑与 common.sh 的 now_stamp 一致：
+# 开机早期 RTC 未同步时 date 会给出 1970-xx-xx，日志里改用开机时长
+now_stamp() {
+    _ns_year=$(date +%Y 2>/dev/null)
+    case "$_ns_year" in
+        20[2-9][0-9]|2[1-9][0-9][0-9]|3[0-9][0-9][0-9]) date '+%F %T' 2>/dev/null ;;
+        *)
+            _ns_up=$(cut -d' ' -f1 /proc/uptime 2>/dev/null | cut -d. -f1)
+            case "$_ns_up" in
+                ''|*[!0-9]*) date '+%F %T' 2>/dev/null ;;
+                *) printf '开机+%ss（RTC 未同步）' "$_ns_up" ;;
+            esac
+            ;;
+    esac
+}
 loaded() { [ -d "$SYS_MOD/$MODNAME" ]; }
 conf_hash() { cksum "$CONF" 2>/dev/null | awk '{print $1 "-" $2}'; }
 
@@ -32,7 +47,7 @@ write_status() {
         echo "kmi=${2:-}"
         echo "short=${3:-}"
         echo "rc=${4:-0}"
-        echo "ts=$(date '+%F %T')"
+        echo "ts=$(now_stamp)"
     } > "$STATE/pid_guard.status" 2>/dev/null
 }
 
@@ -54,7 +69,9 @@ unhide_self() {
 }
 
 unload() {
-    loaded || { log "[=] pid_guard 未加载，无需卸载"; write_status skipped "" "" 0; return 0; }
+    # 无操作时不写日志：load.sh 与 apply.sh 都会调用本脚本，
+    # 每次启动会打印两遍同一行，看着像重复卸载
+    loaded || { write_status skipped "" "" 0; return 0; }
     if command -v rmmod >/dev/null 2>&1 && rmmod "$MODNAME" >/dev/null 2>&1; then
         log "[-] pid_guard 已卸载（rmmod）"
         rm -f "$STATE/pid_guard.conf_hash" 2>/dev/null
@@ -202,7 +219,9 @@ if [ "$rc" -ne 0 ] || ! loaded; then
     exit 1
 fi
 echo "$HASH" > "$STATE/pid_guard.conf_hash" 2>/dev/null
-log "Loaded kernel module: $KO"
+# 不用 ksud 的原话：ksud insmod 自己会输出「Loaded kernel module: <path>」，
+# 再打一遍日志里就是两行一模一样的内容
+log "[i] pid_guard 已加载（KMI $SHORT，参数已生效）"
 hide_self
 write_status ok "$KMI_FULL" "$SHORT" 0
 exit 0

@@ -107,6 +107,22 @@ susfs_bin_runnable() {
 
 # 只挑路径、不执行二进制：status 这类只想知道「有没有」的场景用它，
 # 避免每页首屏都 spawn 好几次 ksu_susfs（每次几十到几百毫秒）
+# 时间戳：开机早期 RTC 还没同步时 date 会给出 1970-xx-xx，
+# 日志里看着像坏数据。年份不可信时改用开机时长，仍能表达先后关系。
+now_stamp() {
+    _ns_year=$(date +%Y 2>/dev/null)
+    case "$_ns_year" in
+        20[2-9][0-9]|2[1-9][0-9][0-9]|3[0-9][0-9][0-9]) date '+%F %T' 2>/dev/null ;;
+        *)
+            _ns_up=$(cut -d' ' -f1 /proc/uptime 2>/dev/null | cut -d. -f1)
+            case "$_ns_up" in
+                ''|*[!0-9]*) date '+%F %T' 2>/dev/null ;;
+                *) printf '开机+%ss（RTC 未同步）' "$_ns_up" ;;
+            esac
+            ;;
+    esac
+}
+
 select_susfs_bin_fast() {
     _fb_active=$(find_susfs_bin)
     _fb_backup=$(find_susfs_backup)

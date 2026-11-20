@@ -31,6 +31,17 @@
 - 35/35 测试通过；1.2.5 的 kallsyms 零地址回退已验证（1.2.4/r18.9 冷启动已验证）。
 - `check_zip` / `check_no_crlf` 通过。
 
+## 1.2.9（2026-11-19）
+
+构建：13,186,781 B，sha256 `236b4c85e3ca8db89b4188900d498a5a3ae57cb07a2801c82e7b14f91e2670d5`，manifest `36adafa1…`。
+离线 **37/37**、前端 **44/44**、门禁 **5/5**、`I18N_OK keys=141`。
+
+- 日志去重：设备实测一次 pid_guard 真实加载写入 `Loaded kernel module` **1 条**（来自 `ksud insmod`）+ `[i] pid_guard 已加载（KMI 6.6，参数已生效）` **1 条**，此前是同一句重复两次
+- 时间戳：`now_stamp()` 在年份不可信时输出 `开机+Ns（RTC 未同步）`；`load.sh`/`apply.sh` 块头与 `pid_guard.status` 的 `ts=` 均已切换；`apply.log`/`load.log` 中不再新增 `1970-` 记录
+- 卸载无操作不再写日志（`pid_guard 未加载，无需卸载` 只在实际卸载时才由 `[-]` 行体现），状态仍记 `skipped`
+- 设备（Android 16 / 6.6.77 / SukiSU）：`module_version=1.2.9`、`integrity=ok`
+- 其余与 1.2.8 相同（WebUI、主题、接口、PID Guard 默认关闭）
+
 ## 1.2.8（2026-11-19）
 
 构建：13,186,088 B，sha256 `0a7557cb85de3a4cb861df5197ceb43d14332bd40de6a714ad4a8b6136475258`，manifest `97b570cd…`。
