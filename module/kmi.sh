@@ -70,7 +70,34 @@ select_kmi() {
     [ -s "$2/lib/susfs_guard_lkm-$_kmi.ko" ] || continue
     echo "$_kmi"; return 0
   done < "$2/kmis"
-  return 1
+  # SDK 对不上（例如 Android 16 跑 5.15 内核，包里没有 android16-5.15）：
+  # 取「不高于设备 Android 版本的最高候选」试一次。选错也只是 insmod 失败，
+  # 与现状（直接跳过、要用户手动指定）等价；选对则省掉一次人工操作。
+  _sdk=$(getprop ro.build.version.sdk 2>/dev/null)
+  case "$_sdk" in ''|*[!0-9]*) return 1 ;; esac
+  _best=""
+  _best_api=0
+  while IFS= read -r _kmi; do
+    [ -n "$_kmi" ] || continue
+    _kver="${_kmi#*-}"
+    case "$rel" in "$_kver".*) ;; *) continue ;; esac
+    _p="${rel#"$_kver".}"; _p="${_p%%-*}"
+    case "$_p" in ''|*[!0-9]*) continue ;; esac
+    [ -s "$2/lib/susfs_guard_lkm-$_kmi.ko" ] || continue
+    case "${_kmi%-*}" in
+      android12) _api=31 ;;
+      android13) _api=33 ;;
+      android14) _api=34 ;;
+      android15) _api=35 ;;
+      android16) _api=36 ;;
+      android17) _api=37 ;;
+      *) continue ;;
+    esac
+    [ "$_api" -le "$_sdk" ] || continue
+    if [ "$_api" -gt "$_best_api" ]; then _best=$_kmi; _best_api=$_api; fi
+  done < "$2/kmis"
+  [ -n "$_best" ] || return 1
+  echo "$_best"; return 0
 }
 
 # 列出所有已打包的 KMI（lib/ 下真实存在的 .ko）

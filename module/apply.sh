@@ -49,8 +49,11 @@ if [ -f "$STATE/loading" ]; then
 fi
 
 # 互斥：开机脚本与 WebUI 可能同时触发 apply，重复执行会让 our_paths 清单错乱
-if ! lock_acquire "$STATE/apply.lock" 900; then
-    echo "[!] 另一个 apply 正在运行，跳过本次"
+if ! lock_acquire "$STATE/apply.lock" 180; then
+    _lk_info=""
+    read -r _lk_info < "$STATE/apply.lock/pid" 2>/dev/null
+    echo "[!] 另一个 apply 正在运行（持有者: ${_lk_info:-未知}），跳过本次"
+    echo "[i] 若持续出现，说明上次 apply 被中断；锁会在 3 分钟后自动失效，或重启后立即释放"
     # 不覆盖已有 apply_result，避免并发时状态在 success/skipped 之间闪变
     # 返回非 0：调用方（boot-completed）不能把"没执行"当成成功
     exit 1

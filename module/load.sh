@@ -186,6 +186,11 @@ force_kmi=${force_kmi:-}
 # 只允许 KMI 名称字符，防止路径穿越
 case "$force_kmi" in *[!A-Za-z0-9._-]*) force_kmi="" ;; esac
 KMI=$(select_kmi "$REL" "$MODDIR" 2>/dev/null)
+# 内核串没有 Android tag 时，KMI 是按 SDK 推测的；加载失败要引导用户手动指定
+case "$REL" in
+    *android[0-9]*) ;;
+    *) [ -n "$KMI" ] && echo "[i] 内核串无 Android tag，按设备 SDK 推测 KMI: $KMI（加载失败可手动指定）" ;;
+esac
 if [ -n "$force_kmi" ] && [ -s "$MODDIR/lib/susfs_guard_lkm-$force_kmi.ko" ]; then
     echo "[!] 使用强制指定的 KMI: $force_kmi"
     KMI="$force_kmi"

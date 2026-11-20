@@ -1365,13 +1365,28 @@ try_umount_add_once() {
 # ---- 运行时锁与耗时判断 ----
 # mkdir 是原子的：用它做简单互斥，避免开机 apply 与 WebUI apply 同时写规则
 lock_acquire() {
-    _lk=$1; _ttl=${2:-900}
+    _lk=$1; _ttl=${2:-180}
     mkdir -p "$STATE" 2>/dev/null
     _bid=$(cat "${PROC_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}" 2>/dev/null)
     # 锁目录里记录持有者 PID：过期被接管后，旧持有者退出时不能删掉新锁
     mkdir "$_lk" 2>/dev/null && { echo "$$ $_bid" > "$_lk/pid" 2>/dev/null; return 0; }
+    # 持有者进程已不存在：锁是上一次被中断留下的，立即接管，不必等 TTL。
+    # （用户实测：apply 被杀后锁留 15 分钟，界面一直提示"另一个 apply 正在运行"）
+    _lk_line=""
+    read -r _lk_line < "$_lk/pid" 2>/dev/null
+    _lk_pid=${_lk_line%% *}
+    _lk_bid=${_lk_line##* }
+    case "$_lk_pid" in
+        ''|*[!0-9]*) _lk_pid="" ;;
+    esac
+    if [ -n "$_lk_pid" ] && [ ! -d "/proc/$_lk_pid" ]; then
+        _stale_dead="$STATE/.lock.dead.$$"
+        if mv "$_lk" "$_stale_dead" 2>/dev/null; then
+            rm -rf "$_stale_dead" 2>/dev/null
+            mkdir "$_lk" 2>/dev/null && { echo "$$ $_bid" > "$_lk/pid" 2>/dev/null; return 0; }
+        fi
+    fi
     # 上一次开机留下的锁：boot_id 不同，直接接管（不再等 TTL）
-    _lk_bid=$(cut -d" " -f2 "$_lk/pid" 2>/dev/null)
     if [ -n "$_lk_bid" ] && [ -n "$_bid" ] && [ "$_lk_bid" != "$_bid" ]; then
         rm -rf "$_lk" 2>/dev/null
         mkdir "$_lk" 2>/dev/null && { echo "$$ $_bid" > "$_lk/pid" 2>/dev/null; return 0; }
