@@ -16,6 +16,7 @@ import {
 import { t } from "../i18n";
 import { countRules, getIni, setIni } from "../ini";
 import { refreshStatus, runSerial, setBanner, state, withBusy } from "../store";
+import Sheet from "./Sheet.vue";
 
 const BOOL_KEYS = [
   "auto_load",
