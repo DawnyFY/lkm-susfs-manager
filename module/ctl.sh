@@ -20,29 +20,148 @@ valid_b64() {
 
 # Probe PID Guard 的状态字段：status 与 pid_guard_bundle 共用，避免两处逻辑漂移
 pg_status_fields() {
-# Probe PID Guard（可选组件）：配置、驻留、可见性、最近一次结果
-_PG_EN=0
-[ -f "$CONFIG/pid_guard.conf" ] && _PG_EN=$(grep -m1 '^enabled=' "$CONFIG/pid_guard.conf" 2>/dev/null | cut -d= -f2)
-case "$_PG_EN" in 0|1) ;; *) _PG_EN=0 ;; esac
-_PG_LOADED=0
-[ -d /sys/module/generic_pid_guard ] && _PG_LOADED=1
-_PG_VISIBLE=0
-grep -qw generic_pid_guard /proc/modules 2>/dev/null && _PG_VISIBLE=1
-_PG_HIDDEN=0
-# 只有真的加载了才算「已隐藏」：卸载后残留的名字不该让页面显示已隐藏
-if [ "$_PG_LOADED" = "1" ]; then
-    grep -qw generic_pid_guard /proc/susfs_hide_modules 2>/dev/null && _PG_HIDDEN=1
-fi
-_PG_RES=$(grep -m1 '^result=' "$STATE/pid_guard.status" 2>/dev/null | cut -d= -f2)
-printf 'pid_guard_enabled=%s\n' "$_PG_EN"
-printf 'pid_guard_loaded=%s\n' "$_PG_LOADED"
-printf 'pid_guard_visible=%s\n' "$_PG_VISIBLE"
-printf 'pid_guard_hidden=%s\n' "$_PG_HIDDEN"
-printf 'pid_guard_result=%s\n' "${_PG_RES:-unknown}"
-_PG_UIDS=$(grep -m1 '^target_uids=' "$CONFIG/pid_guard.conf" 2>/dev/null | cut -d= -f2-)
-_PG_COMMS=$(grep -m1 '^target_comms=' "$CONFIG/pid_guard.conf" 2>/dev/null | cut -d= -f2-)
-printf 'pid_guard_uids=%s\n' "$_PG_UIDS"
-printf 'pid_guard_comms=%s\n' "$_PG_COMMS"
+    # 全部用内建读取：原来这里是 3 次 grep|cut（配置）+ 2 次 grep -qw（/proc）
+    # + 1 次 grep|cut（状态文件），共 7 个进程，是 status 里除探测之外最大的一块。
+    _PG_EN=0
+    _PG_UIDS=""
+    _PG_COMMS=""
+    if [ -f "$CONFIG/pid_guard.conf" ]; then
+        while IFS='=' read -r _k _v; do
+            case "$_k" in
+                enabled) _PG_EN=$_v ;;
+                target_uids) _PG_UIDS=$_v ;;
+                target_comms) _PG_COMMS=$_v ;;
+            esac
+        done < "$CONFIG/pid_guard.conf"
+    fi
+    case "$_PG_EN" in 0|1) ;; *) _PG_EN=0 ;; esac
+    _PG_LOADED=0
+    [ -d /sys/module/generic_pid_guard ] && _PG_LOADED=1
+    _PG_VISIBLE=0
+    if [ -r /proc/modules ]; then
+        while read -r _m _rest; do
+            [ "$_m" = "generic_pid_guard" ] && { _PG_VISIBLE=1; break; }
+        done < /proc/modules
+    fi
+    _PG_HIDDEN=0
+    # 只有真的加载了才算「已隐藏」：卸载后残留的名字不该让页面显示已隐藏
+    if [ "$_PG_LOADED" = "1" ] && [ -r /proc/susfs_hide_modules ]; then
+        while read -r _m; do
+            [ "$_m" = "generic_pid_guard" ] && { _PG_HIDDEN=1; break; }
+        done < /proc/susfs_hide_modules
+    fi
+    _PG_RES=""
+    if [ -f "$STATE/pid_guard.status" ]; then
+        while IFS='=' read -r _k _v; do
+            [ "$_k" = "result" ] && _PG_RES=$_v
+        done < "$STATE/pid_guard.status"
+    fi
+    printf 'pid_guard_enabled=%s\n' "$_PG_EN"
+    printf 'pid_guard_loaded=%s\n' "$_PG_LOADED"
+    printf 'pid_guard_visible=%s\n' "$_PG_VISIBLE"
+    printf 'pid_guard_hidden=%s\n' "$_PG_HIDDEN"
+    printf 'pid_guard_result=%s\n' "${_PG_RES:-unknown}"
+    printf 'pid_guard_uids=%s\n' "$_PG_UIDS"
+    printf 'pid_guard_comms=%s\n' "$_PG_COMMS"
+}
+
+# status 的探测缓存：同一 boot 内只算一次。
+# 这些探测每项要起一个进程（ksu_susfs / getprop / 内核日志 / config.gz），
+# status 每次刷新都重算的话，光是进程创建就 1.5s。
+# ksu_susfs 的版本指纹按 size+mtime 参与，换二进制自动失效。
+_st_probe_signature() {
+    _sig_bid=""
+    read -r _sig_bid < /proc/sys/kernel/random/boot_id 2>/dev/null
+    _sig_bin=""
+    _sig_bin_path=$(select_susfs_bin_fast 2>/dev/null)
+    if [ -n "$_sig_bin_path" ] && [ -x "$_sig_bin_path" ]; then
+        _sig_bin=$(stat -c '%s-%Y' "$_sig_bin_path" 2>/dev/null)
+    fi
+    printf '%s|%s' "$_sig_bid" "$_sig_bin"
+}
+
+_st_probe_refresh() {
+    _BIN=$(select_susfs_bin_fast 2>/dev/null)
+    _VARIANT=""
+    _VERSION=""
+    _BIN_OK=0
+    if [ -n "$_BIN" ] && [ -x "$_BIN" ]; then
+        # version 与 variant 各要几百毫秒（每次起一个进程读内核侧信息），并行跑
+        _tmpv="$STATE/.binver.$$"
+        _tmpa="$STATE/.binvar.$$"
+        mkdir -p "$STATE" 2>/dev/null
+        "$_BIN" show version >"$_tmpv" 2>/dev/null &
+        _pidv=$!
+        _pida=""
+        if [ -d /sys/module/susfs_guard_lkm ]; then
+            "$_BIN" show variant >"$_tmpa" 2>/dev/null &
+            _pida=$!
+        fi
+        wait "$_pidv" 2>/dev/null && _BIN_OK=1
+        [ -n "$_pida" ] && wait "$_pida" 2>/dev/null
+        [ -s "$_tmpv" ] && read -r _VERSION < "$_tmpv" 2>/dev/null
+        [ -s "$_tmpa" ] && read -r _VARIANT < "$_tmpa" 2>/dev/null
+        rm -f "$_tmpv" "$_tmpa" 2>/dev/null
+    fi
+    _KP=$_P_KP
+    _IID=$(install_id 2>/dev/null)
+    _SE=$(getenforce 2>/dev/null)
+    _RM=$(ksu_branch 2>/dev/null)
+    _BL=$(bootloader_state 2>/dev/null)
+    _KPS=$(kernelpatch_kernel_state 2>/dev/null)
+    _KPV=$(kernelpatch_kernel_version 2>/dev/null)
+    _CKSU=$(kernel_config_get CONFIG_KSU 2>/dev/null)
+    _CKSUSFS=$(kernel_config_get CONFIG_KSU_SUSFS 2>/dev/null)
+    {
+        printf 'sig=%s' "$(_st_probe_signature)"
+        printf '%s' "
+bin=$_BIN
+bin_ok=$_BIN_OK
+variant=$_VARIANT
+version=$_VERSION
+kp=$_KP
+iid=$_IID
+se=$_SE
+rm=$_RM
+bl=$_BL
+kps=$_KPS
+kpv=$_KPV
+cksu=$_CKSU
+cksusfs=$_CKSUSFS
+"
+    } > "$STATE/.probe_cache" 2>/dev/null
+}
+
+# 读缓存到 _P_*；返回值 0 表示命中
+_st_probe_load() {
+    _pc="$STATE/.probe_cache"
+    [ -f "$_pc" ] || return 1
+    _want=$(_st_probe_signature)
+    _have=""
+    read -r _first < "$_pc" 2>/dev/null
+    case "$_first" in sig=*) _have=${_first#sig=} ;; esac
+    [ "$_have" = "$_want" ] || return 1
+    _P_BIN=""; _P_BIN_OK=0; _P_VARIANT=""; _P_VERSION=""
+    _P_KP=0; _P_IID=""; _P_SE=""; _P_RM=""; _P_BL=""; _P_KPS=""; _P_KPV=""
+    _P_CKSU=""; _P_CKSUSFS=""
+    while IFS='=' read -r _k _v; do
+        case "$_k" in
+            bin) _P_BIN=$_v ;;
+            bin_ok) _P_BIN_OK=$_v ;;
+            variant) _P_VARIANT=$_v ;;
+            version) _P_VERSION=$_v ;;
+            kp) _P_KP=$_v ;;
+            iid) _P_IID=$_v ;;
+            se) _P_SE=$_v ;;
+            rm) _P_RM=$_v ;;
+            bl) _P_BL=$_v ;;
+            kps) _P_KPS=$_v ;;
+            kpv) _P_KPV=$_v ;;
+            cksu) _P_CKSU=$_v ;;
+            cksusfs) _P_CKSUSFS=$_v ;;
+        esac
+    done < "$_pc"
+    return 0
 }
 
 status() {
@@ -60,33 +179,17 @@ status() {
     [ "$SUSFS_KIND" != "none" ] && PRESENT=1
     LKM_PRESENT=0
     [ "$SUSFS_KIND" = "lkm" ] && LKM_PRESENT=1
-    BIN=$(select_susfs_bin_fast 2>/dev/null)
 
-    # 只 spawn 一次取 version，KSSTAT 直接复用结果。
-    # 之前这里是 select_susfs_bin（内部会试跑 show version）+ variant + version + 再跑一次
-    # version 判 KSSTAT，一共 5 次进程启动，是 status 慢的主因。
-    VARIANT=""
-    VERSION=""
-    _BIN_OK=0
-    if [ -n "$BIN" ] && [ -x "$BIN" ]; then
-        # version 与 variant 各要 ~0.5s（每次都要起一个进程读内核侧信息），
-        # 并行跑把这一段从 1s 压到 0.5s
-        _tmpv="$STATE/.binver.$$"
-        _tmpa="$STATE/.binvar.$$"
-        mkdir -p "$STATE" 2>/dev/null
-        "$BIN" show version >"$_tmpv" 2>/dev/null &
-        _pidv=$!
-        _pida=""
-        if [ "$LKM_PRESENT" = "1" ]; then
-            "$BIN" show variant >"$_tmpa" 2>/dev/null &
-            _pida=$!
-        fi
-        wait "$_pidv" 2>/dev/null && _BIN_OK=1
-        [ -n "$_pida" ] && wait "$_pida" 2>/dev/null
-        [ -s "$_tmpv" ] && VERSION=$(cat "$_tmpv" 2>/dev/null)
-        [ -s "$_tmpa" ] && VARIANT=$(cat "$_tmpa" 2>/dev/null)
-        rm -f "$_tmpv" "$_tmpa" 2>/dev/null
+    # 一键探测：命中缓存就不起任何进程；未命中才重算一次（每 boot 一次）
+    if ! _st_probe_load; then
+        _st_probe_refresh
+        _st_probe_load || true
     fi
+    BIN=$_P_BIN
+
+    VARIANT=$_P_VARIANT
+    VERSION=$_P_VERSION
+    _BIN_OK=$_P_BIN_OK
 
     # 活动二进制存在但跑不起来时，回退到模块自带备份：
     # 1.2.7 的 select_susfs_bin 就是这么做的（bin/ksu_susfs_good 存在的意义），
@@ -103,10 +206,26 @@ status() {
         fi
     fi
 
-    RULES=$(grep '^path=' /proc/susfs_path 2>/dev/null | grep -v '\[ours:' | sed 's/^path=//' | awk '{print $1}' | sort -u | wc -l | tr -d ' ')
-    RULES=${RULES:-0}
+    # 规则数：原先 grep|grep|sed|awk|sort|wc 六段管线要起 6 个进程，改成一次读 + 内建判重
+    RULES=0
+    if [ -r /proc/susfs_path ]; then
+        _seen_rules=" "
+        while read -r _line; do
+            case "$_line" in path=*) ;; *) continue ;; esac
+            case "$_line" in *"[ours:"*) continue ;; esac
+            _p=${_line#path=}
+            _p=${_p%% *}
+            case "$_seen_rules" in *" $_p "*) continue ;; esac
+            _seen_rules="$_seen_rules$_p "
+            RULES=$((RULES + 1))
+        done < /proc/susfs_path
+    fi
     HIDE=0
-    grep -qw kernelsu /proc/susfs_hide_modules 2>/dev/null && HIDE=1
+    if [ -r /proc/susfs_hide_modules ]; then
+        while read -r _mod; do
+            [ "$_mod" = "kernelsu" ] && { HIDE=1; break; }
+        done < /proc/susfs_hide_modules
+    fi
     MARKER=0
     marker_exists && MARKER=1
 
@@ -124,14 +243,25 @@ status() {
             KSSTAT=ok
         fi
     fi
-    FAILS=$(cat "$MODDIR/state/fail_count" 2>/dev/null)
+    FAILS=""
+    read -r FAILS < "$MODDIR/state/fail_count" 2>/dev/null
     FAILS=${FAILS:-0}
     LSIZE=$(stat -c %s "$MODDIR/lib/susfs_guard_lkm-$KMI.ko" 2>/dev/null)
     LSIZE=${LSIZE:-0}
 
-    printf 'module_version=%s\n' "$(get_prop version)"
-    printf 'install_id=%s\n' "$(install_id)"
-    printf 'description=%s\n' "$(get_prop description)"
+    _prop_version=""
+    _prop_desc=""
+    if [ -r "$MODDIR/module.prop" ]; then
+        while IFS='=' read -r _pk _pv; do
+            case "$_pk" in
+                version) _prop_version=$_pv ;;
+                description) _prop_desc=$_pv ;;
+            esac
+        done < "$MODDIR/module.prop"
+    fi
+    printf 'module_version=%s\n' "$_prop_version"
+    printf 'install_id=%s\n' "$_P_IID"
+    printf 'description=%s\n' "$_prop_desc"
     printf 'kernel=%s\n' "$REL"
     printf 'kmi=%s\n' "$KMI"
     printf 'lkm_present=%s\n' "$LKM_PRESENT"
@@ -142,30 +272,34 @@ status() {
     printf 'hide_kernelsu=%s\n' "$HIDE"
     printf 'marker=%s\n' "$MARKER"
     printf 'auto_load=%s\n' "$AUTOLOAD"
-    printf 'root_manager=%s\n' "$(ksu_branch)"
+    printf 'root_manager=%s\n' "$_P_RM"
     printf 'ksu_bin=%s\n' "$KSSTAT"
     printf 'ksu_bin_path=%s\n' "$BIN"
-    printf 'selinux=%s\n' "$(getenforce 2>/dev/null)"
+    printf 'selinux=%s\n' "$_P_SE"
     printf 'fail_count=%s\n' "$FAILS"
-    _AF=$(cat "$STATE/apply_fails" 2>/dev/null)
+    _AF=""
+    read -r _AF < "$STATE/apply_fails" 2>/dev/null
     _AF=${_AF:-0}
     case "$_AF" in ''|*[!0-9]*) _AF=0 ;; esac
     printf 'apply_fails=%s\n' "$_AF"
 
     pg_status_fields
-    if kernelpatch_present; then _KP=1; else _KP=0; fi
+    _KP=$_P_KP
     printf 'kernelpatch=%s\n' "$_KP"
     printf 'apatch_userland=%s\n' "$_KP"
-    printf 'kernelpatch_kernel=%s\n' "$(kernelpatch_kernel_state)"
-    printf 'kernelpatch_version=%s\n' "$(kernelpatch_kernel_version)"
+    printf 'kernelpatch_kernel=%s\n' "$_P_KPS"
+    printf 'kernelpatch_version=%s\n' "$_P_KPV"
     printf 'coexist_mode=%s\n' "$([ "$_KP" = "1" ] && echo apatch || echo none)"
     printf 'allow_lkm=%s\n' "$([ -f "$CONFIG/allow_lkm_on_kernelpatch" ] && echo 1 || echo 0)"
-    printf 'config_ksu=%s\n' "$(kernel_config_get CONFIG_KSU)"
-    printf 'config_ksu_susfs=%s\n' "$(kernel_config_get CONFIG_KSU_SUSFS)"
-    _AR=$(cat "$STATE/apply_result" 2>/dev/null)
+    printf 'config_ksu=%s\n' "$_P_CKSU"
+    printf 'config_ksu_susfs=%s\n' "$_P_CKSUSFS"
+    _AR=""
+    read -r _AR < "$STATE/apply_result" 2>/dev/null
     printf 'apply_result=%s\n' "${_AR:-not_tested}"
     if [ -f "$STATE/boot_stage_completed" ]; then
-        printf 'boot_stage_completed=%s\n' "$(cat "$STATE/boot_stage_completed" 2>/dev/null)"
+        _bst=""
+        read -r _bst < "$STATE/boot_stage_completed" 2>/dev/null
+        printf 'boot_stage_completed=%s\n' "$_bst"
     else
         printf 'boot_stage_completed=no\n'
     fi
@@ -189,7 +323,7 @@ status() {
     if autoload_paused; then printf 'autoload=paused\n'; else printf 'autoload=ok\n'; fi
     if cap_ok sus_mount; then printf 'sus_mount=ok\n'; else printf 'sus_mount=unsupported\n'; fi
     if cap_ok try_umount; then printf 'try_umount=ok\n'; else printf 'try_umount=unsupported\n'; fi
-    printf 'bootloader=%s\n' "$(bootloader_state)"
+    printf 'bootloader=%s\n' "$_P_BL"
     printf 'force_bl_unlocked=%s\n' "$(cfg_force_bl)"
     # 校验结果超过 60 秒视为陈旧，重算一次（只写本地状态文件）
     _age=999
@@ -610,13 +744,17 @@ case "$1" in
         # 和 apply 共用一把锁，避免写规则文件时被另一次 apply 读到半截
         lock_acquire "$STATE/apply.lock" 900 || { echo "apply busy"; exit 1; }
         trap 'lock_release "$STATE/apply.lock"' EXIT
-        # 一次写入 config + 7 个规则文件：WebUI 保存从 8 次调用降到 1 次，
-        # 避免开机 apply 读到「新配置 + 旧规则文件」的中间状态。
-        # 参数：b64(config)|b64(sus_path)|b64(sus_path_loop)|b64(hide_modules)|b64(skip_hide)|b64(sus_mount)|b64(try_umount)|b64(sus_map) —— 共 8 段
+        # 一次写入 config + 7 个规则文件（WebUI 保存从 8 次调用降到 1 次）。
+        #
+        # 线格式：外层 base64( 内层 ) ，内层为 8 段用 | 连接：
+        #   段格式 v2（当前）：<解码后字节数>:<base64>
+        #   段格式 v1（1.2.8 及更早）：<base64>
+        # 带长度是为了能识别「base64 4 字符边界截断」——截断后仍是合法 base64，
+        # 解出来只是内容前缀，重编码校验也一致，只有长度比对能发现。
         [ -n "$2" ] || { echo "empty bundle"; exit 1; }
         valid_b64 "$2" || { echo "invalid base64"; exit 1; }
         _raw=$(printf '%s' "$2" | base64 -d 2>/dev/null) || { echo "decode failed"; exit 1; }
-        # 必须恰好 7 段：段数不对就把规则文件写空，不能接受
+        # 必须恰好 8 段：段数不对就把规则文件写空，不能接受
         _nsep=$(printf '%s' "$_raw" | tr -cd '|' | wc -c | tr -d ' ')
         if [ "$_nsep" != "7" ]; then
             echo "rejected: expect 8 segments, got $((_nsep + 1))"
@@ -629,26 +767,38 @@ case "$1" in
         _bad=""
         _idx=1
         for _n in $_names; do
-            # 用 cut 按 | 取段：mksh 下 ${var%%|*} 的模式解析不一致，cut 更稳
             _seg=$(printf '%s' "$_raw" | cut -d'|' -f"$_idx")
             _idx=$((_idx + 1))
+            # 段内长度前缀（v2）；没有前缀就按 v1 处理，兼容 1.2.8 客户端
+            _expect=""
+            case "$_seg" in
+                *:*)
+                    _head=${_seg%%:*}
+                    case "$_head" in
+                        ''|*[!0-9]*) ;;                       # 不是长度前缀，按 v1 处理
+                        *) _expect=$_head; _seg=${_seg#*:} ;;
+                    esac
+                    ;;
+            esac
             if ! printf '%s' "$_seg" | base64 -d > "$_dir/$_n" 2>/dev/null; then
                 _bad="decode $_n"
                 break
             fi
-            # toybox 的 base64 -d 对非法输入也会返回 0：非空段解出 0 字节必然有问题，
-            # 这正是「WebUI 保存把配置写空」那次回归的形态，必须拒绝而不是静默接受
+            # toybox 的 base64 -d 对非法输入也返回 0：非空段解出 0 字节必然有问题
             if [ -n "$_seg" ] && [ ! -s "$_dir/$_n" ]; then
                 _bad="decode $_n (空输出)"
                 break
             fi
-            # 段级完整性：解出来的内容重新编码必须与原始段一致。
-            # 只看「非空/非空」抓不到 ARG_MAX 之类导致的末段截断（截断后仍能解出内容）。
-            if [ -n "$_seg" ]; then
-                _reenc=$(base64 < "$_dir/$_n" 2>/dev/null | tr -d '
-')
-                _orig=$(printf '%s' "$_seg" | tr -d '
-')
+            if [ -n "$_expect" ]; then
+                _got=$(wc -c < "$_dir/$_n" | tr -d ' ')
+                if [ "$_got" != "$_expect" ]; then
+                    _bad="decode $_n (长度不符：期望 $_expect，实际 $_got)"
+                    break
+                fi
+            elif [ -n "$_seg" ]; then
+                # v1 无法做长度校验，退化为重编码比对（能拦住非法/半截编码）
+                _reenc=$(base64 < "$_dir/$_n" 2>/dev/null | tr -d '\n')
+                _orig=$(printf '%s' "$_seg" | tr -d '\n')
                 if [ "$_reenc" != "$_orig" ]; then
                     _bad="decode $_n (内容不完整)"
                     break

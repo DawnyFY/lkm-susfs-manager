@@ -331,6 +331,12 @@ pstore_crash_ack() {
 pstore_crash_suspect() {
     _pc_dir=$(_pstore_dir)
     [ -d "$_pc_dir" ] || return 1
+    # 先看有没有落盘文件：绝大多数设备这里为空，没必要算指纹（sha256sum + 每文件两次 stat）
+    _pc_any=0
+    for _pc_f in "$_pc_dir"/*; do
+        [ -e "$_pc_f" ] && { _pc_any=1; break; }
+    done
+    [ "$_pc_any" = "1" ] || return 1
     _pc_fp=$(_pstore_fingerprint 2>/dev/null)
     if [ -n "$_pc_fp" ] && [ "$(cat "$STATE/crash_ack" 2>/dev/null)" = "$_pc_fp" ]; then
         return 1
@@ -447,6 +453,9 @@ susfs_hint() {
 
 # ---- 配置读取（config.ini，纯数据，不 source）----
 # 配置不再是 shell 脚本：只按 KEY=VALUE 解析，值永远不会被执行。
+# 制表符常量：供 cfg_get 去尾随空白用，模块级只算一次
+_CFG_TAB=$(printf '	')
+
 CFG_KEYS="auto_load hide_sus_mnts avc_spoof replace_rules hide_ksu_loop hide_revanced hide_custom_rom hide_compat_matrix hide_gapps hide_dex2oat hide_scene auto_try_umount skip_legit_mounts skip_detection_paths fake_cmdline fake_cmdline_value force_kmi manager_name spoof_uname spoof_uname_release spoof_uname_version hide_vendor_sepolicy vold_isolation force_bl_unlocked"
 
 # 读单个键（$1=键，$2=默认值）
@@ -454,8 +463,26 @@ cfg_get() {
     _k=$1; _d=${2:-}
     _f="$CONFIG/config.ini"
     [ -f "$_f" ] || { printf '%s' "$_d"; return 0; }
-    _v=$(grep "^$_k=" "$_f" 2>/dev/null | tail -1 | cut -d= -f2-)
-    _v=$(printf '%s' "$_v" | sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//')
+    # 纯 shell 读取：原来 grep|tail|cut 加一次 sed，四次进程启动
+    _v=""
+    while IFS= read -r _line || [ -n "$_line" ]; do
+        case "$_line" in
+            "$_k="*) _v=${_line#*=} ;;
+        esac
+    done < "$_f"
+    # 去掉行内注释与尾随空白
+    _v=${_v%%#*}
+    case "$_v" in
+        *[![:space:]]) ;;
+        *) _v="" ;;
+    esac
+    while :; do
+        case "$_v" in
+            *' ') _v=${_v% } ;;
+            *"$_CFG_TAB") _v=${_v%"$_CFG_TAB"} ;;
+            *) break ;;
+        esac
+    done
     if [ -n "$_v" ]; then printf '%s' "$_v"; else printf '%s' "$_d"; fi
 }
 
@@ -640,9 +667,10 @@ cfg_ensure() {
 bl_force_flag_path() { printf '%s' "$STATE/force_bl_unlocked"; }
 
 cfg_force_bl() {
-    _p=$(bl_force_flag_path)
+    _p="$STATE/force_bl_unlocked"
     if [ -f "$_p" ]; then
-        _v=$(cat "$_p" 2>/dev/null)
+        _v=""
+        read -r _v < "$_p" 2>/dev/null
         case "$_v" in
             0|1) printf '%s' "$_v"; return 0 ;;
         esac
@@ -668,7 +696,8 @@ set_force_bl() {
 
 _cf_state() {
     [ -f "$_CFS" ] || { printf unknown; return 0; }
-    _v=$(cat "$_CFS" 2>/dev/null)
+    _v=""
+    read -r _v < "$_CFS" 2>/dev/null
     case "$_v" in ok|modified) printf '%s' "$_v" ;; *) printf unknown ;; esac
 }
 
@@ -1390,7 +1419,15 @@ real_kernel_release() {
     #    路径可覆盖，便于离线测试
     _pv=${PROC_VERSION_FILE:-/proc/version}
     if [ -r "$_pv" ]; then
-        _rk=$(awk 'NR==1 { if ($3 ~ /^[0-9]+\.[0-9]+/ && $3 ~ /android[0-9]/) print $3 }' "$_pv" 2>/dev/null)
+        _pv_line=""
+        read -r _pv_line < "$_pv" 2>/dev/null
+        # 取第 3 个字段（uname -v 之后的 release），原来的 awk 换掉，省一次进程启动
+        set -- $_pv_line
+        _rk=${3:-}
+        case "$_rk" in
+            *android[0-9]*) case "$_rk" in [0-9]*.[0-9]*) ;; *) _rk="" ;; esac ;;
+            *) _rk="" ;;
+        esac
     fi
     # 2) 启动时落盘的真实内核快照
     if [ -z "$_rk" ] && [ -f "$STATE/real_uname.txt" ]; then
@@ -1593,16 +1630,33 @@ caps_refresh() {
 
 cap_ok() {
     _cap_f="$STATE/$CAPS_FILE_NAME"
-    _cap_bid=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
-    _cap_cached=$(grep '^boot_id=' "$_cap_f" 2>/dev/null | tail -1 | cut -d= -f2-)
+    _cap_bid=""
+    read -r _cap_bid < /proc/sys/kernel/random/boot_id 2>/dev/null
     # LKM 装载状态也要参与判定：未加载时判定出的 0 不能留到加载之后
-    _cap_lk=$([ -d /sys/module/susfs_guard_lkm ] && echo 1 || echo 0)
-    _cap_cached_lk=$(grep '^lkm=' "$_cap_f" 2>/dev/null | tail -1 | cut -d= -f2-)
-    if [ ! -f "$_cap_f" ] || { [ -n "$_cap_bid" ] && [ "$_cap_bid" != "$_cap_cached" ]; } || [ "$_cap_lk" != "$_cap_cached_lk" ]; then
-        caps_refresh
+    _cap_lk=0
+    [ -d /sys/module/susfs_guard_lkm ] && _cap_lk=1
+    _cap_cached_bid=""
+    _cap_cached_lk=""
+    _cap_val=""
+    if [ -f "$_cap_f" ]; then
+        while IFS='=' read -r _k _v; do
+            case "$_k" in
+                boot_id) _cap_cached_bid=$_v ;;
+                lkm) _cap_cached_lk=$_v ;;
+                "$1") _cap_val=$_v ;;
+            esac
+        done < "$_cap_f"
     fi
-    [ "$(grep "^$1=" "$_cap_f" 2>/dev/null | tail -1 | cut -d= -f2)" = "1" ]
+    if [ ! -f "$_cap_f" ] || { [ -n "$_cap_bid" ] && [ "$_cap_bid" != "$_cap_cached_bid" ]; } || [ "$_cap_lk" != "$_cap_cached_lk" ]; then
+        caps_refresh
+        _cap_val=""
+        while IFS='=' read -r _k _v; do
+            [ "$_k" = "$1" ] && _cap_val=$_v
+        done < "$_cap_f"
+    fi
+    [ "$_cap_val" = "1" ]
 }
+
 # ---- 诊断：ksu_susfs 通信失败排查 ----
 # 输出两个二进制对同一内核的响应，便于判断是二进制 ABI 不匹配还是 LKM 问题。
 diag_tooling() {

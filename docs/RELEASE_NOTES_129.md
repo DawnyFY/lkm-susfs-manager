@@ -35,6 +35,25 @@
 - 原因：`load.sh` 与 `apply.sh` 都会调用 `pid_guard.sh`，卸载函数在「本来没加载」时也写日志
 - 现改为无操作时不写日志，状态文件仍记录 `result=skipped`
 
+3. 保存配置的线格式升级为「长度前缀」（issue #10）
+
+- 段格式由 `<base64>` 改为 `<解码后字节数>:<base64>`，外层仍是整体 base64
+- 目的：识别「base64 4 字符边界截断」——那种截断后仍是合法 base64，解出来只是内容前缀，
+  重编码校验也一致，只有长度比对能发现
+- 设备实测：把某段 base64 截短而长度前缀不改 → `rejected: decode sus_path.txt (长度不符：期望 18，实际 6)`，
+  8 个文件零改动
+- 向后兼容：不带长度前缀的旧格式（1.2.8 及更早前端）仍可写入
+
+4. `status` 去掉大量进程启动（issue #9）
+
+- 同一 boot 内的探测器结果缓存到 `state/.probe_cache`（ksu_branch / kernelpatch* / bootloader /
+  install_id / selinux / 内核 config / ksu_susfs 版本与变体），换 boot_id 或二进制 size+mtime 变化才重算
+- `pid_guard` 的 7 个状态字段、规则数统计、隐藏名单判断、`cfg_get`、`_cf_state`、`real_kernel_release`、
+  `cap_ok`、`boot_stage_completed` 全部改为 shell 内建读取，不再各起一个 grep/cut/sed/awk
+- 设备同条件交错 A/B（old/new 交替各 3 次 ×2 轮）：中位数 **2.29 s → 1.29 s**，最好 0.90–1.01 s
+- 未达 issue 里写的 < 0.5 s 目标：剩余开销主要是 mksh 解释约 1700 条内建命令 + 6 个外部进程，
+  再往下需要把 status 挪进编译型 helper，属独立工作（issue #9 已更新说明）
+
 ## 三、无变化
 
 - WebUI、主题、语言、`get_bundle` / `pid_guard_bundle` 接口与 1.2.8 相同

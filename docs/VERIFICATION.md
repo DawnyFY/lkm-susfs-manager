@@ -36,6 +36,9 @@
 构建：13,186,781 B，sha256 `236b4c85e3ca8db89b4188900d498a5a3ae57cb07a2801c82e7b14f91e2670d5`，manifest `36adafa1…`。
 离线 **37/37**、前端 **44/44**、门禁 **5/5**、`I18N_OK keys=141`。
 
+- `status`：同一 boot 内探测结果缓存（`state/.probe_cache`），7 个 pid_guard 字段与规则数统计改内建读取；
+  设备交错 A/B 中位数 2.29 s → 1.29 s（最好 0.90 s），未达 0.5 s 目标，剩余为解释开销
+- `set_bundle`：段格式 `<字节数>:<base64>`，截断 payload 实测被拒（`长度不符：期望 18，实际 6`），v1 仍兼容
 - 缓存击穿：`index.html` 里的 `app.js?v=<内容 sha256 前 8 位>` / `app.css?v=…` 由 `vite.config.ts` 在构建时写入，
   内容不变则 URL 不变（构建仍可复现），内容一变 URL 必变 —— 避免 WebView 继续用旧 bundle
 - 日志去重：设备实测一次 pid_guard 真实加载写入 `Loaded kernel module` **1 条**（来自 `ksud insmod`）+ `[i] pid_guard 已加载（KMI 6.6，参数已生效）` **1 条**，此前是同一句重复两次

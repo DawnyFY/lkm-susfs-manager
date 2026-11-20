@@ -16,10 +16,21 @@ chk() { if [ "$2" = "$3" ]; then echo "PASS  $1"; else echo "FAIL  $1 expect=[$3
 b64() { printf "%s" "$1" | base64 | tr -d "\n"; }
 
 # 构造 bundle：config|sus_path|hide_modules|skip_hide|sus_mount|try_umount
+seg2() {
+    # v2 段格式：<解码后字节数>:<base64>
+    printf "%s:%s" "$(printf "%s" "$1" | wc -c | tr -d " ")" "$(b64 "$1")"
+}
+
+# v1（1.2.8 及更早）：每段只有 base64，用于验证向后兼容
+make_bundle_v1() {
+    printf "%s|%s|%s|%s|%s|%s|%s|%s" \
+        "$(b64 "$1")" "$(b64 "$2")" "$(b64 "$3")" "$(b64 "$4")" "$(b64 "$5")" "$(b64 "$6")" "$(b64 "${7:-}")" "$(b64 "${8:-}")" | base64 | tr -d "\n"
+}
+
 make_bundle() {
     # 8 段：config|sus_path|sus_path_loop|hide_modules|skip_hide|sus_mount|try_umount|sus_map
     printf "%s|%s|%s|%s|%s|%s|%s|%s" \
-        "$(b64 "$1")" "$(b64 "$2")" "$(b64 "$3")" "$(b64 "$4")" "$(b64 "$5")" "$(b64 "$6")" "$(b64 "${7:-}")" "$(b64 "${8:-}")" | base64 | tr -d "\n"
+        "$(seg2 "$1")" "$(seg2 "$2")" "$(seg2 "$3")" "$(seg2 "$4")" "$(seg2 "$5")" "$(seg2 "$6")" "$(seg2 "${7:-}")" "$(seg2 "${8:-}")" | base64 | tr -d "\n"
 }
 
 run_bundle() {
@@ -94,6 +105,27 @@ case "$out" in
 esac
 chk "单层编码后 config 未被清空" "$(grep -c "^auto_load=1$" "$MOD/config/config.ini")" "1"
 chk "单层编码后 sus_path 未被清空" "$(cat "$MOD/config/sus_path.txt")" "/data/adb"
+
+# v2 长度校验：声明长度与实际不符（模拟 base64 4 字符边界截断）
+# 把 sus_path 段的 base64 截短到 4 的倍数、长度前缀保持原值 —— 全长仍是合法 base64
+inner=$(printf '%s' "$ok" | base64 -d)
+seg=$(printf '%s' "$inner" | cut -d'|' -f2)
+head=${seg%%:*}
+body=${seg#*:}
+short=$(printf '%s' "$body" | cut -c1-8)
+tampered=$(printf '%s' "$inner" | awk -v s="$head:$short" -F'|' 'BEGIN{OFS="|"}{$2=s; print}')
+tampered_payload=$(printf "%s" "$tampered" | base64 | tr -d "\n")
+out2=$(run_bundle "$tampered_payload")
+case "$out2" in
+    *"长度不符"*) echo "PASS  长度不符被拒绝（$out2）" ;;
+    *) echo "FAIL  长度不符未被拒绝 got=[$out2]"; fail=1 ;;
+esac
+chk "长度不符后 config 未被破坏" "$(grep -c "^auto_load=1$" "$MOD/config/config.ini")" "1"
+
+# 向后兼容：v1 格式（无长度前缀）仍应写入成功
+v1=$(make_bundle_v1 "$cfg" "/data/v1" "/loop" "kernelsu" "duck" "# m" "# u")
+chk "v1 格式仍兼容" "$(run_bundle "$v1")" "saved"
+chk "v1 内容正确" "$(cat "$MOD/config/sus_path.txt")" "/data/v1"
 
 rm -rf "$TMP"
 [ "$fail" = 0 ] && echo "ALL PASS" || echo "HAS FAILURE"

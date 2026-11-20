@@ -17,8 +17,12 @@ function b64encode(s: string): string {
   return btoa(bin);
 }
 
+function byteLen(s: string): number {
+  return new TextEncoder().encode(s).length;
+}
+
 const CONF = ["# 注释", "auto_load=1", "hide_sus_mnts=1", "replace_rules=0", ""].join(NL);
-const RULES = {
+const RULES: Record<string, string> = {
   sus_path: "/data/adb" + NL + "# 注释" + NL + "/data/local/tmp/x" + NL,
   sus_path_loop: "",
   hide_modules: "kernelsu" + NL,
@@ -26,22 +30,27 @@ const RULES = {
   sus_mount: "",
   try_umount: "",
   sus_map: "/a/b" + NL,
-} as Record<(typeof RULE_ORDER)[number], string>;
+};
 
-describe("set_bundle 线格式（ctl.sh 契约）", () => {
-  it("外层解码后必须是单行：用 | 连接的内层 base64", () => {
-    const payload = buildBundlePayload(CONF, RULES);
-    const inner = b64decode(payload);
-    // 关键：不能有换行。ctl.sh 用 cut -d'|' 按行取段，多行就会被切碎 → 全部写空
+describe("set_bundle 线格式（ctl.sh 契约 v2）", () => {
+  it("外层解码后必须是单行：8 段用 | 连接", () => {
+    const inner = b64decode(buildBundlePayload(CONF, RULES));
+    // ctl.sh 用 cut -d'|' 按行取段，内层一旦有换行就会被切碎 → 8 个文件写空
     expect(inner.includes(NL)).toBe(false);
     expect(inner.split("|")).toHaveLength(8);
   });
 
-  it("内层每段解出来与原文逐字节一致", () => {
-    const inner = b64decode(buildBundlePayload(CONF, RULES)).split("|");
-    expect(b64decode(inner[0])).toBe(CONF);
-    RULE_ORDER.forEach((name, i) => {
-      expect(b64decode(inner[i + 1])).toBe(RULES[name]);
+  it("每段是 <字节数>:<base64>，且声明长度等于实际解码长度", () => {
+    const segs = b64decode(buildBundlePayload(CONF, RULES)).split("|");
+    const values = [CONF, ...RULE_ORDER.map((r) => RULES[r] ?? "")];
+    expect(segs).toHaveLength(values.length);
+    segs.forEach((seg, i) => {
+      const idx = seg.indexOf(":");
+      expect(idx).toBeGreaterThan(0);
+      const declared = Number(seg.slice(0, idx));
+      const text = b64decode(seg.slice(idx + 1));
+      expect(declared).toBe(byteLen(text));
+      expect(text).toBe(values[i]);
     });
   });
 
@@ -57,12 +66,16 @@ describe("set_bundle 线格式（ctl.sh 契约）", () => {
     ]);
   });
 
-  it("含中文 / CRLF / 竖线的内容也能无损往返", () => {
+  it("中文内容按字节数计长（ctl.sh 用 wc -c 比对）", () => {
     const conf = "manager_name=水行川" + NL + "fake_cmdline_value=a|b" + NL;
-    const rules = { ...RULES, sus_path: "/中文/路径" + NL };
-    const inner = b64decode(buildBundlePayload(conf, rules)).split("|");
-    expect(b64decode(inner[0])).toBe(conf);
-    expect(b64decode(inner[1])).toBe(rules.sus_path);
+    const first = b64decode(buildBundlePayload(conf, RULES)).split("|")[0];
+    const idx = first.indexOf(":");
+    const declared = Number(first.slice(0, idx));
+    const text = b64decode(first.slice(idx + 1));
+    expect(text).toBe(conf);
+    expect(declared).toBe(byteLen(conf));
+    // 「水行川」每个汉字 3 字节：按字符数计长会少 6
+    expect(declared).toBe([...conf].length + 6);
   });
 
   it("外层必须是合法 base64（ctl.sh 会先校验）", () => {

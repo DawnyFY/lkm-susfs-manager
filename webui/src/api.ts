@@ -84,7 +84,11 @@ export async function getBundle(): Promise<{ config: string; rules: Record<RuleN
 // 若只做单层编码，config 里的换行会把 bundle 拆成多行，cut 逐行取段 → 每段都是垃圾，
 // toybox 的 base64 -d 对垃圾输入仍返回 0 → 8 个文件全被写成 0 字节（1.2.8 曾出现此回归）。
 export function buildBundlePayload(configText: string, rules: Record<RuleName, string>): string {
-  const inner = [configText, ...RULE_ORDER.map((r) => rules[r] ?? "")].map((v) => b64Encode(v)).join("|");
+  // 段格式：<解码后字节数>:<base64>。长度让 ctl.sh 能识别「base64 4 字符边界截断」——
+  // 那种截断后仍是合法 base64，解出来只是内容前缀，校验和/重编码都一致。
+  const inner = [configText, ...RULE_ORDER.map((r) => rules[r] ?? "")]
+    .map((v) => `${new TextEncoder().encode(v).length}:${b64Encode(v)}`)
+    .join("|");
   return b64Encode(inner);
 }
 
