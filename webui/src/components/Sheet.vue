@@ -2,8 +2,7 @@
 import { onBeforeUnmount, watch } from "vue";
 
 // 二级窗口：1.2.7 的 #presetModal / #announceModal 交互。
-// 不用 position: fixed / backdrop-filter —— 老 WebView 上这两者会导致白屏，
-// 改为相对 .app 的 absolute 覆盖层（.app 已设 position: relative）。
+// 覆盖层用 position: fixed（1.2.7 的弹窗即如此，目标机型验证过）；不使用毛玻璃滤镜。
 const props = defineProps<{ open: boolean; title: string }>();
 const emit = defineEmits<{ (e: "close"): void }>();
 

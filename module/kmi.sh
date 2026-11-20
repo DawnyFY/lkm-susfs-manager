@@ -71,10 +71,17 @@ select_kmi() {
     echo "$_kmi"; return 0
   done < "$2/kmis"
   # SDK 对不上（例如 Android 16 跑 5.15 内核，包里没有 android16-5.15）：
-  # 取「不高于设备 Android 版本的最高候选」试一次。选错也只是 insmod 失败，
-  # 与现状（直接跳过、要用户手动指定）等价；选对则省掉一次人工操作。
+  # 这里只给出「建议值」，不自动采用 —— bin/susfs_insmod 会改写 vermagic 后重试加载，
+  # 选错有可能真的把不同 android tag 的 ko 装进内核（审计实测字符串证据），
+  # 所以宁可让用户显式指定。
+  return 1
+}
+
+# 当自动匹配失败时，猜一个最可能的候选并打印出来（仅供提示，不做加载决策）
+suggest_kmi() {
+  rel="$1"
   _sdk=$(getprop ro.build.version.sdk 2>/dev/null)
-  case "$_sdk" in ''|*[!0-9]*) return 1 ;; esac
+  case "$_sdk" in ''|*[!0-9]*) _sdk=0 ;; esac
   _best=""
   _best_api=0
   while IFS= read -r _kmi; do

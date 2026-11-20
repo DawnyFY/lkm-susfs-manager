@@ -186,11 +186,6 @@ force_kmi=${force_kmi:-}
 # 只允许 KMI 名称字符，防止路径穿越
 case "$force_kmi" in *[!A-Za-z0-9._-]*) force_kmi="" ;; esac
 KMI=$(select_kmi "$REL" "$MODDIR" 2>/dev/null)
-# 内核串没有 Android tag 时，KMI 是按 SDK 推测的；加载失败要引导用户手动指定
-case "$REL" in
-    *android[0-9]*) ;;
-    *) [ -n "$KMI" ] && echo "[i] 内核串无 Android tag，按设备 SDK 推测 KMI: $KMI（加载失败可手动指定）" ;;
-esac
 if [ -n "$force_kmi" ] && [ -s "$MODDIR/lib/susfs_guard_lkm-$force_kmi.ko" ]; then
     echo "[!] 使用强制指定的 KMI: $force_kmi"
     KMI="$force_kmi"
@@ -199,6 +194,10 @@ if [ -z "$KMI" ]; then
     echo "[!] 未能匹配内核: $REL"
     echo "[i] 已打包 KMI: $(list_kmis "$MODDIR" | tr '\n' ' ')"
     echo "[i] 版本号疑似: $(guess_kmis "$REL" "$MODDIR" | tr '\n' ' ')"
+    _sugg=$(suggest_kmi "$REL" "$MODDIR" 2>/dev/null)
+    if [ -n "$_sugg" ]; then
+        echo "[i] 按设备 SDK 推测最可能的是：$_sugg（不会自动加载，避免把不匹配的 ko 装进内核）"
+    fi
     echo "[i] 可在 WebUI 配置页强制指定 KMI 后再次加载"
     set_description "⚠️ 未匹配内核 | $REL | 请在 WebUI 指定 KMI"
     # 没有尝试加载，不属于"加载后未能启动"；只清守卫，保留已有的暂停状态。

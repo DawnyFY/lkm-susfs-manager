@@ -455,7 +455,8 @@ susfs_hint() {
 # 配置不再是 shell 脚本：只按 KEY=VALUE 解析，值永远不会被执行。
 # 制表符常量：供 cfg_get 去尾随空白用，模块级只算一次
 _CFG_TAB=$(printf '	')
-
+_CFG_CR=$(printf '
+')
 CFG_KEYS="auto_load hide_sus_mnts avc_spoof replace_rules hide_ksu_loop hide_revanced hide_custom_rom hide_compat_matrix hide_gapps hide_dex2oat hide_scene auto_try_umount skip_legit_mounts skip_detection_paths fake_cmdline fake_cmdline_value force_kmi manager_name spoof_uname spoof_uname_release spoof_uname_version hide_vendor_sepolicy vold_isolation force_bl_unlocked"
 
 # 读单个键（$1=键，$2=默认值）
@@ -470,18 +471,21 @@ cfg_get() {
             "$_k="*) _v=${_line#*=} ;;
         esac
     done < "$_f"
-    # 去掉行内注释与尾随空白
+    # 去掉行内注释与尾随空白（空格 / TAB / CR）；有界循环 + 变化检测，避免空模式死循环
     _v=${_v%%#*}
-    case "$_v" in
-        *[![:space:]]) ;;
-        *) _v="" ;;
-    esac
-    while :; do
+    _i=0
+    while [ "$_i" -lt 16 ]; do
+        _i=$((_i + 1))
         case "$_v" in
-            *' ') _v=${_v% } ;;
-            *"$_CFG_TAB") _v=${_v%"$_CFG_TAB"} ;;
-            *) break ;;
+            *' ') _v=${_v% }; continue ;;
         esac
+        if [ -n "$_CFG_TAB" ] && [ "${_v%"$_CFG_TAB"}" != "$_v" ]; then
+            _v=${_v%"$_CFG_TAB"}; continue
+        fi
+        if [ -n "$_CFG_CR" ] && [ "${_v%"$_CFG_CR"}" != "$_v" ]; then
+            _v=${_v%"$_CFG_CR"}; continue
+        fi
+        break
     done
     if [ -n "$_v" ]; then printf '%s' "$_v"; else printf '%s' "$_d"; fi
 }
@@ -1365,46 +1369,69 @@ try_umount_add_once() {
 # ---- 运行时锁与耗时判断 ----
 # mkdir 是原子的：用它做简单互斥，避免开机 apply 与 WebUI apply 同时写规则
 lock_acquire() {
+    # 锁协议：所有「判定 + 建锁」都在二级目录锁内完成。
+    # 只在主锁目录上做 rm+mkdir 有竞态：两个进程同时判定过期，后者会删掉前者刚建的锁重建，
+    # 实测 8 并发时出现 2-3 个进程同时持有。
     _lk=$1; _ttl=${2:-180}
     mkdir -p "$STATE" 2>/dev/null
-    _bid=$(cat "${PROC_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}" 2>/dev/null)
-    # 锁目录里记录持有者 PID：过期被接管后，旧持有者退出时不能删掉新锁
-    mkdir "$_lk" 2>/dev/null && { echo "$$ $_bid" > "$_lk/pid" 2>/dev/null; return 0; }
-    # 持有者进程已不存在：锁是上一次被中断留下的，立即接管，不必等 TTL。
-    # （用户实测：apply 被杀后锁留 15 分钟，界面一直提示"另一个 apply 正在运行"）
-    _lk_line=""
-    read -r _lk_line < "$_lk/pid" 2>/dev/null
-    _lk_pid=${_lk_line%% *}
-    _lk_bid=${_lk_line##* }
-    case "$_lk_pid" in
-        ''|*[!0-9]*) _lk_pid="" ;;
-    esac
-    if [ -n "$_lk_pid" ] && [ ! -d "/proc/$_lk_pid" ]; then
-        _stale_dead="$STATE/.lock.dead.$$"
-        if mv "$_lk" "$_stale_dead" 2>/dev/null; then
-            rm -rf "$_stale_dead" 2>/dev/null
-            mkdir "$_lk" 2>/dev/null && { echo "$$ $_bid" > "$_lk/pid" 2>/dev/null; return 0; }
+    _bid=""
+    read -r _bid < "${PROC_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}" 2>/dev/null
+
+    _mutex="$STATE/.lock.mutex"
+    _i=0
+    while [ "$_i" -lt 20 ]; do
+        if mkdir "$_mutex" 2>/dev/null; then
+            printf '%s
+' "$$" > "$_mutex/pid" 2>/dev/null
+            break
+        fi
+        _mo=""
+        read -r _mo < "$_mutex/pid" 2>/dev/null
+        case "$_mo" in
+            ''|*[!0-9]*) ;;
+            *) [ -d "/proc/$_mo" ] || rm -rf "$_mutex" 2>/dev/null ;;
+        esac
+        _i=$((_i + 1))
+    done
+    [ "$_i" -lt 20 ] || return 1
+
+    _ok=0
+    if [ -e "$_lk" ]; then
+        _line=""
+        read -r _line < "$_lk/pid" 2>/dev/null
+        _lk_pid=${_line%% *}
+        _lk_bid=${_line##* }
+        case "$_lk_pid" in ''|*[!0-9]*) _lk_pid="" ;; esac
+
+        _reclaim=0
+        if [ -n "$_lk_pid" ] && [ ! -d "/proc/$_lk_pid" ]; then
+            _reclaim=1
+        fi
+        if [ "$_reclaim" = "0" ] && [ -n "$_lk_bid" ] && [ -n "$_bid" ] && [ "$_lk_bid" != "$_bid" ]; then
+            _reclaim=1
+        fi
+        if [ "$_reclaim" = "0" ]; then
+            _now=$(date +%s 2>/dev/null)
+            _mt=$(stat -c %Y "$_lk" 2>/dev/null)
+            case "$_now$_mt" in
+                ''|*[!0-9]*) ;;
+                *) [ $((_now - _mt)) -gt "$_ttl" ] && _reclaim=1 ;;
+            esac
+        fi
+        if [ "$_reclaim" = "1" ]; then
+            rm -rf "$_lk" 2>/dev/null
+        else
+            rm -rf "$_mutex" 2>/dev/null
+            return 1
         fi
     fi
-    # 上一次开机留下的锁：boot_id 不同，直接接管（不再等 TTL）
-    if [ -n "$_lk_bid" ] && [ -n "$_bid" ] && [ "$_lk_bid" != "$_bid" ]; then
-        rm -rf "$_lk" 2>/dev/null
-        mkdir "$_lk" 2>/dev/null && { echo "$$ $_bid" > "$_lk/pid" 2>/dev/null; return 0; }
+    if mkdir "$_lk" 2>/dev/null; then
+        printf '%s %s
+' "$$" "$_bid" > "$_lk/pid" 2>/dev/null
+        _ok=1
     fi
-    _now=$(date +%s 2>/dev/null)
-    _mt=$(stat -c %Y "$_lk" 2>/dev/null)
-    [ -n "$_now" ] && [ -n "$_mt" ] || return 1
-    case "$_now$_mt" in *[!0-9]*) return 1 ;; esac
-    if [ $((_now - _mt)) -gt "$_ttl" ]; then
-        # 原子接管：只有成功把过期目录改名的那一方才能重建锁，
-        # 否则两个进程同时判定过期会互删对方刚建的锁
-        _stale="$STATE/.lock.stale.$$"
-        if mv "$_lk" "$_stale" 2>/dev/null; then
-            rm -rf "$_stale" 2>/dev/null
-            mkdir "$_lk" 2>/dev/null && { echo "$$ $_bid" > "$_lk/pid" 2>/dev/null; return 0; }
-        fi
-    fi
-    return 1
+    rm -rf "$_mutex" 2>/dev/null
+    [ "$_ok" = "1" ]
 }
 
 lock_release() {

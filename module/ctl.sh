@@ -101,7 +101,7 @@ _st_probe_refresh() {
         [ -s "$_tmpa" ] && read -r _VARIANT < "$_tmpa" 2>/dev/null
         rm -f "$_tmpv" "$_tmpa" 2>/dev/null
     fi
-    _KP=$_P_KP
+    if kernelpatch_present; then _KP=1; else _KP=0; fi
     _IID=$(install_id 2>/dev/null)
     _SE=$(getenforce 2>/dev/null)
     _RM=$(ksu_branch 2>/dev/null)
@@ -110,6 +110,7 @@ _st_probe_refresh() {
     _KPV=$(kernelpatch_kernel_version 2>/dev/null)
     _CKSU=$(kernel_config_get CONFIG_KSU 2>/dev/null)
     _CKSUSFS=$(kernel_config_get CONFIG_KSU_SUSFS 2>/dev/null)
+    _pc_tmp="$STATE/.probe_cache.$$"
     {
         printf 'sig=%s' "$(_st_probe_signature)"
         printf '%s' "
@@ -127,7 +128,8 @@ kpv=$_KPV
 cksu=$_CKSU
 cksusfs=$_CKSUSFS
 "
-    } > "$STATE/.probe_cache" 2>/dev/null
+        printf 'ok=1'
+    } > "$_pc_tmp" 2>/dev/null && mv -f "$_pc_tmp" "$STATE/.probe_cache" 2>/dev/null || rm -f "$_pc_tmp" 2>/dev/null
 }
 
 # 读缓存到 _P_*；返回值 0 表示命中
@@ -142,6 +144,7 @@ _st_probe_load() {
     _P_BIN=""; _P_BIN_OK=0; _P_VARIANT=""; _P_VERSION=""
     _P_KP=0; _P_IID=""; _P_SE=""; _P_RM=""; _P_BL=""; _P_KPS=""; _P_KPV=""
     _P_CKSU=""; _P_CKSUSFS=""
+    _P_OK=0
     while IFS='=' read -r _k _v; do
         case "$_k" in
             bin) _P_BIN=$_v ;;
@@ -157,8 +160,11 @@ _st_probe_load() {
             kpv) _P_KPV=$_v ;;
             cksu) _P_CKSU=$_v ;;
             cksusfs) _P_CKSUSFS=$_v ;;
+            ok) _P_OK=$_v ;;
         esac
     done < "$_pc"
+    # 半写/被截断的缓存不能当命中：否则整个 boot 都会用空值（audit M3）
+    [ "$_P_OK" = "1" ] || return 1
     return 0
 }
 

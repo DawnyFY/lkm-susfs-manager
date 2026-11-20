@@ -50,7 +50,7 @@
   install_id / selinux / 内核 config / ksu_susfs 版本与变体），换 boot_id 或二进制 size+mtime 变化才重算
 - `pid_guard` 的 7 个状态字段、规则数统计、隐藏名单判断、`cfg_get`、`_cf_state`、`real_kernel_release`、
   `cap_ok`、`boot_stage_completed` 全部改为 shell 内建读取，不再各起一个 grep/cut/sed/awk
-- 设备同条件交错 A/B（old/new 交替各 3 次 ×2 轮）：中位数 **2.29 s → 1.29 s**，最好 0.90–1.01 s
+- 设备同条件交错 A/B（old/new 交替各 3 次 ×2 轮）：中位数 **~1.6 s → ~0.9 s**；空载最佳 0.75 s
 - 未达 issue 里写的 < 0.5 s 目标：剩余开销主要是 mksh 解释约 1700 条内建命令 + 6 个外部进程，
   再往下需要把 status 挪进编译型 helper，属独立工作（issue #9 已更新说明）
 
@@ -82,6 +82,28 @@
   于是直接跳过并要求手动指定。现增加兜底：取「不高于设备 SDK 的最高候选」试一次
   （选错只是 insmod 失败，与原来一样；选对则省掉人工操作），并在日志里注明这是推测值
 
+8. 审计（1.2.9 候选）发现的三个缺陷
+
+- **`cfg_get` 读不到带尾随空白的值**：`case *[![:space:]])` 在 glob 下不成立（`[:space:]` 不能被这样取反），
+  于是 `auto_load=1␠␠` / `1␉` / `1␍` 这类行会被判成"全空白"并静默回落默认值。改为参数展开 + 有界循环去空白，
+  设备实测 `auto_load=1␠␠␠` 现在能正确读到 `1`
+- **`kernelpatch` / `apatch_userland` 恒为空**：少 fork 改造时把 `_KP=$_P_KP` 误写进了探测器内部（那里应该算
+  `kernelpatch_present`），导致缓存里 `kp=` 永远为空，状态页两个字段空白、`coexist_mode` 恒 `none`
+- **探测缓存半写会让整个 boot 的黑值**：缓存只校验首行 `sig=` 且非原子写。现改为 `$STATE/.probe_cache.$$` +
+  原子 `mv`，并增加 `ok=1` 哨兵；文件被截断时视为未命中、当场重算
+
+9. apply 锁改为单一互斥协议
+
+- 审计实测：原「判定过期 → rm → mkdir」在 8 并发下会出现 **2–3 个进程同时持有**（后到者删掉前者的锁重建）
+- 现所有判定与建锁都在 `state/.lock.mutex` 二级目录锁内完成；新增 `tools/test_apply_lock_race.sh`
+  （8 并发 + 持锁窗口重叠检测），对旧实现可复现 3 个赢家，新实现恒为 1
+
+10. 撤回「无 tag 内核自动猜 KMI」
+
+- 审计证实 `bin/susfs_insmod` 会改写 `.modinfo` 的 vermagic 后**重试加载**，所以"猜错只是 insmod 失败"不成立，
+  不同 android tag 的 ko 有可能真的进内核
+- 改为只提示：`select_kmi` 不再自动采用兜底候选，新增 `suggest_kmi()` 用于日志建议，加载仍需用户显式指定
+
 ## 三、无变化
 
 - WebUI、主题、语言、`get_bundle` / `pid_guard_bundle` 接口与 1.2.8 相同
@@ -90,7 +112,7 @@
 
 ## 四、已知限制（与 1.2.8 一致）
 
-- `status` 仍约 1.6–1.8 s，重构计划见 issue #9
+- `status` 从约 1.6 s 降到约 0.8–1.3 s（设备负载波动），重构计划见 issue #9
 - `set_bundle` 检测不到 base64 4 字符边界截断，方案见 issue #10
 - 冷启动首次自动装载未验证；其余 5 套 KMI 仅编译未运行；APatch 为实验性
 - 不可执行 `rmmod susfs_guard_lkm`；热重启不重载 LKM，更换 ko 需冷启动
@@ -98,5 +120,5 @@
 
 ## 五、验证
 
-- 离线 37/37、前端 44/44、门禁 5/5、`I18N_OK keys=141`
+- 离线 39/39、前端 45/45、门禁 5/5、`I18N_OK keys=152`
 - 设备（Android 16 / 6.6.77 / SukiSU）：`integrity=ok`，`rules` 与配置一致，日志块头与 pid_guard 记录按新格式输出
