@@ -144,6 +144,7 @@ body {
 }
 
 .app {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -834,4 +835,111 @@ details summary {
     background: var(--card);
     box-shadow: 0 6px 24px rgba(24, 24, 27, 0.14);
   }
+}
+
+/* 二级窗口（预设路径 / 强制 KMI / 公告）：结构沿用 1.2.7 的 modal。
+   1.2.7 的弹窗就是 fixed，在目标机型上验证过；1.2.8 的白屏是给外壳布局用 fixed 造成的，
+   与弹窗无关。这里只用半透明底，不加毛玻璃滤镜。 */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.36);
+}
+
+.modal-box {
+  width: min(100%, 360px);
+  max-height: 80%;
+  overflow-y: auto;
+  padding: 20px;
+  border-radius: var(--radius);
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lg, 0 24px 60px rgba(0, 0, 0, 0.24));
+  animation: modal-in 0.16s ease both;
+}
+
+.modal-box h3 {
+  margin: 0 0 10px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
+.preset-list {
+  max-height: 46vh;
+  overflow-y: auto;
+  margin: 8px 0 4px;
+}
+
+.preset-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13.5px;
+}
+
+.preset-row:last-child {
+  border-bottom: 0;
+}
+
+.preset-row span.path {
+  font-family: var(--mono);
+  word-break: break-all;
+  min-width: 0;
+}
+
+.preset-row.done span.path {
+  color: var(--text-3);
+}
+
+.preset-row small {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.kmi-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  font-size: 14px;
+  background: transparent;
+  color: inherit;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kmi-row.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.99); }
+  to { opacity: 1; transform: none; }
 }

@@ -59,8 +59,14 @@ describe("主题 token 与原版一致", () => {
   it("暖灰窄屏页签在滚动容器之外（order:3，无 sticky/fixed）", () => {
     // 用「固定高度 + 内容区内部滚动」的布局：页签天然不动，切页/滚动都不会跳
     expect(css).toMatch(/html\[data-theme="warm"\] \.tabs \{[^}]*order: 3/);
-    expect(css).not.toContain("position: fixed");
-    expect(css).not.toContain("position: sticky");
+    // 外壳（.app / .tabs / .topbar）不能用 fixed / sticky：1.2.8 曾因此白屏与跳动。
+    // 二级窗口（.modal）例外 —— 1.2.7 的弹窗就是 fixed，目标机型上验证过。
+    const shell = css
+      .split(new RegExp("\n(?=[.a-zA-Z\\[#])"))
+      .filter((block) => /^\.(app|tabs|topbar|content)\b/.test(block.trim()))
+      .join("\n");
+    expect(shell).not.toContain("position: fixed");
+    expect(shell).not.toContain("position: sticky");
     expect(css).not.toContain("backdrop-filter");
     expect(css).toMatch(/\.content \{[^}]*overflow-y: auto/);
   });

@@ -139,5 +139,15 @@
   "status.running": "运行中",
   "common.load_failed": "加载失败",
   "common.retry": "重试",
-  "about.credit.ui": "1.2.8 两版 UI（冷蓝圆角 / 暖灰极简）的设计与实现"
+  "about.credit.ui": "1.2.8 两版 UI（冷蓝圆角 / 暖灰极简）的设计与实现",
+  "config.presets.title": "预设隐藏项",
+  "config.presets.apply": "追加所选",
+  "config.presets.added": "已追加 {n} 项到 sus_path",
+  "config.presets.exists": "已存在",
+  "config.force_kmi.hint": "选项来自本模块实际打包的 KMI；只在自动匹配失败时使用。",
+  "config.force_kmi.unpacked": "（未打包）",
+  "common.cancel": "取消",
+  "common.close": "关闭",
+  "common.choose": "选择",
+  "status.release_page": "发布页"
 }

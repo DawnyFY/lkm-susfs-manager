@@ -105,6 +105,13 @@ export interface PresetPath {
   configured: boolean;
 }
 
+// 强制指定 KMI 的候选：模块实际打包的 .ko，避免手输拼错（与 1.2.7 的 list_kmis 一致）
+export async function listKmis(): Promise<string[]> {
+  return splitLines(await exec(`${CTL} list_kmis`))
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
 export async function presetPaths(): Promise<PresetPath[]> {
   const raw = await exec(`${CTL} preset_paths`);
   return splitLines(raw)

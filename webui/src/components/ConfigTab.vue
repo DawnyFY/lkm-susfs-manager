@@ -4,6 +4,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import {
   RULE_ORDER,
   getBundle,
+  listKmis,
   importLegacy,
   presetPaths,
   resetDefaults,
@@ -46,6 +47,10 @@ const rules = reactive<Record<RuleName, string>>({
 });
 const cfg = reactive<Record<string, string>>({});
 const presets = ref<PresetPath[]>([]);
+const presetOpen = ref(false);
+const presetSel = ref<Record<string, boolean>>({});
+const kmis = ref<string[]>([]);
+const kmiOpen = ref(false);
 const ruleTab = ref<"sus_path" | "sus_path_loop" | "hide_modules" | "skip_hide" | "advanced">("sus_path");
 const ready = ref(false);
 
@@ -142,21 +147,59 @@ async function doSave(): Promise<void> {
 async function loadPresets(): Promise<void> {
   await withBusy(async () => {
     try {
-      presets.value = (await presetPaths()).filter((p) => !p.configured);
-      if (!presets.value.length) setBanner("info", t("config.presets.hint"));
+      presets.value = await presetPaths();
+      presetSel.value = {};
+      for (const p of presets.value) presetSel.value[p.path] = false;
+      if (!presets.value.length) {
+        setBanner("info", t("config.presets.hint"));
+        return;
+      }
+      presetOpen.value = true;
     } catch (e) {
       setBanner("err", (e as Error).message);
     }
   });
 }
 
-function addPreset(p: string): void {
-  const cur = rules.sus_path.trimEnd();
-  if (cur.split(/\r?\n/).some((l) => l.trim() === p)) return;
-  rules.sus_path = (cur ? cur + "\n" : "") + p + "\n";
-  presets.value = presets.value.filter((x) => x.path !== p);
-  setBanner("ok", t("msg.preset_added", { p }));
+// 二级窗口「追加所选」：只有勾选且未存在的项会写入
+function applyPresets(): void {
+  const picked = presets.value
+    .filter((p) => presetSel.value[p.path] && !p.configured)
+    .map((p) => p.path);
+  presetOpen.value = false;
+  if (!picked.length) return;
+  const lines = rules.sus_path.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  for (const p of picked) if (!lines.includes(p)) lines.push(p);
+  rules.sus_path = lines.join("\n") + "\n";
+  presets.value = presets.value.map((p) => (picked.includes(p.path) ? { ...p, configured: true } : p));
+  setBanner("ok", t("config.presets.added", { n: picked.length }));
 }
+
+async function openKmiPicker(): Promise<void> {
+  await withBusy(async () => {
+    try {
+      kmis.value = await listKmis();
+    } catch (e) {
+      setBanner("err", (e as Error).message);
+      return;
+    }
+    kmiOpen.value = true;
+  });
+}
+
+function pickKmi(v: string): void {
+  cfg.force_kmi = v;
+  kmiOpen.value = false;
+}
+
+// 配过一个已不存在的 KMI 时保留展示，提醒用户（与 1.2.7 一致）
+function kmiOptions(): string[] {
+  const cur = (cfg.force_kmi || "").trim();
+  const list = [...kmis.value];
+  if (cur && !list.includes(cur)) list.push(cur);
+  return list;
+}
+
 
 async function doRescan(): Promise<void> {
   await withBusy(async () => {
@@ -245,19 +288,61 @@ async function doReset(): Promise<void> {
           <button class="btn ghost" type="button" :disabled="state.busy" @click="doRescan">{{ t("config.rescan") }}</button>
           <button class="btn ghost" type="button" :disabled="state.busy" @click="loadPresets">{{ t("config.presets") }}</button>
         </div>
-        <div v-if="presets.length" class="btn-row">
-          <button v-for="p in presets" :key="p.path" class="btn" type="button" @click="addPreset(p.path)">
-            + {{ p.path }}
-          </button>
-        </div>
+        <Sheet :open="presetOpen" :title="t('config.presets.title')" @close="presetOpen = false">
+          <p class="hint">{{ t("config.presets.hint") }}</p>
+          <div class="preset-list">
+            <label v-for="p in presets" :key="p.path" class="preset-row" :class="{ done: p.configured }">
+              <input
+                type="checkbox"
+                :disabled="p.configured"
+                :checked="presetSel[p.path]"
+                @change="presetSel[p.path] = ($event.target as HTMLInputElement).checked"
+              />
+              <span class="path">{{ p.path }}</span>
+              <small v-if="p.configured">{{ t("config.presets.exists") }}</small>
+            </label>
+          </div>
+          <template #actions>
+            <button class="btn" type="button" @click="presetOpen = false">{{ t("common.cancel") }}</button>
+            <button class="btn primary" type="button" @click="applyPresets">{{ t("config.presets.apply") }}</button>
+          </template>
+        </Sheet>
       </div>
 
       <div class="card">
         <h2>{{ t("config.kernel") }}</h2>
         <div class="field">
           <label>{{ t("config.force_kmi") }}</label>
-          <input v-model="cfg.force_kmi" type="text" :placeholder="t('config.force_kmi.auto')" />
+          <button class="kmi-row" type="button" :disabled="state.busy" @click="openKmiPicker">
+            <span>{{ cfg.force_kmi ? cfg.force_kmi : t("config.force_kmi.auto") }}</span>
+            <span class="hint">{{ t("common.choose") }}</span>
+          </button>
         </div>
+        <Sheet :open="kmiOpen" :title="t('config.force_kmi')" @close="kmiOpen = false">
+          <p class="hint">{{ t("config.force_kmi.hint") }}</p>
+          <button
+            class="kmi-row"
+            :class="{ on: !(cfg.force_kmi || '').trim() }"
+            type="button"
+            @click="pickKmi('')"
+          >
+            {{ t("config.force_kmi.auto") }}
+          </button>
+          <button
+            v-for="k in kmiOptions()"
+            :key="k"
+            class="kmi-row"
+            :class="{ on: (cfg.force_kmi || '').trim() === k }"
+            type="button"
+            @click="pickKmi(k)"
+          >
+            {{ k }}
+            <span v-if="!kmis.includes(k)" class="hint">{{ t("config.force_kmi.unpacked") }}</span>
+          </button>
+          <template #actions>
+            <button class="btn" type="button" @click="kmiOpen = false">{{ t("common.close") }}</button>
+          </template>
+        </Sheet>
         <label class="row">
           <span>{{ t("config.fake_cmdline") }}</span>
           <span class="switch"><input type="checkbox" :checked="isOn('fake_cmdline')" @change="setOn('fake_cmdline', ($event.target as HTMLInputElement).checked)" /><i /></span>

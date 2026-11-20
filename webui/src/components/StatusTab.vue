@@ -1,13 +1,14 @@
 <!-- SPDX-License-Identifier: GPL-2.0-only -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import Sheet from "./Sheet.vue";
 import { applyRules, exportLog, getAnnouncement, loadAndApply, type Announcement } from "../api";
 import { t } from "../i18n";
 import { refreshStatus, setBanner, state, withBusy } from "../store";
 
 const s = computed(() => state.status);
 const announce = ref<Announcement | null>(null);
-const showAnnounce = ref(false);
+const announceOpen = ref(false);
 
 onMounted(async () => {
   announce.value = await getAnnouncement();
@@ -108,21 +109,23 @@ async function doExport(): Promise<void> {
       </div>
     </div>
 
-    <!-- 公告行 -->
+    <!-- 公告行：点击打开二级窗口（1.2.7 的 #announceModal） -->
     <div v-if="announce && announce.summary" class="card announce">
       <span class="badge-mini">{{ t("status.announce") }}</span>
       <span class="announce-text">{{ announce.summary }}</span>
-      <button class="link-btn" type="button" @click="showAnnounce = !showAnnounce">
-        {{ showAnnounce ? t("status.hide") : t("status.detail") }}
-      </button>
+      <button class="link-btn" type="button" @click="announceOpen = true">{{ t("status.detail") }}</button>
     </div>
-    <div v-if="showAnnounce && announce" class="card announce-full">
+    <Sheet v-if="announce" :open="announceOpen" :title="t('status.announce')" @close="announceOpen = false">
       <p class="announce-text">{{ announce.summary }}</p>
-      <ul class="announce-list">
+      <ul v-if="announce.items && announce.items.length" class="announce-list">
         <li v-for="(item, i) in announce.items" :key="i">{{ item }}</li>
       </ul>
       <p v-if="announce.updated" class="hint">{{ announce.updated }}</p>
-    </div>
+      <template #actions>
+        <a class="btn" href="https://susfs.stdawns.top/" target="_blank" rel="noopener">{{ t("status.release_page") }}</a>
+        <button class="btn primary" type="button" @click="announceOpen = false">{{ t("common.close") }}</button>
+      </template>
+    </Sheet>
 
     <!-- 指标：2 列，标签在上、值在下、带状态圆点 -->
     <div class="grid-stats">

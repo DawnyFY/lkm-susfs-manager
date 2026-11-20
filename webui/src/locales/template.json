@@ -139,5 +139,15 @@
   "status.running": "",
   "common.load_failed": "",
   "common.retry": "",
-  "about.credit.ui": ""
+  "about.credit.ui": "",
+  "config.presets.title": "",
+  "config.presets.apply": "",
+  "config.presets.added": "",
+  "config.presets.exists": "",
+  "config.force_kmi.hint": "",
+  "config.force_kmi.unpacked": "",
+  "common.cancel": "",
+  "common.close": "",
+  "common.choose": "",
+  "status.release_page": ""
 }
