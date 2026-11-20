@@ -106,6 +106,9 @@ export async function exportLog(): Promise<string> {
 
 export interface PresetPath {
   path: string;
+  /** 设备上是否真的存在（不存在就没必要隐藏） */
+  exists: boolean;
+  /** 是否已经写进 sus_path */
   configured: boolean;
 }
 
@@ -123,7 +126,12 @@ export async function presetPaths(): Promise<PresetPath[]> {
     .filter(Boolean)
     .map((l) => {
       const parts = l.split(String.fromCharCode(9));
-      return { path: parts[0] || "", configured: parts[1] === "1" };
+      // 三列：path<TAB>exists<TAB>in_rules（旧版只有两列，第二列当存在性）
+      return {
+        path: parts[0] || "",
+        exists: parts[1] === "1",
+        configured: parts[2] === undefined ? false : parts[2] === "1",
+      };
     })
     .filter((p) => p.path);
 }

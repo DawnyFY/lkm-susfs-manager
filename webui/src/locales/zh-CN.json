@@ -143,11 +143,12 @@
   "config.presets.title": "预设隐藏项",
   "config.presets.apply": "追加所选",
   "config.presets.added": "已追加 {n} 项到 sus_path",
-  "config.presets.exists": "已存在",
+  "config.presets.exists": "已加入",
   "config.force_kmi.hint": "选项来自本模块实际打包的 KMI；只在自动匹配失败时使用。",
   "config.force_kmi.unpacked": "（未打包）",
   "common.cancel": "取消",
   "common.close": "关闭",
   "common.choose": "选择",
-  "status.release_page": "发布页"
+  "status.release_page": "发布页",
+  "config.presets.none": "设备上没有可追加的预设路径"
 }

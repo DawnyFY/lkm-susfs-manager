@@ -149,5 +149,6 @@
   "common.cancel": "",
   "common.close": "",
   "common.choose": "",
-  "status.release_page": ""
+  "status.release_page": "",
+  "config.presets.none": ""
 }

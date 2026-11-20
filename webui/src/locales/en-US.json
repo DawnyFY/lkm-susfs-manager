@@ -143,11 +143,12 @@
   "config.presets.title": "Preset hidden paths",
   "config.presets.apply": "Add selected",
   "config.presets.added": "Added {n} item(s) to sus_path",
-  "config.presets.exists": "already added",
+  "config.presets.exists": "added",
   "config.force_kmi.hint": "Options come from the KMI build shipped with this module. Use only when auto-detection fails.",
   "config.force_kmi.unpacked": "(not bundled)",
   "common.cancel": "Cancel",
   "common.close": "Close",
   "common.choose": "Choose",
-  "status.release_page": "Release page"
+  "status.release_page": "Release page",
+  "config.presets.none": "No preset paths found on this device"
 }

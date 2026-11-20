@@ -45,10 +45,8 @@ pg_status_fields() {
     fi
     _PG_HIDDEN=0
     # 只有真的加载了才算「已隐藏」：卸载后残留的名字不该让页面显示已隐藏
-    if [ "$_PG_LOADED" = "1" ] && [ -r /proc/susfs_hide_modules ]; then
-        while read -r _m; do
-            [ "$_m" = "generic_pid_guard" ] && { _PG_HIDDEN=1; break; }
-        done < /proc/susfs_hide_modules
+    if [ "$_PG_LOADED" = "1" ]; then
+        hide_list_has generic_pid_guard && _PG_HIDDEN=1
     fi
     _PG_RES=""
     if [ -f "$STATE/pid_guard.status" ]; then
@@ -221,11 +219,7 @@ status() {
         done < /proc/susfs_path
     fi
     HIDE=0
-    if [ -r /proc/susfs_hide_modules ]; then
-        while read -r _mod; do
-            [ "$_mod" = "kernelsu" ] && { HIDE=1; break; }
-        done < /proc/susfs_hide_modules
-    fi
+    hide_list_has kernelsu && HIDE=1
     MARKER=0
     marker_exists && MARKER=1
 
@@ -460,8 +454,16 @@ case "$1" in
         exit 0
         ;;
     preset_paths)
-        # 输出当前设备上真实存在的建议隐藏路径（已配置的由前端标记，不在此过滤）
+        # 输出候选隐藏路径：path<TAB>是否存在<TAB>是否已在 sus_path 里
+        # 前端只展示「存在」的项，已加入的置灰
         _cur="$CONFIG/sus_path.txt"
+        _rules=" "
+        if [ -f "$_cur" ]; then
+            while IFS= read -r _rl; do
+                case "$_rl" in ''|'#'*) continue ;; esac
+                _rules="$_rules$_rl "
+            done < "$_cur"
+        fi
         for _p in /data/adb/ksu /data/adb/ap /data/adb/magisk /data/adb/modules \
                   /data/adb/ksu/bin /data/adb/ap/bin \
                   /data/adb/ksu/susfs4ksu /data/adb/ap/susfs4ksu /data/adb/susfs4ksu \
@@ -472,12 +474,14 @@ case "$1" in
                   /data/local/tmp/HyperCeiler /data/local/tmp/simpleHook \
                   /data/local/tmp/resetprop \
                   /data/adb/mount_mask /data/adb/mount_mark \
-                  /data/local/tmp/mount_mask /data/local/tmp/mount_mark; do
-            if [ -e "$_p" ]; then
-                printf '%s\t1\n' "$_p"
-            else
-                printf '%s\t0\n' "$_p"
-            fi
+                  /data/local/tmp/mount_mask /data/local/tmp/mount_mark \
+                  /data/local/tmp/brevent \
+                  /data/local/tmp/AppRetention /data/local/AppRetention; do
+            _ex=0
+            if [ -e "$_p" ]; then _ex=1; fi
+            _in=0
+            case "$_rules" in *" $_p "*) _in=1 ;; esac
+            printf '%s\t%s\t%s\n' "$_p" "$_ex" "$_in"
         done
         # Scene 痕迹目录名随机，不放进预设（用「隐藏 Scene 痕迹」开关 + 重扫处理）
         ;;

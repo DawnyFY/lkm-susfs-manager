@@ -54,6 +54,23 @@
 - 未达 issue 里写的 < 0.5 s 目标：剩余开销主要是 mksh 解释约 1700 条内建命令 + 6 个外部进程，
   再往下需要把 status 挪进编译型 helper，属独立工作（issue #9 已更新说明）
 
+5. 预设路径补充与语义修正
+
+- 预设列表新增 `/data/local/tmp/brevent`（Brevent 的 root helper 落点）与
+  `/data/local/tmp/AppRetention`、`/data/local/AppRetention`（按需出现）
+- `ctl.sh preset_paths` 改为三列输出：`path<TAB>是否存在<TAB>是否已在 sus_path` ——
+  原先只有「是否存在」一列，界面却当成「已加入」显示，勾选状态与实际不符
+- 界面只列出设备上真实存在的路径；已加入的项标「已加入」并禁用勾选
+
+6. 修复「kernelsu 隐藏」误报未隐藏（本轮改动的回归）
+
+- 原因：#9 的少 fork 改造里把 `/proc/susfs_hide_modules` 的判断改成「整行等于模块名」，
+  而该文件的格式是 `names: susfs_guard_lkm kernelsu generic_pid_guard`（空格分隔在同一行），
+  于是 `kernelsu 隐藏` 与 `pid_guard_hidden` 恒为 0，状态页显示「未隐藏」
+- 修复：抽出 `common.sh` 的 `hide_list_has()` 按词匹配，`status` 与 `pg_status_fields` 共用
+- 回归测试：新增 `tools/test_hide_list.sh`（7 条断言，喂真实格式样本，含「按词不按行」和文件缺失）
+- 设备实测：`hide_kernelsu=1`、`pid_guard_hidden=1`
+
 ## 三、无变化
 
 - WebUI、主题、语言、`get_bundle` / `pid_guard_bundle` 接口与 1.2.8 相同

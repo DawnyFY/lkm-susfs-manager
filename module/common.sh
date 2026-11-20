@@ -1628,6 +1628,22 @@ caps_refresh() {
     } > "$_cr_f" 2>/dev/null
 }
 
+# /proc/susfs_hide_modules 的格式是：
+#   hide_modules: 3/16 name(s), ...
+#   names: susfs_guard_lkm kernelsu generic_pid_guard
+# 模块名在 names: 行里以空格分隔 —— 必须按「词」匹配，不能按整行比较
+# （曾经的回归：改成整行比较后 kernelsu 永远判为未隐藏）
+hide_list_has() {
+    _hl_f=${HIDE_MODULES_NODE:-/proc/susfs_hide_modules}
+    [ -r "$_hl_f" ] || return 1
+    while IFS= read -r _hl_l; do
+        case " $_hl_l " in
+            *" $1 "*) return 0 ;;
+        esac
+    done < "$_hl_f"
+    return 1
+}
+
 cap_ok() {
     _cap_f="$STATE/$CAPS_FILE_NAME"
     _cap_bid=""

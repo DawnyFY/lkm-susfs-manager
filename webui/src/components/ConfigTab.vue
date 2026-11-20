@@ -148,11 +148,12 @@ async function doSave(): Promise<void> {
 async function loadPresets(): Promise<void> {
   await withBusy(async () => {
     try {
-      presets.value = await presetPaths();
+      // 只列设备上真实存在的路径：隐藏一个不存在的路径没有意义
+      presets.value = (await presetPaths()).filter((p) => p.exists);
       presetSel.value = {};
       for (const p of presets.value) presetSel.value[p.path] = false;
       if (!presets.value.length) {
-        setBanner("info", t("config.presets.hint"));
+        setBanner("info", t("config.presets.none"));
         return;
       }
       presetOpen.value = true;
