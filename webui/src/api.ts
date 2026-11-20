@@ -215,6 +215,18 @@ export interface Announcement {
 const ANNOUNCE_URL = "https://susfs.stdawns.top/announcement.json";
 const ANNOUNCE_TTL = 60 * 1000;
 
+// 拉不到远程公告时的内置兜底：至少让用户看到交流群入口与版本要点
+const ANNOUNCE_FALLBACK: Announcement = {
+  summary: "交流群：QQ 1019737433。模块使用、规则配置与日志排查都可以在群里问。",
+  items: [
+    "QQ 交流群：1019737433（加入链接 https://qm.qq.com/q/I1aYPXoIiy）",
+    "Bug 与功能请求请走 GitHub Issues：https://github.com/DawnyFY/lkm-susfs-manager/issues",
+    "发布页与校验值：https://susfs.stdawns.top/",
+  ],
+  updated: "2026-11-20",
+  link: "https://qm.qq.com/q/I1aYPXoIiy",
+};
+
 export async function getAnnouncement(): Promise<Announcement | null> {
   try {
     const raw = localStorage.getItem("announce_cache");
@@ -230,7 +242,7 @@ export async function getAnnouncement(): Promise<Announcement | null> {
     const timer = setTimeout(() => ctrl.abort(), 6000);
     const res = await fetch(ANNOUNCE_URL, { cache: "no-store", signal: ctrl.signal });
     clearTimeout(timer);
-    if (!res.ok) return null;
+    if (!res.ok) return ANNOUNCE_FALLBACK;
     const data = (await res.json()) as Announcement;
     try {
       localStorage.setItem("announce_cache", JSON.stringify({ at: Date.now(), data }));
@@ -239,6 +251,6 @@ export async function getAnnouncement(): Promise<Announcement | null> {
     }
     return data;
   } catch {
-    return null;
+    return ANNOUNCE_FALLBACK;
   }
 }

@@ -150,5 +150,10 @@
   "common.close": "Close",
   "common.choose": "Choose",
   "status.release_page": "Release page",
-  "config.presets.none": "No preset paths found on this device"
+  "config.presets.none": "No preset paths found on this device",
+  "about.group": "Community",
+  "about.group.name": "QQ group",
+  "about.group.id": "Group ID",
+  "about.group.join": "Join",
+  "about.group.desc": "Ask usage, rule configuration and log questions here; file bugs and feature requests on GitHub Issues."
 }

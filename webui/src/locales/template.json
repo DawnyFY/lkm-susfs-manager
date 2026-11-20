@@ -150,5 +150,10 @@
   "common.close": "",
   "common.choose": "",
   "status.release_page": "",
-  "config.presets.none": ""
+  "config.presets.none": "",
+  "about.group": "",
+  "about.group.name": "",
+  "about.group.id": "",
+  "about.group.join": "",
+  "about.group.desc": ""
 }

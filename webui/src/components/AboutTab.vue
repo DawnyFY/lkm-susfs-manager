@@ -9,6 +9,10 @@ import { currentTheme, setTheme, type ThemeName } from "../theme";
 
 const theme = ref<ThemeName>(currentTheme());
 
+// 交流群：群号与加群链接（qm.qq.com 的短链，点开由 QQ 接管）
+const GROUP_ID = "1019737433";
+const GROUP_URL = "https://qm.qq.com/q/I1aYPXoIiy";
+
 // 第一位贡献者用随包的图片（离线也稳），其余用 GitHub 头像链接（不进包）；
 // 链接加载失败（离线 / 被管理器 CSP 拦）时回退首字母，避免出现破图图标。
 const CREDITS = [
@@ -99,6 +103,20 @@ async function toggleStats(v: boolean): Promise<void> {
         <summary>{{ t("about.privacy.more") }}</summary>
         <p class="hint">{{ t("about.privacy.text") }}</p>
       </details>
+    </div>
+
+    <p class="section-label">{{ t("about.group") }}</p>
+    <div class="card">
+      <div class="row">
+        <span>
+          {{ t("about.group.name") }}
+          <span class="hint" style="display: block">{{ t("about.group.id") }} · {{ GROUP_ID }}</span>
+        </span>
+        <a class="btn primary small" :href="GROUP_URL" target="_blank" rel="noopener noreferrer">
+          {{ t("about.group.join") }}
+        </a>
+      </div>
+      <p class="hint">{{ t("about.group.desc") }}</p>
     </div>
 
     <p class="section-label">{{ t("about.thanks") }}</p>
