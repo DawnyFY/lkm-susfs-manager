@@ -171,7 +171,7 @@
   "wizard.kmi.force": "Force a KMI (optional)",
   "wizard.kmi.none": "No packaged KMI list",
   "wizard.hide.title": "Hiding options",
-  "wizard.hide.desc": "A general-purpose set — leave them on unless you know better.",
+  "wizard.hide.desc": "Keep the recommended set on (only hide_sus_mnts ships enabled by default; turning on the other two reduces AVC log and loop traces). Advanced items stay off unless you need them.",
   "wizard.path.title": "Hidden paths",
   "wizard.path.desc": "Pick paths to add to sus_path. Remove /data/adb in Config if it conflicts with NeoZygisk.",
   "wizard.path.added": "already added",
@@ -189,5 +189,8 @@
   "about.wizard": "Setup wizard",
   "about.wizard.sub": "Run the first-run setup again",
   "about.wizard.btn": "Open",
-  "wizard.reapply": "Apply again"
+  "wizard.reapply": "Apply again",
+  "wizard.hide.rec": "Recommended (on)",
+  "wizard.hide.risk": "Advanced (off, opt in)",
+  "wizard.hide.risk.desc": "These change semantics: replace_rules replaces existing rules instead of appending; auto_try_umount unmounts mount points; vold_isolation and hide_vendor_sepolicy alter vendor/vold behaviour."
 }

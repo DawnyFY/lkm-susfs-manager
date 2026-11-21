@@ -189,5 +189,8 @@
   "about.wizard": "",
   "about.wizard.sub": "",
   "about.wizard.btn": "",
-  "wizard.reapply": ""
+  "wizard.reapply": "",
+  "wizard.hide.rec": "",
+  "wizard.hide.risk": "",
+  "wizard.hide.risk.desc": ""
 }

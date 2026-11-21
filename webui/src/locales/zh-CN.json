@@ -171,7 +171,7 @@
   "wizard.kmi.force": "强制指定 KMI（可留空）",
   "wizard.kmi.none": "模块内没有可选的 KMI 列表",
   "wizard.hide.title": "隐藏项",
-  "wizard.hide.desc": "下面是一套通用推荐组合，全开即可；不确定的可以保持默认。",
+  "wizard.hide.desc": "推荐档建议保持开启（出厂默认只有 hide_sus_mnts 是开的，另两项打开后可减少 AVC 日志与 loop 痕迹）。谨慎档默认关，需要时再勾。",
   "wizard.path.title": "隐藏路径",
   "wizard.path.desc": "勾选要加入 sus_path 的路径（只列设备上真实存在且还没加入的）。/data/adb 若与 NeoZygisk 冲突请到配置页删掉。",
   "wizard.path.added": "已加入",
@@ -189,5 +189,8 @@
   "about.wizard": "配置向导",
   "about.wizard.sub": "重新走一遍首次配置流程",
   "about.wizard.btn": "打开",
-  "wizard.reapply": "重新应用"
+  "wizard.reapply": "重新应用",
+  "wizard.hide.rec": "推荐（默认已开）",
+  "wizard.hide.risk": "谨慎（默认关，按需勾选）",
+  "wizard.hide.risk.desc": "下列项会改变行为语义：replace_rules 是「替换」而非追加既有规则；auto_try_umount 会自动卸载挂载点；vold_isolation 与 hide_vendor_sepolicy 会动 vendor/vold 行为，排查问题时建议先关。"
 }

@@ -31,17 +31,20 @@ const curKernel = computed(() => state.status.kernel || "");
 const kmiChoice = ref("");
 
 // 第二步：推荐隐藏项（默认全开，都可以关）
+// 隐藏项分两档：推荐（默认开）与谨慎（默认关，改了会变语义）
+// 推荐档对应「出厂默认就该这样」的项：sus 挂载、AVC 日志、KSU loop；
+// 谨慎档会替换既有规则或动 vendor/挂载行为，默认关，交给用户按需勾。
 const HIDE_KEYS = [
-  "hide_sus_mnts",
-  "avc_spoof",
-  "replace_rules",
-  "hide_ksu_loop",
-  "auto_try_umount",
-  "vold_isolation",
-  "hide_vendor_sepolicy",
+  { key: "hide_sus_mnts", on: true, risk: false },
+  { key: "avc_spoof", on: true, risk: false },
+  { key: "hide_ksu_loop", on: true, risk: false },
+  { key: "replace_rules", on: false, risk: true },
+  { key: "auto_try_umount", on: false, risk: true },
+  { key: "vold_isolation", on: false, risk: true },
+  { key: "hide_vendor_sepolicy", on: false, risk: true },
 ] as const;
 const hideOn = ref<Record<string, boolean>>(
-  Object.fromEntries(HIDE_KEYS.map((k) => [k, true])) as Record<string, boolean>,
+  Object.fromEntries(HIDE_KEYS.map((k) => [k.key, k.on])) as Record<string, boolean>,
 );
 
 // 第三步：隐藏路径（只列设备上存在、且还没加入 sus_path 的）
@@ -75,7 +78,7 @@ function finish(): void {
 /** 真正写盘的部分；不自己包 withBusy，由调用方统一包一层 */
 async function writeConfig(): Promise<void> {
   let text = config.value;
-  for (const k of HIDE_KEYS) text = setIni(text, k, hideOn.value[k] ? "1" : "0");
+  for (const k of HIDE_KEYS) text = setIni(text, k.key, hideOn.value[k.key] ? "1" : "0");
   text = setIni(text, "auto_load", autoLoad.value ? "1" : "0");
   if (kmiChoice.value) text = setIni(text, "force_kmi", kmiChoice.value);
   // 预设路径：勾选的追加到 sus_path（已存在的不重复加）
@@ -168,11 +171,17 @@ onMounted(async () => {
         <template v-else-if="step === 1">
           <p class="wizard-h">{{ t("wizard.hide.title") }}</p>
           <p class="hint">{{ t("wizard.hide.desc") }}</p>
-          <label v-for="k in HIDE_KEYS" :key="k" class="row wizard-check">
-            <span class="mono">{{ k }}</span>
-            <span class="switch">
-              <input type="checkbox" v-model="hideOn[k]" /><i />
-            </span>
+          <p class="section-mini">{{ t("wizard.hide.rec") }}</p>
+          <label v-for="k in HIDE_KEYS.filter((x) => !x.risk)" :key="k.key" class="row wizard-check">
+            <span class="mono">{{ k.key }}</span>
+            <span class="switch"><input type="checkbox" v-model="hideOn[k.key]" /><i /></span>
+          </label>
+
+          <p class="section-mini">{{ t("wizard.hide.risk") }}</p>
+          <p class="hint">{{ t("wizard.hide.risk.desc") }}</p>
+          <label v-for="k in HIDE_KEYS.filter((x) => x.risk)" :key="k.key" class="row wizard-check">
+            <span class="mono">{{ k.key }}</span>
+            <span class="switch"><input type="checkbox" v-model="hideOn[k.key]" /><i /></span>
           </label>
         </template>
 
