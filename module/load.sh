@@ -88,6 +88,12 @@ if pstore_crash_suspect; then
     fi
 fi
 
+# 有内核崩溃但调用栈里没有本模块（例如 vivo 的 zram 重建竞态）：只提示，不暂停自动加载
+_foreign_crash=$(pstore_crash_foreign)
+if [ -n "$_foreign_crash" ]; then
+    echo "[i] 上次启动有内核崩溃（$_foreign_crash），调用栈里没有本模块，不暂停自动加载"
+fi
+
 # APatch/KernelPatch 默认不外挂 LKM：自动跳过、手动拒绝（需显式放行）
 if kernelpatch_present && ! apatch_lkm_allowed && ! susfs_kernel_ready; then
     if [ "${1:-}" != "manual" ]; then

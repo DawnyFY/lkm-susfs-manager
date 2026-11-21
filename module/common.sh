@@ -343,11 +343,56 @@ pstore_crash_suspect() {
     fi
     for _pc_f in "$_pc_dir"/*; do
         [ -f "$_pc_f" ] || continue
-        grep -qiE "Kernel panic|Oops|Unable to handle kernel|BUG:|Internal error" "$_pc_f" 2>/dev/null || continue
-        grep -q "susfs_guard_lkm" "$_pc_f" 2>/dev/null && return 0
-        grep -q "susfs_allinone" "$_pc_f" 2>/dev/null && return 0
+        _pc_ctx=$(pstore_fault_context "$_pc_f")
+        [ -n "$_pc_ctx" ] || continue
+        # 只有「故障现场」里出现本模块符号才算（PC/LR/调用栈帧）。
+        # 崩转储天然含模块自己的加载日志（susfs_guard_lkm init …）与 "Modules linked in:" 清单，
+        # 拿整份文件匹配会把任何 panic 都认领成本模块崩溃（vivo 实测误判过一次）。
+        printf '%s\n' "$_pc_ctx" | grep -v "Modules linked in" | grep -qE "susfs_guard_lkm|susfs_allinone" && return 0
     done
     return 1
+}
+
+# 取崩溃现场：最后一条 panic/oops 触发行往后 120 行（Call trace 通常紧跟其后）。
+# 没有触发行则输出空。
+pstore_fault_context() {
+    _fc_f=$1
+    [ -f "$_fc_f" ] || return 0
+    _fc_line=$(grep -nE "Kernel panic|Oops|Unable to handle kernel|BUG:|Internal error" "$_fc_f" 2>/dev/null | tail -1 | cut -d: -f1)
+    case "$_fc_line" in ''|*[!0-9]*) return 0 ;; esac
+    tail -n +"$_fc_line" "$_fc_f" 2>/dev/null | head -n 120
+}
+
+# 崩溃现场的出错函数（供提示用）：pc 行里的 "func+0x.. [module]"；取不到则空
+pstore_fault_culprit() {
+    _fp_f=$1
+    _fp_ctx=$(pstore_fault_context "$_fp_f")
+    [ -n "$_fp_ctx" ] || return 0
+    # 只取 pc 行，用参数展开剥掉 "+0xb4/0x67c [zram]" 这类尾部，不依赖 sed 反引用
+    _fp_line=$(printf '%s\n' "$_fp_ctx" | grep -m1 -E " (pc|lr) *: ")
+    [ -n "$_fp_line" ] || return 0
+    _fp_line=${_fp_line#*: }
+    _fp_line=${_fp_line%%+*}
+    _fp_line=${_fp_line##* }
+    [ -n "$_fp_line" ] || return 0
+    printf '%s\n' "$_fp_line"
+}
+
+# 有内核崩溃、但卡的是别人的模块（例如 vivo 的 zram 重建竞态）
+# 输出 "<函数名>"；没有崩溃或崩溃与本模块相关时输出空。
+pstore_crash_foreign() {
+    _cf_dir=$(_pstore_dir)
+    [ -d "$_cf_dir" ] || return 0
+    pstore_crash_suspect && return 0
+    for _cf_f in "$_cf_dir"/*; do
+        [ -f "$_cf_f" ] || continue
+        _cf_cul=$(pstore_fault_culprit "$_cf_f")
+        [ -n "$_cf_cul" ] || continue
+        printf '%s
+' "$_cf_cul"
+        return 0
+    done
+    return 0
 }
 
 # 读取内核配置项（/proc/config.gz；测试钩子 CONFIG_GZ_FILE 只在 SUSFS_TEST_HOOK=1 时生效）
