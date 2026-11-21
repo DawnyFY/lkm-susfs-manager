@@ -2,10 +2,10 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { t } from "../i18n";
 
-// 首次启动开场（对齐参考视频前 0.7 s 的那段动画）：
-//   黑场 → 一道光刃从左斜切而过 → 上下两片幕沿斜缝张开、露出内容 → 标题浮出。
-// 只用 transform / opacity / width 动，不依赖 clip-path 插值，老 WebView 也能正常退化。
-// 点击 / Esc / Enter 可提前跳过；总时长约 3.0 s。
+// 首次启动开场（对齐参考视频前 1 秒的实际运动）：
+//   黑场 → 光刃绕中心旋转（横向转到竖向，过程中带螺旋拖尾）→ 立成竖向后左右拉开 → 内容露出。
+// 只用 transform / opacity，不依赖 clip-path 插值；不使用毛玻璃滤镜。
+// 点击 / Esc / Enter 可提前跳过；总时长约 3.1 s。
 defineProps<{ version?: string }>();
 const emit = defineEmits<{ (e: "done"): void }>();
 
@@ -26,7 +26,7 @@ function onKey(ev: KeyboardEvent): void {
 onMounted(() => {
   document.body.classList.add("splash-open");
   document.addEventListener("keydown", onKey);
-  timer = setTimeout(finish, 3000);
+  timer = setTimeout(finish, 3100);
 });
 
 onBeforeUnmount(() => {
@@ -39,7 +39,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="splash" :class="{ closing }" @click="finish">
-    <!-- 光刃张开后露出的内容 -->
+    <!-- 光刃转开之后露出的内容 -->
     <div class="splash-content">
       <div class="splash-glow" />
       <div class="splash-grain" />
@@ -53,11 +53,16 @@ onBeforeUnmount(() => {
       <p class="splash-skip">{{ t("splash.skip") }}</p>
     </div>
 
-    <!-- 第一道光刃：从左斜切进入，划过之后拉起第一层幕 -->
-    <div class="splash-spark" />
+    <!-- 旋转的光刃：横向转竖向，带螺旋拖尾（参考里的「螺纹」） -->
+    <div class="wiper">
+      <i class="wiper-thread th1" />
+      <i class="wiper-thread th2" />
+      <i class="wiper-thread th3" />
+      <i class="wiper-blade" />
+    </div>
 
-    <!-- 上下两片幕，沿斜缝向两侧退开；内侧边缘带白色光带 -->
-    <div class="curtain curtain-top"><i class="blade" /></div>
-    <div class="curtain curtain-bottom"><i class="blade" /></div>
+    <!-- 光刃立成竖向后，左右两片幕沿竖缝拉开 -->
+    <div class="curtain curtain-left"><i class="blade" /></div>
+    <div class="curtain curtain-right"><i class="blade" /></div>
   </div>
 </template>
