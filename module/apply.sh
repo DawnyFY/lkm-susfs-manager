@@ -290,24 +290,52 @@ if [ "$hide_sus_mnts" = "1" ]; then
         echo "[i] 内核未提供 hide_sus_mnts 接口（无特性位、无 /proc/susfs_hide_mounts），跳过"
     fi
 fi
-if has_feature CONFIG_KSU_SUSFS_AVC_LOG_SPOOFING || [ -e /proc/susfs_avc_spoof ]; then
-    if [ -f "$STATE/avc_unsupported" ]; then
-        echo "[i] avc_log_spoofing 已标记不可用，跳过（重新加载 LKM 后会自动重试）"
-    elif [ "$avc_spoof" = "1" ]; then
+# AVC 日志伪装的三条路径，按可用性依次尝试：
+#   1) ksu_susfs enable_avc_log_spoofing（新版 CLI 才有）
+#   2) LKM 参数 /sys/module/susfs_guard_lkm/parameters/avc_su_ctx
+#      （官方 KernelSU 常见：功能在 LKM 里，但 CLI 没有对应命令）
+#   3) 都没有 → 标记不可用，本次开机不再重试
+AVC_PARAM=/sys/module/susfs_guard_lkm/parameters/avc_su_ctx
+AVC_REAL_CTX="u:r:ksu:s0"
+AVC_SPOOF_CTX="u:r:priv_app:s0:c512,c768"
+if has_feature CONFIG_KSU_SUSFS_AVC_LOG_SPOOFING || [ -e /proc/susfs_avc_spoof ] || [ -e "$AVC_PARAM" ]; then
+    if [ "$avc_spoof" = "1" ]; then
         if "$BIN" enable_avc_log_spoofing 1 >/dev/null 2>&1; then
-            echo "[i] avc_log_spoofing=1"
+            echo "[i] avc_log_spoofing=1（ksu_susfs 命令）"
+        elif [ -w "$AVC_PARAM" ]; then
+            _avc_cur=$(cat "$AVC_PARAM" 2>/dev/null)
+            if [ "$_avc_cur" = "$AVC_SPOOF_CTX" ]; then
+                echo "[i] avc_log_spoofing=1（LKM 参数已生效：$_avc_cur）"
+            elif printf '%s\n' "$AVC_SPOOF_CTX" > "$AVC_PARAM" 2>/dev/null; then
+                _avc_now=$(cat "$AVC_PARAM" 2>/dev/null)
+                if [ "$_avc_now" = "$AVC_SPOOF_CTX" ]; then
+                    echo "[i] avc_log_spoofing=1（经 LKM 参数：$_avc_cur → $_avc_now）"
+                else
+                    echo "[!] avc_log_spoofing 写入参数后未生效（读回：$_avc_now）"
+                fi
+            else
+                echo "[!] avc_log_spoofing 无法开启：CLI 无该命令，参数写入被拒绝"
+                : > "$STATE/avc_unsupported" 2>/dev/null
+            fi
         else
-            echo "[!] avc_log_spoofing 设置失败：当前 ksu_susfs 二进制没有该命令（多数 KernelSU/susfs4ksu 构建未提供）"
-            echo "[i] 该项保持关闭即可；内核侧的 AVC 记录只能由 ROM 策略或支持该命令的 SUSFS 版本处理"
+            echo "[!] avc_log_spoofing 不可用：CLI 无该命令，LKM 也未暴露 avc_su_ctx 参数"
             : > "$STATE/avc_unsupported" 2>/dev/null
         fi
     else
         "$BIN" enable_avc_log_spoofing 0 >/dev/null 2>&1
+        # 参数通道打开的，关闭时要还原，否则 AVC 日志会继续被改写
+        if [ -w "$AVC_PARAM" ]; then
+            _avc_cur=$(cat "$AVC_PARAM" 2>/dev/null)
+            if [ -n "$_avc_cur" ] && [ "$_avc_cur" != "$AVC_REAL_CTX" ]; then
+                if printf '%s\n' "$AVC_REAL_CTX" > "$AVC_PARAM" 2>/dev/null; then
+                    echo "[i] avc_log_spoofing=0（参数已还原：$_avc_cur → $AVC_REAL_CTX）"
+                fi
+            fi
+        fi
     fi
 else
-    echo "[i] 内核未提供 avc_log_spoofing 接口（无特性位、无 /proc/susfs_avc_spoof），跳过"
+    echo "[i] 内核未提供 avc_log_spoofing 接口（LKM 无该特性，也无 avc_su_ctx 参数），跳过"
 fi
-
 # 读取配置文件的第一个字段，忽略注释和空行
 # 清洗单行：去 \r、去注释、去首尾空白
 clean_entry() {
