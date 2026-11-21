@@ -229,6 +229,14 @@ if [ -z "$VARIANT" ] && [ -x "$MODDIR/bin/ksu_susfs_good" ] && [ "$BIN" != "$MOD
     VARIANT=$("$BIN" show variant 2>/dev/null)
 fi
 [ -n "$VARIANT" ] || { echo "[!] ksu_susfs 无法与内核通信"; set_description "❌ $(susfs_hint comm)"; _set_apply_result failed; exit 1; }
+# 回退到模块备份二进制时，它可能比 LKM 旧：缺 avc_log_spoofing / set_sdcard_root_path /
+# try_umount 等新命令，现象很像「内核不支持」。这里把真实原因说出来，避免误判。
+USING_BACKUP_BIN=0
+case "$BIN" in */ksu_susfs_good) USING_BACKUP_BIN=1 ;; esac
+if [ "$USING_BACKUP_BIN" = "1" ]; then
+    echo "[!] 正在使用模块备份的 ksu_susfs（管理器自带的无法通信）"
+    echo "[i] 备份二进制可能较旧：下面若出现「不支持 / 设置失败」，先重装模块或更新管理器，再判断是否内核问题"
+fi
 VERSION=$("$BIN" show version 2>/dev/null)
 FEATURES=$("$BIN" show enabled_features 2>/dev/null)
 has_feature() { printf "%s\n" "$FEATURES" | grep -qx "$1"; }
@@ -253,7 +261,11 @@ if [ -d /sdcard/Android/data ]; then
     if [ "$_sd_rc" = "0" ] && [ "$_ad_rc" = "0" ]; then
         echo "[i] sdcard 根路径已设置"
     else
-        echo "[i] 内核不支持 sdcard 根路径设置（需 susfs v1.5.8+），跳过"
+        if [ "${USING_BACKUP_BIN:-0}" = "1" ]; then
+            echo "[i] sdcard 根路径设置失败：当前用的是模块备份的旧 ksu_susfs，缺该命令（需 susfs v1.5.8+ 的二进制）；不是内核问题"
+        else
+            echo "[i] 内核不支持 sdcard 根路径设置（需 susfs v1.5.8+），跳过"
+        fi
     fi
 else
     echo "[!] /sdcard/Android/data 15 秒内未出现，sus_path 可能不生效"
@@ -285,7 +297,11 @@ if has_feature CONFIG_KSU_SUSFS_AVC_LOG_SPOOFING || [ -e /proc/susfs_avc_spoof ]
         if "$BIN" enable_avc_log_spoofing 1 >/dev/null 2>&1; then
             echo "[i] avc_log_spoofing=1"
         else
-            echo "[!] avc_log_spoofing 设置失败，本次开机内不再重试"
+            if [ "${USING_BACKUP_BIN:-0}" = "1" ]; then
+                echo "[!] avc_log_spoofing 设置失败：当前用的是模块备份的旧 ksu_susfs，可能缺该命令；请重装模块或更新管理器"
+            else
+                echo "[!] avc_log_spoofing 设置失败（该内核/LKM 不支持此命令），本次开机内不再重试"
+            fi
             : > "$STATE/avc_unsupported" 2>/dev/null
         fi
     else
@@ -635,7 +651,11 @@ fi
 # 7. try_umount
 if [ -f "$CONFIG/try_umount.txt" ]; then
     if ! cap_ok try_umount; then
-        echo "[i] 本内核未实现 try_umount 命令，跳过"
+        if [ "${USING_BACKUP_BIN:-0}" = "1" ]; then
+            echo "[i] try_umount 不可用：当前用的是模块备份的旧 ksu_susfs，可能缺该命令"
+        else
+            echo "[i] 本内核未实现 try_umount 命令，跳过"
+        fi
     else
     _tu_ok=0; _tu_bad=0
     while IFS= read -r _line || [ -n "$_line" ]; do
