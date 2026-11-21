@@ -493,6 +493,46 @@ case "$1" in
         done
         # Scene 痕迹目录名随机，不放进预设（用「隐藏 Scene 痕迹」开关 + 重扫处理）
         ;;
+    detect_self)
+        # 自检：应用层扫描器（Duck Detector 之类）能看到的、可能归到本模块的痕迹。
+        # 用来对账「报告里哪条是本模块的、哪条是 root 管理器/ROM 的」。
+        echo "# 本模块暴露面自检 $(now_stamp)"
+        printf 'module_version=%s\n' "$(cfg_get_prop version 2>/dev/null || sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null)"
+        if [ -f "$MODDIR/kmi.sh" ]; then
+            . "$MODDIR/kmi.sh"
+            printf 'kmi=%s\n' "$(select_kmi "$(real_kernel_release 2>/dev/null)" "$MODDIR" 2>/dev/null)"
+        else
+            printf 'kmi=\n'
+        fi
+        # /proc/modules：hide_modules 生效时本模块与 kernelsu 都不该出现
+        if grep -q "susfs_guard_lkm" /proc/modules 2>/dev/null; then
+            printf 'proc_modules_susfs=visible\n'
+        else
+            printf 'proc_modules_susfs=hidden\n'
+        fi
+        if grep -qi "kernelsu\|kernelsu_next\|ksu" /proc/modules 2>/dev/null; then
+            printf 'proc_modules_ksu=visible\n'
+        else
+            printf 'proc_modules_ksu=hidden\n'
+        fi
+        # kallsyms：只给计数，符号名无法被本模块清除（属 root 管理器/内核侧）
+        printf 'kallsyms_ksu=%s\n' "$(awk '$3 ~ /^__?ksu_/ {c++} END{print c+0}' /proc/kallsyms 2>/dev/null)"
+        printf 'kallsyms_susfs=%s\n' "$(awk '$3 ~ /^susfs_/ {c++} END{print c+0}' /proc/kallsyms 2>/dev/null)"
+        # uname：可被 spoof_uname 改写，扫描器读 uname 时看不到真实串
+        printf 'uname_release=%s\n' "$(cat /proc/sys/kernel/osrelease 2>/dev/null)"
+        printf 'spoof_uname=%s\n' "$(cfg_get spoof_uname 0)"
+        printf 'spoof_uname_value=%s\n' "$(cfg_get spoof_uname_release "")"
+        # 隐藏面：sus_path 规则数、/data/adb 是否在小径表里
+        printf 'sus_path_rules=%s\n' "$(grep -cvE '^\s*(#|$)' "$CONFIG/sus_path.txt" 2>/dev/null || echo 0)"
+        if grep -qx "/data/adb" "$CONFIG/sus_path.txt" 2>/dev/null; then
+            printf 'hides_data_adb=yes\n'
+        else
+            printf 'hides_data_adb=no\n'
+        fi
+        printf 'hide_kernelsu=%s\n' "$(hide_list_has kernelsu && echo 1 || echo 0)"
+        printf 'note=%s\n' "kallsyms 计数属内核/root 管理器侧，本模块无法清除；netlink MAC/邻居泄漏属 ROM SELinux 策略"
+        exit 0
+        ;;
     guard_status)
         if autoload_paused; then
             echo "autoload=paused"
