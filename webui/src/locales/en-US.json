@@ -155,5 +155,7 @@
   "about.group.name": "QQ group",
   "about.group.id": "Group ID",
   "about.group.join": "Join",
-  "about.group.desc": "Ask usage, rule configuration and log questions here; file bugs and feature requests on GitHub Issues."
+  "about.group.desc": "Ask usage, rule configuration and log questions here; file bugs and feature requests on GitHub Issues.",
+  "splash.eyebrow": "KERNEL · RULES · WEBUI",
+  "splash.skip": "Tap to skip"
 }

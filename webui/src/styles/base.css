@@ -943,3 +943,243 @@ body.modal-open {
   from { opacity: 0; transform: translateY(6px) scale(0.99); }
   to { opacity: 1; transform: none; }
 }
+
+/* ---------------- 首次启动开场动画 ---------------- */
+/* 深色电影感开场：光扫 + 缓慢推近 + 轻微色相漂移，约 2.6 s。
+   用局部的 --sp-* 变量，不跟随主题（浅色 UI 淡出时对比更强）；
+   不使用毛玻璃滤镜（老 WebView 会白屏）。 */
+.splash {
+  --sp-bg-1: #070b14;
+  --sp-bg-2: #101a30;
+  --sp-fg: #f7fafc;
+  --sp-dim: rgba(247, 250, 252, 0.66);
+  --sp-line: rgba(247, 250, 252, 0.5);
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--sp-bg-1);
+  transition: opacity 0.32s ease, transform 0.32s ease;
+}
+
+.splash.closing {
+  opacity: 0;
+  transform: scale(1.03);
+  pointer-events: none;
+}
+
+.splash-bg {
+  position: absolute;
+  inset: -14%;
+  background:
+    radial-gradient(46% 38% at 50% 38%, rgba(77, 141, 255, 0.34) 0%, transparent 72%),
+    radial-gradient(90% 70% at 76% 104%, rgba(120, 96, 255, 0.28) 0%, transparent 62%),
+    linear-gradient(158deg, var(--sp-bg-1) 0%, var(--sp-bg-2) 58%, #050810 100%);
+  animation: splash-zoom 2.6s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* 暗角：压住四角，视线收在中间 */
+.splash-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(112% 86% at 50% 44%, transparent 30%, rgba(0, 0, 0, 0.62) 100%);
+}
+
+.splash-spot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 130vmax;
+  height: 130vmax;
+  margin: -65vmax 0 0 -65vmax;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(150, 190, 255, 0.34) 0%, transparent 58%);
+  opacity: 0;
+  animation: splash-spot 2.2s ease-out both;
+}
+
+.splash-sweep {
+  position: absolute;
+  top: -20%;
+  left: -60%;
+  width: 52%;
+  height: 140%;
+  transform: skewX(-18deg);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(96, 150, 255, 0.16) 26%,
+    rgba(255, 255, 255, 0.72) 48%,
+    rgba(96, 150, 255, 0.16) 70%,
+    transparent 100%
+  );
+  mix-blend-mode: screen;
+  animation: splash-sweep 1.5s 0.42s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* 细颗粒纹理：点阵，避免纯色过平 */
+.splash-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.28;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.5) 0.5px, transparent 0.5px);
+  background-size: 13px 13px;
+  mask-image: radial-gradient(56% 44% at 50% 45%, #000 0%, transparent 76%);
+  -webkit-mask-image: radial-gradient(56% 44% at 50% 45%, #000 0%, transparent 76%);
+  animation: splash-grain 2.4s ease-out both;
+}
+
+.splash-body {
+  position: relative;
+  z-index: 2;
+  isolation: isolate;
+  text-align: center;
+  padding: 0 24px;
+  animation: splash-hue 2.6s ease-in-out both;
+}
+
+/* 标题后的柔光，让文字从背景里浮出来 */
+.splash-body::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 50%;
+  width: 62vw;
+  height: 62vw;
+  max-width: 320px;
+  max-height: 320px;
+  margin: -31vw 0 0 -31vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(140, 180, 255, 0.30) 0%, transparent 68%);
+  opacity: 0;
+  animation: splash-glow 2.4s 0.18s ease-out both;
+}
+
+.splash-eyebrow {
+  margin: 0 0 12px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: #8fb6ff;
+  opacity: 0;
+  animation: splash-rise 0.7s 0.14s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.splash-title {
+  margin: 0;
+  font-size: clamp(21px, 6.4vw, 30px);
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  color: var(--sp-fg);
+  text-shadow: 0 8px 26px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  animation: splash-title 1.05s 0.24s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.splash-line {
+  height: 1px;
+  margin: 16px auto 14px;
+  width: 0;
+  background: linear-gradient(90deg, transparent, var(--sp-line), transparent);
+  animation: splash-line 0.9s 0.58s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.splash-sub {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sp-dim);
+  letter-spacing: 0.1em;
+  opacity: 0;
+  animation: splash-rise 0.8s 0.78s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.splash-ver {
+  margin: 10px 0 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: rgba(247, 250, 252, 0.46);
+  letter-spacing: 0.08em;
+  opacity: 0;
+  animation: splash-rise 0.7s 0.98s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.splash-skip {
+  position: absolute;
+  bottom: 26px;
+  margin: 0;
+  font-size: 11.5px;
+  color: rgba(247, 250, 252, 0.5);
+  letter-spacing: 0.08em;
+  opacity: 0;
+  animation: splash-rise 0.6s 1.25s ease both;
+}
+
+body.splash-open {
+  overflow: hidden;
+}
+
+@keyframes splash-glow {
+  0% { opacity: 0; transform: scale(0.86); }
+  45% { opacity: 1; }
+  100% { opacity: 0.42; transform: scale(1.04); }
+}
+
+@keyframes splash-zoom {
+  from { transform: scale(1); }
+  to { transform: scale(1.08); }
+}
+
+@keyframes splash-spot {
+  0% { opacity: 0; transform: scale(0.7); }
+  35% { opacity: 0.5; }
+  100% { opacity: 0; transform: scale(1.06); }
+}
+
+@keyframes splash-sweep {
+  0% { left: -60%; opacity: 0; }
+  12% { opacity: 1; }
+  100% { left: 118%; opacity: 0; }
+}
+
+@keyframes splash-grain {
+  from { opacity: 0; transform: scale(1.04); }
+  to { opacity: 0.26; transform: scale(1); }
+}
+
+/* 轻微色相漂移：对应参考里的「变彩色」，幅度刻意小，避免脏色 */
+@keyframes splash-hue {
+  0% { filter: hue-rotate(0deg); }
+  55% { filter: hue-rotate(-7deg); }
+  100% { filter: hue-rotate(0deg); }
+}
+
+@keyframes splash-title {
+  0% { opacity: 0; transform: translateY(10px); letter-spacing: 0.26em; }
+  100% { opacity: 1; transform: none; letter-spacing: 0.12em; }
+}
+
+@keyframes splash-rise {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes splash-line {
+  from { width: 0; opacity: 0; }
+  to { width: min(220px, 62vw); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-bg, .splash-spot, .splash-sweep, .splash-grain, .splash-body,
+  .splash-eyebrow, .splash-title, .splash-line, .splash-sub, .splash-ver, .splash-skip {
+    animation: none;
+    opacity: 1;
+  }
+  .splash-body::before { animation: none; opacity: 1; }
+  .splash-line { width: min(220px, 62vw); }
+}

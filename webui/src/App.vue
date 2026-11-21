@@ -5,10 +5,30 @@ import AboutTab from "./components/AboutTab.vue";
 import ConfigTab from "./components/ConfigTab.vue";
 import LogTab from "./components/LogTab.vue";
 import PidTab from "./components/PidTab.vue";
+import Splash from "./components/Splash.vue";
 import StatusTab from "./components/StatusTab.vue";
 import { hasKsu } from "./bridge";
 import { t } from "./i18n";
 import { clearBanner, refreshStatus, state, withBusy } from "./store";
+
+// 开场动画只在首次打开 WebUI 时播放；标记写入失败（隐私模式）就当已看过，避免每次打扰
+const SPLASH_KEY = "splash_seen_v1";
+const showSplash = ref(false);
+function readSplashFlag(): boolean {
+  try {
+    return localStorage.getItem(SPLASH_KEY) === "1";
+  } catch {
+    return true;
+  }
+}
+function markSplashSeen(): void {
+  try {
+    localStorage.setItem(SPLASH_KEY, "1");
+  } catch {
+    /* 存不下就算了 */
+  }
+  showSplash.value = false;
+}
 
 const ICONS = {
   status: '<path d="M22 12h-4l-3 7-4-14-3 7H2"/>',
@@ -68,6 +88,8 @@ window.addEventListener("hashchange", () => {
 });
 
 onMounted(async () => {
+  // 首次打开：播一次开场动画（由 Splash 自己计时结束）
+  if (!readSplashFlag()) showSplash.value = true;
   if (noKsu.value) return;
   await withBusy(async () => {
     try {
@@ -110,5 +132,6 @@ onMounted(async () => {
         <span>{{ t(item.key) }}</span>
       </button>
     </nav>
+    <Splash v-if="showSplash" :version="state.status.module_version" @done="markSplashSeen" />
   </div>
 </template>
