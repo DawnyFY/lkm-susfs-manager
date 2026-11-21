@@ -29,7 +29,6 @@ if not (SRC / "module.prop").is_file() and (BASE / "module.prop").is_file():
 DIST = BASE / "dist"
 
 EXEC_NAMES = {
-    "detect_self.sh",
     "action.sh",
     "load.sh",
     "apply.sh",
