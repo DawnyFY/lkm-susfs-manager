@@ -53,8 +53,8 @@ chk "被拒绝后原配置未被破坏" "$(grep -c "^auto_load=1$" "$MOD/config/
 # 出厂默认：1.3.0 起 avc_spoof 默认开启（老用户配置不动，只影响新装）
 _d1=$(sed -n 's/^avc_spoof=//p' "$REPO/config/config.ini" 2>/dev/null | head -1)
 _d2=$(sed -n 's/^avc_spoof=//p' "$REPO/config/config.ini.default" 2>/dev/null | head -1)
-chk "config.ini 默认开启 avc_spoof" "${_d1:-missing}" "1"
-chk "config.ini.default 与之一致" "${_d2:-missing}" "1"
+chk "config.ini 默认关闭 avc_spoof（命令多为不支持）" "${_d1:-missing}" "0"
+chk "config.ini.default 与之一致" "${_d2:-missing}" "0"
 
 rm -rf "$TMP"
 [ "$fail" = 0 ] && echo "ALL PASS" || echo "HAS FAILURE"

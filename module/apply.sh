@@ -297,11 +297,8 @@ if has_feature CONFIG_KSU_SUSFS_AVC_LOG_SPOOFING || [ -e /proc/susfs_avc_spoof ]
         if "$BIN" enable_avc_log_spoofing 1 >/dev/null 2>&1; then
             echo "[i] avc_log_spoofing=1"
         else
-            if [ "${USING_BACKUP_BIN:-0}" = "1" ]; then
-                echo "[!] avc_log_spoofing 设置失败：当前用的是模块备份的旧 ksu_susfs，可能缺该命令；请重装模块或更新管理器"
-            else
-                echo "[!] avc_log_spoofing 设置失败（该内核/LKM 不支持此命令），本次开机内不再重试"
-            fi
+            echo "[!] avc_log_spoofing 设置失败：当前 ksu_susfs 二进制没有该命令（多数 KernelSU/susfs4ksu 构建未提供）"
+            echo "[i] 该项保持关闭即可；内核侧的 AVC 记录只能由 ROM 策略或支持该命令的 SUSFS 版本处理"
             : > "$STATE/avc_unsupported" 2>/dev/null
         fi
     else
