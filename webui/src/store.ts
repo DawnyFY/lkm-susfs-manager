@@ -73,10 +73,22 @@ export function runSerial<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 // 用户主动操作（按钮）：串行 + 全局 busy 用于禁用按钮
+// 任务执行期间置位：用于识别「withBusy 里再套 withBusy」。
+// runSerial 是串行队列，内层会等外层结束 → 自己等自己 → busy 永远为 true（界面卡在"处理中"）。
+let insideTask = false;
+
 export async function withBusy<T>(fn: () => Promise<T>): Promise<T> {
+  if (insideTask) return fn();
   state.busy = true;
   try {
-    return await runSerial(fn);
+    return await runSerial(async () => {
+      insideTask = true;
+      try {
+        return await fn();
+      } finally {
+        insideTask = false;
+      }
+    });
   } finally {
     state.busy = false;
   }

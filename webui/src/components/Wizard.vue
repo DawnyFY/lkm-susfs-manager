@@ -53,6 +53,7 @@ const autoLoad = ref(true);
 const statsOn = ref(state.status.anonymous_stats !== "0");
 
 const STEP_TOTAL = 5;
+const NL = String.fromCharCode(10);
 const canNext = computed(() => {
   if (busy.value) return false;
   if (step.value === 0) return true; // 内核匹配只是展示，允许不选
@@ -71,41 +72,35 @@ function finish(): void {
   emit("close");
 }
 
-async function flushConfig(): Promise<void> {
-  await withBusy(async () => {
-    try {
-      let text = config.value;
-      for (const k of HIDE_KEYS) text = setIni(text, k, hideOn.value[k] ? "1" : "0");
-      text = setIni(text, "auto_load", autoLoad.value ? "1" : "0");
-      if (kmiChoice.value) text = setIni(text, "force_kmi", kmiChoice.value);
-      // 预设路径：勾选的追加到 sus_path（已存在的不重复加）
-      const r: Record<string, string> = { ...(rules.value as Record<string, string>) };
-      const add = visiblePresets.value.filter((p) => pathPicked.value[p.path]).map((p) => p.path);
-      if (add.length) {
-        const cur = (r.sus_path || "").split("\n").filter((l) => l.trim());
-        for (const p of add) if (!cur.includes(p)) cur.push(p);
-        r.sus_path = cur.join("\n");
-      }
-      const out = await saveBundle(text, r as Record<RuleName, string>);
-      if (!out.includes("saved")) throw new Error(out.trim() || "save failed");
-      await refreshStatus();
-      setBanner("ok", t("wizard.saved"));
-    } catch (e) {
-      err.value = (e as Error).message;
-      setBanner("err", err.value);
-    }
-  });
+/** 真正写盘的部分；不自己包 withBusy，由调用方统一包一层 */
+async function writeConfig(): Promise<void> {
+  let text = config.value;
+  for (const k of HIDE_KEYS) text = setIni(text, k, hideOn.value[k] ? "1" : "0");
+  text = setIni(text, "auto_load", autoLoad.value ? "1" : "0");
+  if (kmiChoice.value) text = setIni(text, "force_kmi", kmiChoice.value);
+  // 预设路径：勾选的追加到 sus_path（已存在的不重复加）
+  const r: Record<string, string> = { ...(rules.value as Record<string, string>) };
+  const add = visiblePresets.value.filter((p) => pathPicked.value[p.path]).map((p) => p.path);
+  if (add.length) {
+    const cur = (r.sus_path || "").split(NL).filter((l) => l.trim());
+    for (const p of add) if (!cur.includes(p)) cur.push(p);
+    r.sus_path = cur.join(NL);
+  }
+  const out = await saveBundle(text, r as Record<RuleName, string>);
+  if (!out.includes("saved")) throw new Error(out.trim() || "save failed");
 }
 
+/** 保存并应用：只包一层 withBusy */
 async function applyNow(): Promise<void> {
   await withBusy(async () => {
     try {
-      await flushConfig();
+      await writeConfig();
       await refreshStatus();
       step.value = STEP_TOTAL - 1;
       setBanner("ok", t("wizard.done.body", { n: state.status.rules || "0" }));
     } catch (e) {
       err.value = (e as Error).message;
+      setBanner("err", err.value);
     }
   });
 }
