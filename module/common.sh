@@ -1368,6 +1368,22 @@ try_umount_add_once() {
 
 # ---- 运行时锁与耗时判断 ----
 # mkdir 是原子的：用它做简单互斥，避免开机 apply 与 WebUI apply 同时写规则
+# 虚拟/临时文件系统下的路径不适合做 sus_path 规则：
+#   /sys/fs/cgroup/apps/uid_XXXX 这类目录随进程生灭，加进去必然失败；
+#   /dev/cpuset、/proc、/sys/fs/bpf 同理。
+# 以前这些失败会被计入「规则下发失败」，把每次 apply 的结果从 success 降成 partial —— 实际是噪音。
+is_ephemeral_path() {
+    case "$1" in
+        /sys/fs/cgroup|/sys/fs/cgroup/*) return 0 ;;
+        /dev/cpuset|/dev/cpuset/*) return 0 ;;
+        /dev/memcg|/dev/memcg/*) return 0 ;;
+        /dev/blkio|/dev/blkio/*) return 0 ;;
+        /sys/fs/bpf|/sys/fs/bpf/*) return 0 ;;
+        /proc|/proc/*) return 0 ;;
+    esac
+    return 1
+}
+
 lock_acquire() {
     # 锁协议：所有「判定 + 建锁」都在二级目录锁内完成。
     # 只在主锁目录上做 rm+mkdir 有竞态：两个进程同时判定过期，后者会删掉前者刚建的锁重建，

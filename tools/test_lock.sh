@@ -46,7 +46,9 @@ chk "旧文件判旧" "$(file_older_than "$TMP/old" 600 && echo old || echo new)
 chk "文件缺失不报旧" "$(file_older_than "$TMP/missing" 600 && echo old || echo new)" "new"
 
 # 集成断言：apply.sh 必须真的用了锁与自愈
-chk "apply 使用锁" "$(grep -c 'lock_acquire "$STATE/apply.lock"' "$REPO/apply.sh")" "1"
+# 至少有 1 处：抢锁失败后会短暂重试（等待开机自动 apply 结束），因此允许 >1
+_lk_uses=$(grep -c 'lock_acquire "$STATE/apply.lock"' "$REPO/apply.sh")
+chk "apply 使用锁" "$([ "$_lk_uses" -ge 1 ] && echo yes || echo no)" "yes"
 chk "apply 释放锁" "$(grep -c "trap 'lock_release" "$REPO/apply.sh")" "1"
 chk "自愈不再用 find -mmin" "$(grep -c 'mmin' "$REPO/apply.sh" || true)" "0"
 

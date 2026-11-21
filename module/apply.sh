@@ -49,7 +49,20 @@ if [ -f "$STATE/loading" ]; then
 fi
 
 # 互斥：开机脚本与 WebUI 可能同时触发 apply，重复执行会让 our_paths 清单错乱
-if ! lock_acquire "$STATE/apply.lock" 180; then
+_lk_ok=0
+lock_acquire "$STATE/apply.lock" 180 && _lk_ok=1
+if [ "$_lk_ok" = "0" ]; then
+    # 常见情形：开机自动 apply 还在跑，用户又点了「保存并应用」。
+    # 直接跳过会让用户以为按钮没反应，先等一会儿（最多 10 秒）。
+    echo "[i] 另一个 apply 正在运行，等待其结束（最多 10 秒）"
+    _lk_wait=0
+    while [ "$_lk_wait" -lt 20 ]; do
+        sleep 0.5 2>/dev/null || sleep 1
+        if lock_acquire "$STATE/apply.lock" 180; then _lk_ok=1; break; fi
+        _lk_wait=$((_lk_wait + 1))
+    done
+fi
+if [ "$_lk_ok" = "0" ]; then
     _lk_info=""
     read -r _lk_info < "$STATE/apply.lock/pid" 2>/dev/null
     echo "[!] 另一个 apply 正在运行（持有者: ${_lk_info:-未知}），跳过本次"
@@ -352,6 +365,10 @@ if [ -f "$CONFIG/sus_path.txt" ]; then
                 *) : ;;  # 老版本不报 dev/ino，无从判断，维持原行为
             esac
         fi
+        if is_ephemeral_path "$path"; then
+            echo "[i] sus_path $path (虚拟/临时路径，内核不接受；建议从 sus_path 移除)"
+            continue
+        fi
         if [ "$_sp_present" = "1" ]; then
             echo "[=] sus_path $path (已存在)"
         elif "$BIN" add_sus_path "$path" >/dev/null 2>&1; then
@@ -471,6 +488,10 @@ fi
 add_sus_path_safe() {
     _p=$1
     [ -n "$_p" ] || return 0
+    if is_ephemeral_path "$_p"; then
+        echo "[i] sus_path $_p (虚拟/临时路径，跳过)"
+        return 0
+    fi
     if grep -F -q "path=$_p " /proc/susfs_path 2>/dev/null; then
         echo "[=] sus_path $_p (已存在)"
     elif "$BIN" add_sus_path "$_p" >/dev/null 2>&1; then
