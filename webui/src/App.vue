@@ -6,13 +6,15 @@ import ConfigTab from "./components/ConfigTab.vue";
 import LogTab from "./components/LogTab.vue";
 import PidTab from "./components/PidTab.vue";
 import Splash from "./components/Splash.vue";
+import Wizard from "./components/Wizard.vue";
 import StatusTab from "./components/StatusTab.vue";
 import { hasKsu } from "./bridge";
 import { t } from "./i18n";
-import { clearBanner, refreshStatus, state, withBusy } from "./store";
+import { clearBanner, closeWizard, openWizard, refreshStatus, state, withBusy } from "./store";
 
 // 开场动画只在首次打开 WebUI 时播放；标记写入失败（隐私模式）就当已看过，避免每次打扰
 const SPLASH_KEY = "splash_seen_v1";
+const WIZARD_KEY = "wizard_done_v1";
 const showSplash = ref(false);
 function readSplashFlag(): boolean {
   try {
@@ -21,6 +23,22 @@ function readSplashFlag(): boolean {
     return true;
   }
 }
+function readWizardFlag(): boolean {
+  try {
+    return localStorage.getItem(WIZARD_KEY) === "1";
+  } catch {
+    return true;
+  }
+}
+function markWizardSeen(): void {
+  try {
+    localStorage.setItem(WIZARD_KEY, "1");
+  } catch {
+    /* 存不下就算了 */
+  }
+  closeWizard();
+}
+
 function markSplashSeen(): void {
   try {
     localStorage.setItem(SPLASH_KEY, "1");
@@ -28,6 +46,8 @@ function markSplashSeen(): void {
     /* 存不下就算了 */
   }
   showSplash.value = false;
+  // 开场动画之后：还没走完向导就自动进入一次
+  if (!readWizardFlag()) openWizard(false);
 }
 
 const ICONS = {
@@ -133,5 +153,6 @@ onMounted(async () => {
       </button>
     </nav>
     <Splash v-if="showSplash" :version="state.status.module_version" @done="markSplashSeen" />
+    <Wizard v-if="state.wizard.open" :replay="state.wizard.replay" @close="markWizardSeen" />
   </div>
 </template>

@@ -5,6 +5,7 @@ export type BannerKind = "" | "ok" | "err" | "info";
 
 export interface AppState {
   status: Record<string, string>;
+  wizard: { open: boolean; replay: boolean };
   busy: boolean;
   banner: { kind: BannerKind; text: string };
   loaded: boolean;
@@ -12,12 +13,24 @@ export interface AppState {
 
 export const state = reactive<AppState>({
   status: {},
+  wizard: { open: false, replay: false },
   busy: false,
   banner: { kind: "", text: "" },
   loaded: false,
 });
 
 let bannerTimer = 0;
+
+/** 打开配置向导；replay=true 表示从关于页手动进来 */
+export function openWizard(replay = true): void {
+  state.wizard.replay = replay;
+  state.wizard.open = true;
+}
+
+export function closeWizard(): void {
+  state.wizard.open = false;
+  state.wizard.replay = false;
+}
 
 export function setBanner(kind: BannerKind, text: string, ms = 4000): void {
   state.banner = { kind, text };

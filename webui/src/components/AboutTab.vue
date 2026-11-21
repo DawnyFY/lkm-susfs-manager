@@ -4,10 +4,11 @@ import { computed, reactive, ref } from "vue";
 import avatarHhgbmh from "../assets/contributor.jpg";
 import { reportInstall, setStats } from "../api";
 import { locale, setLocale, t, type Locale } from "../i18n";
-import { refreshStatus, setBanner, state, withBusy } from "../store";
+import { openWizard, refreshStatus, setBanner, state, withBusy } from "../store";
 import { currentTheme, setTheme, type ThemeName } from "../theme";
 
 const theme = ref<ThemeName>(currentTheme());
+
 
 // 交流群：群号与加群链接（qm.qq.com 的短链，点开由 QQ 接管）
 const GROUP_ID = "1019737433";
@@ -103,6 +104,17 @@ async function toggleStats(v: boolean): Promise<void> {
         <summary>{{ t("about.privacy.more") }}</summary>
         <p class="hint">{{ t("about.privacy.text") }}</p>
       </details>
+    </div>
+
+    <p class="section-label">{{ t("about.wizard") }}</p>
+    <div class="card">
+      <div class="row">
+        <span>
+          {{ t("about.wizard") }}
+          <span class="hint" style="display: block">{{ t("about.wizard.sub") }}</span>
+        </span>
+        <button type="button" class="btn small" @click="openWizard(true)">{{ t("about.wizard.btn") }}</button>
+      </div>
     </div>
 
     <p class="section-label">{{ t("about.group") }}</p>
