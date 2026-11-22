@@ -353,12 +353,15 @@ _pstore_classify() {
     _pc_unparsed=0
     for _pc_f in "$_pc_dir"/*; do
         [ -f "$_pc_f" ] || continue
-        _pc_ctx=$(pstore_fault_context "$_pc_f")
-        if [ -z "$_pc_ctx" ]; then
-            # 有转储但找不到 panic/oops 触发行：既不能算自己也别断言"没有崩溃"
+        # 读不到（权限/半写）：既不能算自己也别断言"没有崩溃" → unknown
+        if [ ! -r "$_pc_f" ]; then
             _pc_unparsed=1
             continue
         fi
+        _pc_ctx=$(pstore_fault_context "$_pc_f")
+        # 读得到但没有崩溃关键词：就是干净的开机日志（Qualcomm 设备每次开机都有），
+        # 不能算 unknown —— 否则这些设备的 crash_evidence 会永久显示异常（audit N1）
+        [ -n "$_pc_ctx" ] || continue
         _pc_cul=$(printf '%s
 ' "$_pc_ctx" | _pstore_culprit_from_text)
         # 只有故障现场的调用栈里出现本模块符号才算自己的

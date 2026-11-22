@@ -45,12 +45,23 @@ rm -f "$P"/*
 chk "别人的崩溃同样能跨窗口识别" "$(pstore_crash_suspect && echo suspect || echo clear)" "clear"
 chk "能取出出错函数" "$(pstore_crash_foreign)" "stat_readable_show"
 
-# C) 完全没有触发行的转储 → unknown（不暂停，但可见）
+# C) 干净的开机日志（Qualcomm 设备常见）→ 不是 unknown，回落到 none（audit N1）
 rm -f "$P"/*
 { i=0; while [ $i -lt 200 ]; do echo "[  10.0] normal boot log $i"; i=$((i+1)); done; } > "$P/console-ramoops-0"
-chk "无触发行 → unknown" "$(pstore_crash_unknown && echo yes || echo no)" "yes"
-chk "unknown 不算自己" "$(pstore_crash_suspect && echo suspect || echo clear)" "clear"
-chk "unknown 不算外部" "$(pstore_crash_foreign)" ""
+chk "干净日志不算 unknown" "$(pstore_crash_unknown && echo yes || echo no)" "no"
+chk "干净日志不算自己" "$(pstore_crash_suspect && echo suspect || echo clear)" "clear"
+chk "干净日志不算外部" "$(pstore_crash_foreign)" ""
+
+# D) 转储读不到（权限/半写）→ unknown；root 下读得到则跳过这条
+rm -f "$P"/*
+echo "[  10.0] unreadable dump" > "$P/console-ramoops-0"
+chmod 000 "$P/console-ramoops-0" 2>/dev/null || true
+if [ -r "$P/console-ramoops-0" ]; then
+    echo "SKIP  读不到转储 → unknown（当前用户可读，跳过）"
+else
+    chk "读不到转储 → unknown" "$(pstore_crash_unknown && echo yes || echo no)" "yes"
+fi
+chmod 644 "$P/console-ramoops-0" 2>/dev/null || true
 
 rm -rf "$TMP"
 [ "$fail" = 0 ] && echo "ALL PASS" || echo "HAS FAILURE"

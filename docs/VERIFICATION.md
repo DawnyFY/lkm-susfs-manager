@@ -33,7 +33,7 @@
 
 ## 1.3.0-beta（未发布 · 2026-11-22）
 
-构建：13,202,872 B，sha256 `9545d99dff6c5543bb857e962ca9963de391b61b544a478e837d7292d08d034f`，manifest `aaaed211…`。
+构建：13,202,994 B，sha256 `15293a048334209d8fe5b1636a8e82fdc85a89ca93bf159caec44d6b9a617634`，manifest `0f81c77f…`。
 离线 **47/47**、Vitest **56/56**、门禁 **5/5**、`I18N_OK keys=194`；两次构建字节一致。
 
 - 首次配置向导（五步）与启动动画；`wizard.ts` 的 `buildWizardBundle()` 在规则未加载时抛错（audit B1）
