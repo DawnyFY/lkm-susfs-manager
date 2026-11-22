@@ -98,7 +98,9 @@ export async function withBusy<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await runSerial(fn);
   } finally {
-    taskDepth = 0;
-    state.busy = false;
+    // 外层同样只递减（audit R2-3）：直接置 0 会在"两个任务真并发"时把 busy 提前清掉
+    taskDepth -= 1;
+    if (taskDepth < 0) taskDepth = 0;
+    state.busy = taskDepth > 0;
   }
 }

@@ -60,4 +60,22 @@ describe("withBusy", () => {
     await p1;
     expect(state.busy).toBe(false);
   });
+
+  it("先起的任务先结束时 busy 仍必须为 true（audit R2-3 的顺序）", async () => {
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+    const p1 = withBusy(async () => {
+      await sleep(20);
+    });
+    const p2 = withBusy(async () => {
+      await sleep(60);
+    });
+
+    await p1;
+    // p1 已结束但 p2 还在跑：旧实现（外层 finally 直接置 0）这里会变 false
+    expect(state.busy).toBe(true);
+
+    await p2;
+    expect(state.busy).toBe(false);
+  });
 });

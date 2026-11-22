@@ -316,6 +316,8 @@ status() {
         printf 'crash_evidence=observed\n'
     elif _cr_fc=$(pstore_crash_foreign) && [ -n "$_cr_fc" ]; then
         printf 'crash_evidence=foreign:%s\n' "$_cr_fc"
+    elif pstore_crash_unknown; then
+        printf 'crash_evidence=unknown\n'
     elif [ -d /sys/fs/pstore ]; then
         printf 'crash_evidence=not_observed\n'
     else
@@ -688,6 +690,8 @@ case "$1" in
             echo "crash_evidence=observed"
         elif _cr_fc2=$(pstore_crash_foreign) && [ -n "$_cr_fc2" ]; then
             echo "crash_evidence=foreign:$_cr_fc2"
+        elif pstore_crash_unknown; then
+            echo "crash_evidence=unknown"
         elif [ -d /sys/fs/pstore ]; then
             echo "crash_evidence=not_observed"
         else

@@ -28,13 +28,25 @@
 
 ## 离线
 
-- 35/35 测试通过；1.2.5 的 kallsyms 零地址回退已验证（1.2.4/r18.9 冷启动已验证）。
+- 各版本按发布时的脚本数统计（见下方分段）；1.2.5 的 kallsyms 零地址回退已验证（1.2.4/r18.9 冷启动已验证）。
 - `check_zip` / `check_no_crlf` 通过。
 
-## 1.2.9（2026-11-19）
+## 1.3.0-beta（未发布 · 2026-11-22）
 
-构建：13,186,781 B，sha256 `236b4c85e3ca8db89b4188900d498a5a3ae57cb07a2801c82e7b14f91e2670d5`，manifest `36adafa1…`。
-离线 **46/46**、Vitest **55/55**、门禁 **5/5**、`I18N_OK keys=194`。
+构建：13,202,872 B，sha256 `9545d99dff6c5543bb857e962ca9963de391b61b544a478e837d7292d08d034f`，manifest `aaaed211…`。
+离线 **47/47**、Vitest **56/56**、门禁 **5/5**、`I18N_OK keys=194`；两次构建字节一致。
+
+- 首次配置向导（五步）与启动动画；`wizard.ts` 的 `buildWizardBundle()` 在规则未加载时抛错（audit B1）
+- `state/.lock.mutex` 按 mtime/pid 回收（audit B2）；AVC 开启时记录原值、关闭仅在"当前确为伪装值"时还原（audit M1/R2-1）
+- pstore 崩溃归属单次分类 + 递增窗口（512 KB → 4 MB → 全文件），解析不出触发行时标 `crash_evidence=unknown`（audit R2-2）
+- `withBusy` 改用任务计数，并发时 busy 不提前复位（audit R2-3）
+- 真机：`integrity=ok`、`rules=11`、AVC 参数按配置设置与还原、残留 mutex 自动回收
+
+## 1.2.9（已发布 · 2026-11-20）
+
+构建（= 发布资产，下载回验一致）：13,192,648 B，sha256 `b1a3fd4f60ffe934c23e6cb36151538f45c43a3a3197943157e5b3eda0faf618`，
+manifest `0700c256…`；tag `v1.2.9`。
+离线 **40/40**（tag 内脚本数）、门禁 **5/5**。
 
 - `status`：同一 boot 内探测结果缓存（`state/.probe_cache`），7 个 pid_guard 字段与规则数统计改内建读取；
   设备交错 A/B 中位数 2.29 s → 1.29 s（最好 0.90 s），未达 0.5 s 目标，剩余为解释开销
@@ -47,10 +59,11 @@
 - 设备（Android 16 / 6.6.77 / SukiSU）：`module_version=1.2.9`、`integrity=ok`
 - 其余与 1.2.8 相同（WebUI、主题、接口、PID Guard 默认关闭）
 
-## 1.2.8（2026-11-19）
+## 1.2.8（已发布 · 2026-11-19）
 
-构建：13,202,159 B，sha256 `b5520d563b5f65590bf51387dd7d2b50fb295946287158073b7f900ca352c1e4`，manifest `8833fb37…`。
-离线 **46/46**、Vitest **55/55**、门禁 **5/5**、`I18N_OK keys=194`；两次构建字节一致（zip 重建哈希相同）。
+构建（= 发布资产，下载回验一致）：13,186,088 B，sha256 `0a7557cb85de3a4cb861df5197ceb43d14332bd40de6a714ad4a8b6136475258`，
+manifest `97b570cd…`；tag `v1.2.8`。
+离线 **37/37**（tag 内脚本数）、门禁 **5/5**。
 
 **前端（Vite + Vue 3 + TS 重写）**
 

@@ -299,6 +299,8 @@ echo "[i] version: $VERSION"
 echo 0 > "$STATE/fail_count"
 # 本次是真实加载，清掉可能由"未加载时"的探测、旧 LKM 写下的能力缓存
 rm -f "$STATE/caps" "$STATE/hide_sus_unsupported" "$STATE/avc_unsupported" 2>/dev/null
+# LKM 重载会把 avc_su_ctx 参数恢复成默认，旧的原值记录随即过期（audit R2-1）
+rm -f "$STATE/avc_orig_ctx" 2>/dev/null
 # 真实 insmod 后内核里的挂载/映射注册已清空，去重账本必须一起失效
 rm -f "$STATE/sus_mount_added.txt" "$STATE/sus_mount_added.txt.boot" \
       "$STATE/sus_map_added.txt" "$STATE/sus_map_added.txt.boot" \

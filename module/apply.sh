@@ -331,16 +331,23 @@ if has_feature CONFIG_KSU_SUSFS_AVC_LOG_SPOOFING || [ -e /proc/susfs_avc_spoof ]
         # 参数通道打开的，关闭时要还原，否则 AVC 日志会继续被改写
         if [ -w "$AVC_PARAM" ]; then
             _avc_cur=$(cat "$AVC_PARAM" 2>/dev/null)
-            # 优先还原开启前记下的原值；没有记录才退回 u:r:ksu:s0（audit M1）
-            _avc_target=$AVC_REAL_CTX
-            if [ -s "$STATE/avc_orig_ctx" ]; then
-                _avc_saved=$(cat "$STATE/avc_orig_ctx" 2>/dev/null)
-                [ -n "$_avc_saved" ] && _avc_target=$_avc_saved
-            fi
-            if [ -n "$_avc_cur" ] && [ "$_avc_cur" != "$_avc_target" ]; then
+            # 只有"当前确实是伪装值"才需要还原（audit R2-1）：
+            # 记录可能来自 1.2.9 的 avc_spoof.sh、或 LKM 重载后早已过期，
+            # 无条件信任会造成「配置关、伪装反而被打开」。
+            if [ "$_avc_cur" = "$AVC_SPOOF_CTX" ]; then
+                _avc_target=$AVC_REAL_CTX
+                if [ -s "$STATE/avc_orig_ctx" ]; then
+                    _avc_saved=$(cat "$STATE/avc_orig_ctx" 2>/dev/null)
+                    case "$_avc_saved" in
+                        ''|"$AVC_SPOOF_CTX") ;;   # 空 / 记录本身是伪装值 → 不可信，用默认
+                        *) _avc_target=$_avc_saved ;;
+                    esac
+                fi
                 if printf '%s\n' "$_avc_target" > "$AVC_PARAM" 2>/dev/null; then
                     echo "[i] avc_log_spoofing=0（参数已还原：$_avc_cur → $_avc_target）"
                 fi
+            else
+                echo "[i] avc_log_spoofing=0（当前值不是伪装值，无需还原）"
             fi
             rm -f "$STATE/avc_orig_ctx" 2>/dev/null
         fi

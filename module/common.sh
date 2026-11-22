@@ -350,11 +350,17 @@ _pstore_classify() {
         _PC_KIND=acked
         return 0
     fi
+    _pc_unparsed=0
     for _pc_f in "$_pc_dir"/*; do
         [ -f "$_pc_f" ] || continue
         _pc_ctx=$(pstore_fault_context "$_pc_f")
-        [ -n "$_pc_ctx" ] || continue
-        _pc_cul=$(pstore_fault_culprit "$_pc_f")
+        if [ -z "$_pc_ctx" ]; then
+            # 有转储但找不到 panic/oops 触发行：既不能算自己也别断言"没有崩溃"
+            _pc_unparsed=1
+            continue
+        fi
+        _pc_cul=$(printf '%s
+' "$_pc_ctx" | _pstore_culprit_from_text)
         # 只有故障现场的调用栈里出现本模块符号才算自己的
         if printf '%s\n' "$_pc_ctx" | grep -v "Modules linked in" | grep -qE "susfs_guard_lkm|susfs_allinone"; then
             _PC_KIND=mine
@@ -367,6 +373,8 @@ _pstore_classify() {
             _PC_CULPRIT=$_pc_cul
         fi
     done
+    # 有转储却完全解析不出触发行（格式不认识 / 被截断）：标 unknown，不暂停自动加载但可见
+    [ "$_PC_KIND" = "none" ] && [ "$_pc_unparsed" = "1" ] && _PC_KIND=unknown
     return 0
 }
 
@@ -376,29 +384,54 @@ pstore_crash_suspect() {
     [ "$_PC_KIND" = "mine" ]
 }
 
-# 取崩溃现场：最后一条 panic/oops 触发行往后 120 行。
-# 只看尾部 512 KB —— 转储可达数十 MB，toybox 的 grep 扫全文件单次就要 8 s+。
+# 崩溃现场窗口：先扫尾部，没命中再放大窗口，最后才全文件（audit R2-2）
+# 旧实现只看尾部 512 KB，panic 后若又有 700 KB 打印，触发行会被挤出窗口 → 崩溃循环保护失效。
 pstore_fault_context() {
     _fc_f=$1
     [ -f "$_fc_f" ] || return 0
-    _fc_line=$(tail -c 524288 "$_fc_f" 2>/dev/null \
-        | grep -nE "Kernel panic|Oops|Unable to handle kernel|BUG:|Internal error" 2>/dev/null \
-        | tail -1 | cut -d: -f1)
-    case "$_fc_line" in ''|*[!0-9]*) return 0 ;; esac
-    tail -c 524288 "$_fc_f" 2>/dev/null | tail -n +"$_fc_line" | head -n 120
+    _fc_pat="Kernel panic|Oops|Unable to handle kernel|BUG:|Internal error"
+    for _fc_win in 524288 4194304 0; do
+        if [ "$_fc_win" = "0" ]; then
+            _fc_line=$(grep -nE "$_fc_pat" "$_fc_f" 2>/dev/null | tail -1 | cut -d: -f1)
+        else
+            _fc_line=$(tail -c "$_fc_win" "$_fc_f" 2>/dev/null | grep -nE "$_fc_pat" 2>/dev/null | tail -1 | cut -d: -f1)
+        fi
+        case "$_fc_line" in ''|*[!0-9]*) continue ;; esac
+        if [ "$_fc_win" = "0" ]; then
+            tail -n +"$_fc_line" "$_fc_f" 2>/dev/null | head -n 120
+        else
+            tail -c "$_fc_win" "$_fc_f" 2>/dev/null | tail -n +"$_fc_line" | head -n 120
+        fi
+        return 0
+    done
+    return 0
 }
 
 # 崩溃现场的出错函数：pc 行里的 "func+0x.. [module]" 取函数名；取不到则空
 pstore_fault_culprit() {
     _fp_f=$1
     [ -f "$_fp_f" ] || return 0
-    _fp_line=$(tail -c 524288 "$_fp_f" 2>/dev/null | grep -m1 -E " (pc|lr) *: ")
-    [ -n "$_fp_line" ] || return 0
-    _fp_line=${_fp_line#*: }
-    _fp_line=${_fp_line%%+*}
-    _fp_line=${_fp_line##* }
-    [ -n "$_fp_line" ] || return 0
-    printf '%s\n' "$_fp_line"
+    # 复用现场文本（同一套递增窗口），避免固定窗口漏判、也避免二次全文件扫描
+    _fp_ctx=$(pstore_fault_context "$_fp_f")
+    [ -n "$_fp_ctx" ] || return 0
+    printf '%s\n' "$_fp_ctx" | _pstore_culprit_from_text
+}
+
+# 从现场文本里取 pc/lr 行的函数名（内部函数，供上面与 classify 共用）
+_pstore_culprit_from_text() {
+    _ct_line=$(grep -m1 -E " (pc|lr) *: " 2>/dev/null)
+    [ -n "$_ct_line" ] || return 0
+    _ct_line=${_ct_line#*: }
+    _ct_line=${_ct_line%%+*}
+    _ct_line=${_ct_line##* }
+    [ -n "$_ct_line" ] || return 0
+    printf '%s\n' "$_ct_line"
+}
+
+# 有转储但解析不出触发行（unknown）：返回 0 表示"不确定"
+pstore_crash_unknown() {
+    _pstore_classify
+    [ "$_PC_KIND" = "unknown" ]
 }
 
 # 有内核崩溃但栈里没有本模块：输出出错函数名，否则空
