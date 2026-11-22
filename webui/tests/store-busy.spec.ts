@@ -37,4 +37,27 @@ describe("withBusy", () => {
     expect(seen).toBe(true);
     expect(state.busy).toBe(false);
   });
+
+  it("两个并发任务时 busy 不能提前复位（audit M5）", async () => {
+    let releaseFirst: () => void = () => {};
+    const firstDone = new Promise<void>((r) => (releaseFirst = r));
+    let secondSawBusy = false;
+
+    const p1 = withBusy(async () => {
+      await firstDone;
+    });
+    // 第二个任务在第一个还挂着时启动
+    const p2 = withBusy(async () => {
+      secondSawBusy = state.busy;
+    });
+
+    await p2;
+    // p2 结束时 p1 仍在跑，busy 必须还是 true
+    expect(secondSawBusy).toBe(true);
+    expect(state.busy).toBe(true);
+
+    releaseFirst();
+    await p1;
+    expect(state.busy).toBe(false);
+  });
 });

@@ -7,11 +7,11 @@
 ```ini
 auto_load=1
 hide_sus_mnts=1
-avc_spoof=0
+avc_spoof=1
 replace_rules=0
 ```
 
-> 配置值里不要写行内注释。WebUI 保存会拒绝“值含空白”的行；注释请单独占一行（以 `#` 开头）。auto_load=1 表示开机自动加载并应用；hide_sus_mnts=1 隐藏 SUS 挂载点；avc_spoof=0 默认关闭；replace_rules=0 只追加。
+> 配置值里不要写行内注释。WebUI 保存会拒绝“值含空白”的行；注释请单独占一行（以 `#` 开头）。auto_load=1 表示开机自动加载并应用；hide_sus_mnts=1 隐藏 SUS 挂载点；avc_spoof=1 默认开启（优先用 ksu_susfs 命令，官方 KernelSU 没有该命令时自动写 LKM 参数 avc_su_ctx；置 0 会还原原值）；replace_rules=0 只追加。
 
 其他配置：
 

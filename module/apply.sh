@@ -307,6 +307,11 @@ if has_feature CONFIG_KSU_SUSFS_AVC_LOG_SPOOFING || [ -e /proc/susfs_avc_spoof ]
             if [ "$_avc_cur" = "$AVC_SPOOF_CTX" ]; then
                 echo "[i] avc_log_spoofing=1（LKM 参数已生效：$_avc_cur）"
             elif printf '%s\n' "$AVC_SPOOF_CTX" > "$AVC_PARAM" 2>/dev/null; then
+                # 记下开启前的原值，关闭时按原值还原（audit M1）：
+                # 硬编码 u:r:ksu:s0 会覆盖用户自定义的 su 域（Magisk/自定义 su 设备上这个硬编码值本身就是错的）
+                if [ ! -s "$STATE/avc_orig_ctx" ] && [ -n "$_avc_cur" ]; then
+                    printf '%s\n' "$_avc_cur" > "$STATE/avc_orig_ctx" 2>/dev/null
+                fi
                 _avc_now=$(cat "$AVC_PARAM" 2>/dev/null)
                 if [ "$_avc_now" = "$AVC_SPOOF_CTX" ]; then
                     echo "[i] avc_log_spoofing=1（经 LKM 参数：$_avc_cur → $_avc_now）"
@@ -326,11 +331,18 @@ if has_feature CONFIG_KSU_SUSFS_AVC_LOG_SPOOFING || [ -e /proc/susfs_avc_spoof ]
         # 参数通道打开的，关闭时要还原，否则 AVC 日志会继续被改写
         if [ -w "$AVC_PARAM" ]; then
             _avc_cur=$(cat "$AVC_PARAM" 2>/dev/null)
-            if [ -n "$_avc_cur" ] && [ "$_avc_cur" != "$AVC_REAL_CTX" ]; then
-                if printf '%s\n' "$AVC_REAL_CTX" > "$AVC_PARAM" 2>/dev/null; then
-                    echo "[i] avc_log_spoofing=0（参数已还原：$_avc_cur → $AVC_REAL_CTX）"
+            # 优先还原开启前记下的原值；没有记录才退回 u:r:ksu:s0（audit M1）
+            _avc_target=$AVC_REAL_CTX
+            if [ -s "$STATE/avc_orig_ctx" ]; then
+                _avc_saved=$(cat "$STATE/avc_orig_ctx" 2>/dev/null)
+                [ -n "$_avc_saved" ] && _avc_target=$_avc_saved
+            fi
+            if [ -n "$_avc_cur" ] && [ "$_avc_cur" != "$_avc_target" ]; then
+                if printf '%s\n' "$_avc_target" > "$AVC_PARAM" 2>/dev/null; then
+                    echo "[i] avc_log_spoofing=0（参数已还原：$_avc_cur → $_avc_target）"
                 fi
             fi
+            rm -f "$STATE/avc_orig_ctx" 2>/dev/null
         fi
     fi
 else

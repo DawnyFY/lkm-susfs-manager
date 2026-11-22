@@ -185,7 +185,7 @@ sh /data/adb/modules/susfs_allinone/action.sh
 
 通过 `ctl.sh reset_defaults` 重置配置：
 
-- 默认 `auto_load=1`、`hide_sus_mnts=1`、`avc_spoof=0`、`replace_rules=1`。
+- 默认 `auto_load=1`、`hide_sus_mnts=1`、`avc_spoof=1`、`replace_rules=0`。
 - `sus_path.txt` 默认仅 `/data/adb`。
 - `hide_modules.txt` 为 `kernelsu`。
 - 删除 `disable_autoload`。

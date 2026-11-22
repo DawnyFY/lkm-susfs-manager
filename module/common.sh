@@ -327,49 +327,72 @@ pstore_crash_ack() {
 ' "$_pa_fp" > "$STATE/crash_ack" 2>/dev/null
 }
 
-# 上次启动是否疑似因本模块崩溃：同一 pstore 文件里同时有 panic/oops 与模块栈字样
-pstore_crash_suspect() {
+# 崩溃归属只判定一次：none / mine / foreign / acked，避免 suspect 与 foreign 各扫一遍
+# （旧实现 foreign 内部又调 suspect，12 MB 转储时 status 从 ~1.9 s 涨到 30 s+）
+_PC_DONE=0
+_PC_KIND=none
+_PC_CULPRIT=""
+
+_pstore_classify() {
+    [ "$_PC_DONE" = "1" ] && return 0
+    _PC_DONE=1
+    _PC_KIND=none
+    _PC_CULPRIT=""
     _pc_dir=$(_pstore_dir)
-    [ -d "$_pc_dir" ] || return 1
-    # 先看有没有落盘文件：绝大多数设备这里为空，没必要算指纹（sha256sum + 每文件两次 stat）
+    [ -d "$_pc_dir" ] || return 0
     _pc_any=0
     for _pc_f in "$_pc_dir"/*; do
-        [ -e "$_pc_f" ] && { _pc_any=1; break; }
+        [ -f "$_pc_f" ] && { _pc_any=1; break; }
     done
-    [ "$_pc_any" = "1" ] || return 1
+    [ "$_pc_any" = "1" ] || return 0
     _pc_fp=$(_pstore_fingerprint 2>/dev/null)
     if [ -n "$_pc_fp" ] && [ "$(cat "$STATE/crash_ack" 2>/dev/null)" = "$_pc_fp" ]; then
-        return 1
+        _PC_KIND=acked
+        return 0
     fi
     for _pc_f in "$_pc_dir"/*; do
         [ -f "$_pc_f" ] || continue
         _pc_ctx=$(pstore_fault_context "$_pc_f")
         [ -n "$_pc_ctx" ] || continue
-        # 只有「故障现场」里出现本模块符号才算（PC/LR/调用栈帧）。
-        # 崩转储天然含模块自己的加载日志（susfs_guard_lkm init …）与 "Modules linked in:" 清单，
-        # 拿整份文件匹配会把任何 panic 都认领成本模块崩溃（vivo 实测误判过一次）。
-        printf '%s\n' "$_pc_ctx" | grep -v "Modules linked in" | grep -qE "susfs_guard_lkm|susfs_allinone" && return 0
+        _pc_cul=$(pstore_fault_culprit "$_pc_f")
+        # 只有故障现场的调用栈里出现本模块符号才算自己的
+        if printf '%s\n' "$_pc_ctx" | grep -v "Modules linked in" | grep -qE "susfs_guard_lkm|susfs_allinone"; then
+            _PC_KIND=mine
+            _PC_CULPRIT=$_pc_cul
+            return 0
+        fi
+        # 别人的崩溃先记下，继续扫其它转储 —— 多份 dump 时"有自己的一份"优先于"有别人的"
+        if [ -n "$_pc_cul" ] && [ "$_PC_KIND" = "none" ]; then
+            _PC_KIND=foreign
+            _PC_CULPRIT=$_pc_cul
+        fi
     done
-    return 1
+    return 0
 }
 
-# 取崩溃现场：最后一条 panic/oops 触发行往后 120 行（Call trace 通常紧跟其后）。
-# 没有触发行则输出空。
+# 是否「本模块」崩溃
+pstore_crash_suspect() {
+    _pstore_classify
+    [ "$_PC_KIND" = "mine" ]
+}
+
+# 取崩溃现场：最后一条 panic/oops 触发行往后 120 行。
+# 只看尾部 512 KB —— 转储可达数十 MB，toybox 的 grep 扫全文件单次就要 8 s+。
 pstore_fault_context() {
     _fc_f=$1
     [ -f "$_fc_f" ] || return 0
-    _fc_line=$(grep -nE "Kernel panic|Oops|Unable to handle kernel|BUG:|Internal error" "$_fc_f" 2>/dev/null | tail -1 | cut -d: -f1)
+    _fc_line=$(tail -c 524288 "$_fc_f" 2>/dev/null \
+        | grep -nE "Kernel panic|Oops|Unable to handle kernel|BUG:|Internal error" 2>/dev/null \
+        | tail -1 | cut -d: -f1)
     case "$_fc_line" in ''|*[!0-9]*) return 0 ;; esac
-    tail -n +"$_fc_line" "$_fc_f" 2>/dev/null | head -n 120
+    tail -c 524288 "$_fc_f" 2>/dev/null | tail -n +"$_fc_line" | head -n 120
 }
 
-# 崩溃现场的出错函数（供提示用）：pc 行里的 "func+0x.. [module]"；取不到则空
+# 崩溃现场的出错函数：pc 行里的 "func+0x.. [module]" 取函数名；取不到则空
 pstore_fault_culprit() {
     _fp_f=$1
-    _fp_ctx=$(pstore_fault_context "$_fp_f")
-    [ -n "$_fp_ctx" ] || return 0
-    # 只取 pc 行，用参数展开剥掉 "+0xb4/0x67c [zram]" 这类尾部，不依赖 sed 反引用
-    _fp_line=$(printf '%s\n' "$_fp_ctx" | grep -m1 -E " (pc|lr) *: ")
+    [ -f "$_fp_f" ] || return 0
+    _fp_line=$(tail -c 524288 "$_fp_f" 2>/dev/null | grep -m1 -E " (pc|lr) *: ")
     [ -n "$_fp_line" ] || return 0
     _fp_line=${_fp_line#*: }
     _fp_line=${_fp_line%%+*}
@@ -378,21 +401,11 @@ pstore_fault_culprit() {
     printf '%s\n' "$_fp_line"
 }
 
-# 有内核崩溃、但卡的是别人的模块（例如 vivo 的 zram 重建竞态）
-# 输出 "<函数名>"；没有崩溃或崩溃与本模块相关时输出空。
+# 有内核崩溃但栈里没有本模块：输出出错函数名，否则空
 pstore_crash_foreign() {
-    _cf_dir=$(_pstore_dir)
-    [ -d "$_cf_dir" ] || return 0
-    pstore_crash_suspect && return 0
-    for _cf_f in "$_cf_dir"/*; do
-        [ -f "$_cf_f" ] || continue
-        _cf_cul=$(pstore_fault_culprit "$_cf_f")
-        [ -n "$_cf_cul" ] || continue
-        printf '%s
-' "$_cf_cul"
-        return 0
-    done
-    return 0
+    _pstore_classify
+    [ "$_PC_KIND" = "foreign" ] || return 0
+    printf '%s\n' "$_PC_CULPRIT"
 }
 
 # 读取内核配置项（/proc/config.gz；测试钩子 CONFIG_GZ_FILE 只在 SUSFS_TEST_HOOK=1 时生效）
@@ -1439,22 +1452,40 @@ lock_acquire() {
     read -r _bid < "${PROC_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}" 2>/dev/null
 
     _mutex="$STATE/.lock.mutex"
+    # 回收条件（任一成立即接管，避免 mutex 一旦残留就永久卡死）：
+    #   1) pid 是数字且进程已不在
+    #   2) pid 缺失/损坏且 mutex 已存在 ≥2 s（给自己写完 pid 的窗口留余量；
+    #      旧实现遇到这种情况直接放弃，apply 会永久「另一个 apply 正在运行」）
+    #   3) mutex 目录 mtime 超过 30 s（覆盖 pid 被别的进程复用的场景）
     _i=0
-    while [ "$_i" -lt 20 ]; do
+    while [ "$_i" -lt 40 ]; do
         if mkdir "$_mutex" 2>/dev/null; then
-            printf '%s
-' "$$" > "$_mutex/pid" 2>/dev/null
+            printf '%s\n' "$$" > "$_mutex/pid" 2>/dev/null
             break
         fi
         _mo=""
         read -r _mo < "$_mutex/pid" 2>/dev/null
-        case "$_mo" in
+        _mnow=$(date +%s 2>/dev/null)
+        _mmt=$(stat -c %Y "$_mutex" 2>/dev/null)
+        _mage=0
+        case "$_mnow$_mmt" in
             ''|*[!0-9]*) ;;
-            *) [ -d "/proc/$_mo" ] || rm -rf "$_mutex" 2>/dev/null ;;
+            *) [ "$_mnow" -ge "$_mmt" ] && _mage=$((_mnow - _mmt)) ;;
         esac
+        _mstale=0
+        case "$_mo" in
+            ''|*[!0-9]*) [ "$_mage" -ge 2 ] && _mstale=1 ;;
+            *) [ -d "/proc/$_mo" ] || _mstale=1 ;;
+        esac
+        [ "$_mage" -ge 30 ] && _mstale=1
+        if [ "$_mstale" = "1" ]; then
+            rm -rf "$_mutex" 2>/dev/null
+        fi
+        # 退避：旧实现是无 sleep 的忙等，20 次在几毫秒内跑完，等于没等
+        sleep 0.05 2>/dev/null || sleep 1
         _i=$((_i + 1))
     done
-    [ "$_i" -lt 20 ] || return 1
+    [ "$_i" -lt 40 ] || return 1
 
     _ok=0
     if [ -e "$_lk" ]; then

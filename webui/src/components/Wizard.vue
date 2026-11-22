@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: GPL-2.0-only -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { getBundle, listKmis, presetPaths, saveBundle, type PresetPath, type RuleName } from "../api";
-import { setIni } from "../ini";
+import { getBundle, listKmis, presetPaths, saveBundle, setStats, type PresetPath, type RuleName } from "../api";
+import { buildWizardBundle, rulesReady } from "../wizard";
 import { t } from "../i18n";
 import { refreshStatus, setBanner, state, withBusy } from "../store";
 
@@ -56,7 +56,6 @@ const autoLoad = ref(true);
 const statsOn = ref(state.status.anonymous_stats !== "0");
 
 const STEP_TOTAL = 5;
-const NL = String.fromCharCode(10);
 const canNext = computed(() => {
   if (busy.value) return false;
   if (step.value === 0) return true; // 内核匹配只是展示，允许不选
@@ -77,19 +76,16 @@ function finish(): void {
 
 /** 真正写盘的部分；不自己包 withBusy，由调用方统一包一层 */
 async function writeConfig(): Promise<void> {
-  let text = config.value;
-  for (const k of HIDE_KEYS) text = setIni(text, k.key, hideOn.value[k.key] ? "1" : "0");
-  text = setIni(text, "auto_load", autoLoad.value ? "1" : "0");
-  if (kmiChoice.value) text = setIni(text, "force_kmi", kmiChoice.value);
-  // 预设路径：勾选的追加到 sus_path（已存在的不重复加）
-  const r: Record<string, string> = { ...(rules.value as Record<string, string>) };
-  const add = visiblePresets.value.filter((p) => pathPicked.value[p.path]).map((p) => p.path);
-  if (add.length) {
-    const cur = (r.sus_path || "").split(NL).filter((l) => l.trim());
-    for (const p of add) if (!cur.includes(p)) cur.push(p);
-    r.sus_path = cur.join(NL);
-  }
-  const out = await saveBundle(text, r as Record<RuleName, string>);
+  // 拼装逻辑放到 wizard.ts（纯函数、可单测）；rules 未加载会在这里抛错，
+  // 绝不拿空对象去覆盖设备上的规则（audit B1）。
+  const patch: Record<string, string> = {};
+  for (const k of HIDE_KEYS) patch[k.key] = hideOn.value[k.key] ? "1" : "0";
+  patch.auto_load = autoLoad.value ? "1" : "0";
+  if (kmiChoice.value) patch.force_kmi = kmiChoice.value;
+
+  const addPaths = visiblePresets.value.filter((p) => pathPicked.value[p.path]).map((p) => p.path);
+  const built = buildWizardBundle(config.value, rules.value, { patch, addPaths });
+  const out = await saveBundle(built.config, built.rules as Record<RuleName, string>);
   if (!out.includes("saved")) throw new Error(out.trim() || "save failed");
 }
 
@@ -98,6 +94,12 @@ async function applyNow(): Promise<void> {
   await withBusy(async () => {
     try {
       await writeConfig();
+      // 匿名统计走独立入口：ctl.sh set_stats 会写 config 并撤销本地 token（M2）
+      try {
+        await setStats(statsOn.value);
+      } catch (e) {
+        err.value = (e as Error).message;
+      }
       await refreshStatus();
       step.value = STEP_TOTAL - 1;
       setBanner("ok", t("wizard.done.body", { n: state.status.rules || "0" }));
@@ -261,7 +263,7 @@ onMounted(async () => {
           >
             {{ t("wizard.next") }}
           </button>
-          <button v-else type="button" class="btn primary" :disabled="busy" @click="applyNow">
+          <button v-else type="button" class="btn primary" :disabled="busy || !rulesReady(rules)" @click="applyNow">
             {{ t("wizard.apply") }}
           </button>
         </template>
