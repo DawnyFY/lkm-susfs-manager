@@ -48,6 +48,9 @@ jobs:
       - name: Check text files for CR bytes
         run: python tools/check_no_crlf.py
 
+      - name: Check for multi-line literals in shell scripts
+        run: python tools/check_multiline_literals.py
+
       - name: Offline unit tests
         run: |
           for t in tools/test_*.sh; do

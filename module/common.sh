@@ -546,9 +546,8 @@ susfs_hint() {
 # ---- 配置读取（config.ini，纯数据，不 source）----
 # 配置不再是 shell 脚本：只按 KEY=VALUE 解析，值永远不会被执行。
 # 制表符常量：供 cfg_get 去尾随空白用，模块级只算一次
-_CFG_TAB=$(printf '	')
-_CFG_CR=$(printf '
-')
+_CFG_TAB=$(printf '\t')
+_CFG_CR=$(printf '\r')
 CFG_KEYS="auto_load hide_sus_mnts avc_spoof replace_rules hide_ksu_loop hide_revanced hide_custom_rom hide_compat_matrix hide_gapps hide_dex2oat hide_scene auto_try_umount skip_legit_mounts skip_detection_paths fake_cmdline fake_cmdline_value force_kmi manager_name spoof_uname spoof_uname_release spoof_uname_version hide_vendor_sepolicy vold_isolation force_bl_unlocked"
 
 # 读单个键（$1=键，$2=默认值）
