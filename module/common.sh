@@ -875,7 +875,11 @@ apply_hide_modules() {
         _name=$(printf '%s' "$_name" | tr -d '\r')
         [ -n "$_name" ] || continue
         case "$_name" in '#'*) continue ;; esac
-        if grep -qw "$_name" /proc/susfs_hide_modules 2>/dev/null; then
+        # 内核协议是「一行一个名字」，含空白/控件的名字下发后会切成两条，直接拒绝
+        case "$_name" in
+            *[[:space:]]*) echo "[=] hide_module $_name (名字含空白，跳过)"; continue ;;
+        esac
+        if grep -qw -- "$_name" /proc/susfs_hide_modules 2>/dev/null; then
             echo "[=] hide_module $_name (已隐藏)"
             continue
         fi

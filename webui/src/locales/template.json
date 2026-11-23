@@ -195,5 +195,7 @@
   "wizard.hide.risk.desc": "",
   "log.clear": "",
   "log.clear.confirm": "",
-  "log.clear.done": ""
+  "log.clear.done": "",
+  "config.reset.confirm": "",
+  "msg.reset.bak": ""
 }

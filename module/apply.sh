@@ -460,6 +460,12 @@ if [ -f "$CONFIG/sus_path.txt" ]; then
                 *) : ;;  # 老版本不报 dev/ino，无从判断，维持原行为
             esac
         fi
+        case "$path" in
+            *[[:space:]]*)
+                echo "[i] sus_path $path (路径含空白，内核协议以空格分隔，无法下发；请改名或改用 sus_path_loop)"
+                continue
+                ;;
+        esac
         if is_ephemeral_path "$path"; then
             echo "[i] sus_path $path (虚拟/临时路径，内核不接受；建议从 sus_path 移除)"
             continue

@@ -226,14 +226,28 @@ async function doImport(): Promise<void> {
   });
 }
 
+// 恢复默认会覆写 8 个文件（含全部规则），必须两步确认；后端会先备份到 config.bak.<时间戳>/
+const confirmReset = ref(false);
+let resetTimer: ReturnType<typeof setTimeout> | undefined;
+
 async function doReset(): Promise<void> {
+  if (!confirmReset.value) {
+    confirmReset.value = true;
+    if (resetTimer) clearTimeout(resetTimer);
+    resetTimer = setTimeout(() => (confirmReset.value = false), 5000);
+    return;
+  }
+  confirmReset.value = false;
+  if (resetTimer) clearTimeout(resetTimer);
   await withBusy(async () => {
     try {
-      await resetDefaults();
+      const out = (await resetDefaults()).trim();
+      if (!out.includes("reset")) throw new Error(out || "reset failed");
+      const bak = out.split(String.fromCharCode(10)).map((l) => l.trim()).find((l) => l.startsWith("backup="));
       await loadAll();
-      setBanner("ok", t("msg.reset"));
+      setBanner("ok", bak ? t("msg.reset.bak", { p: bak.replace("backup=", "") }) : t("msg.reset"), 8000);
     } catch (e) {
-      setBanner("err", (e as Error).message);
+      setBanner("err", (e as Error).message, 8000);
     }
   });
 }
@@ -410,7 +424,14 @@ async function doReset(): Promise<void> {
           {{ state.busy ? t("common.busy") : t("common.save") }}
         </button>
         <button class="btn ghost" type="button" :disabled="state.busy" @click="doImport">{{ t("config.import") }}</button>
-        <button class="btn ghost" type="button" :disabled="state.busy" @click="doReset">{{ t("config.reset") }}</button>
+        <button
+          :class="['btn', 'ghost', { danger: confirmReset }]"
+          type="button"
+          :disabled="state.busy"
+          @click="doReset"
+        >
+          {{ confirmReset ? t("config.reset.confirm") : t("config.reset") }}
+        </button>
       </div>
     </template>
   </div>

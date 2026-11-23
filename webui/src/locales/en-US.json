@@ -195,5 +195,7 @@
   "wizard.hide.risk.desc": "These change semantics: replace_rules replaces existing rules instead of appending; auto_try_umount unmounts mount points; vold_isolation and hide_vendor_sepolicy alter vendor/vold behaviour.",
   "log.clear": "Clear logs",
   "log.clear.confirm": "Click again to confirm",
-  "log.clear.done": "Logs cleared (previous kept as .1)"
+  "log.clear.done": "Logs cleared (previous kept as .1)",
+  "config.reset.confirm": "Click again to confirm (overwrites rules)",
+  "msg.reset.bak": "Defaults restored; previous config backed up to {p}"
 }

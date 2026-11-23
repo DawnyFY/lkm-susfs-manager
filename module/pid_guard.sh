@@ -54,7 +54,7 @@ write_status() {
 # /proc/modules 里可见时补一条隐藏，与 hide_modules.txt 同一条内核接口
 hide_self() {
     [ -e "$HIDE_LIST" ] || return 0
-    grep -qw "$MODNAME" "$HIDE_LIST" 2>/dev/null && return 0
+    grep -qw -- "$MODNAME" "$HIDE_LIST" 2>/dev/null && return 0
     if echo "add $MODNAME" > "$HIDE_LIST" 2>/dev/null; then
         log "[+] hide_module $MODNAME"
     else
@@ -64,7 +64,7 @@ hide_self() {
 
 unhide_self() {
     [ -e "$HIDE_LIST" ] || return 0
-    grep -qw "$MODNAME" "$HIDE_LIST" 2>/dev/null || return 0
+    grep -qw -- "$MODNAME" "$HIDE_LIST" 2>/dev/null || return 0
     echo "del $MODNAME" > "$HIDE_LIST" 2>/dev/null && log "[-] hide_module $MODNAME 已移除"
 }
 

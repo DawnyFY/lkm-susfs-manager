@@ -75,7 +75,11 @@ _st_probe_signature() {
     if [ -n "$_sig_bin_path" ] && [ -x "$_sig_bin_path" ]; then
         _sig_bin=$(stat -c '%s-%Y' "$_sig_bin_path" 2>/dev/null)
     fi
-    printf '%s|%s' "$_sig_bid" "$_sig_bin"
+    # LKM 是否已装载必须参与签名：先看状态、后加载 LKM 的用户，
+    # 若沿用旧签名会一直拿到 ksu_bin=incompatible（audit M1b）
+    _sig_lkm=0
+    [ -d /sys/module/susfs_guard_lkm ] && _sig_lkm=1
+    printf '%s|%s|%s' "$_sig_bid" "$_sig_bin" "$_sig_lkm"
 }
 
 _st_probe_refresh() {
@@ -128,7 +132,7 @@ kpv=$_KPV
 cksu=$_CKSU
 cksusfs=$_CKSUSFS
 "
-        printf 'ok=1'
+        printf 'ok=1\n'
     } > "$_pc_tmp" 2>/dev/null && mv -f "$_pc_tmp" "$STATE/.probe_cache" 2>/dev/null || rm -f "$_pc_tmp" 2>/dev/null
 }
 
@@ -295,7 +299,16 @@ status() {
     printf 'config_ksu_susfs=%s\n' "$_P_CKSUSFS"
     _AR=""
     read -r _AR < "$STATE/apply_result" 2>/dev/null
-    printf 'apply_result=%s\n' "${_AR:-not_tested}"
+    # 本次开机没 apply 过就别报上次的结果（audit M4）：apply_result_boot 记的是产生它的 boot_id
+    _ARB=""
+    read -r _ARB < "$STATE/apply_result_boot" 2>/dev/null
+    _CURBID=""
+    read -r _CURBID < /proc/sys/kernel/random/boot_id 2>/dev/null
+    if [ -n "$_AR" ] && [ -n "$_ARB" ] && [ -n "$_CURBID" ] && [ "$_ARB" != "$_CURBID" ]; then
+        printf 'apply_result=stale:%s\n' "$_AR"
+    else
+        printf 'apply_result=%s\n' "${_AR:-not_tested}"
+    fi
     if [ -f "$STATE/boot_stage_completed" ]; then
         _bst=""
         read -r _bst < "$STATE/boot_stage_completed" 2>/dev/null
@@ -337,6 +350,8 @@ status() {
     fi
     [ "$_age" -gt 60 ] && _cf_run >/dev/null 2>&1 || true
     printf 'integrity=%s\n' "$(_cf_state)"
+    # WebUI 的隐私开关读这个字段（此前 49 个字段里没有它 → 界面永远显示"开"）
+    printf 'anonymous_stats=%s\n' "$(cfg_get anonymous_stats 1)"
 }
 
 # 校验 config 文件：只允许注释、空行与 KEY=VALUE；值必须是紧凑 token。
@@ -798,7 +813,24 @@ case "$1" in
             echo "rejected: $_err"
             exit 1
         fi
-        mv -f "$CONFIG/config.ini.tmp" "$CONFIG/config.ini"
+        # 写配置与 apply 互斥：否则 apply 可能读到半截文件（mv 是原子的，但两处同时改会互相覆盖）
+        if lock_acquire "$STATE/apply.lock" 30; then
+            mv -f "$CONFIG/config.ini.tmp" "$CONFIG/config.ini"
+            _sc_rc=$?
+            # auto_load=0 要同步 disable_autoload，否则下次开机仍会自动加载
+            _sc_auto=""
+            while IFS= read -r _sc_l || [ -n "$_sc_l" ]; do
+                case "$_sc_l" in auto_load=*) _sc_auto=${_sc_l#*=} ;; esac
+            done < "$CONFIG/config.ini" 2>/dev/null
+            case "$_sc_auto" in
+                0) touch "$MODDIR/disable_autoload" 2>/dev/null ;;
+                1) rm -f "$MODDIR/disable_autoload" 2>/dev/null ;;
+            esac
+            lock_release "$STATE/apply.lock"
+        else
+            _sc_rc=1
+        fi
+        [ "$_sc_rc" = "0" ] || { echo "busy"; exit 1; }
         echo "saved"
         ;;
     set_file)
@@ -1021,14 +1053,50 @@ case "$1" in
         echo "imported"
         ;;
     reset_defaults)
-        printf '# 每行一个文件路径\n' > "$CONFIG/sus_map.txt" 2>/dev/null
-        printf '# 每行一个包名子串，命中则不隐藏其数据目录\nduckdetector\nappvisibility\nnativecheck\n' > "$CONFIG/skip_hide.txt" 2>/dev/null
-        cat > "$CONFIG/config.ini" <<'EOF'
+        # 这是「毁灭性」操作：先把现有 8 个文件备份到 config.bak.<时间戳>/，
+        # 每步写入都检查返回值，任何一步失败就报 failed 并保留备份（audit M2）
+        _rd_stamp=$(date +%Y%m%d-%H%M%S 2>/dev/null)
+        case "$_rd_stamp" in ''|*[!0-9-]*) _rd_stamp=manual ;; esac
+        _rd_bak="$MODDIR/config.bak.$_rd_stamp"
+        _rd_ok=1
+        mkdir -p "$_rd_bak" 2>/dev/null || _rd_ok=0
+        if [ "$_rd_ok" = "1" ]; then
+            for _rd_f in config.ini sus_path.txt sus_path_loop.txt sus_mount.txt \
+                         try_umount.txt hide_modules.txt skip_hide.txt sus_map.txt; do
+                [ -f "$CONFIG/$_rd_f" ] || continue
+                cp -f "$CONFIG/$_rd_f" "$_rd_bak/$_rd_f" 2>/dev/null || _rd_ok=0
+            done
+        fi
+        # 备份失败就别动原文件
+        if [ "$_rd_ok" != "1" ]; then
+            rm -rf "$_rd_bak" 2>/dev/null
+            echo "failed: backup"
+            exit 1
+        fi
+
+        _rd_write() {
+            # $1=目标文件，内容走 stdin
+            _rd_tmp="$1.tmp.$$"
+            cat > "$_rd_tmp" 2>/dev/null || { rm -f "$_rd_tmp" 2>/dev/null; return 1; }
+            mv -f "$_rd_tmp" "$1" 2>/dev/null || { rm -f "$_rd_tmp" 2>/dev/null; return 1; }
+            return 0
+        }
+
+        _rd_write "$CONFIG/sus_map.txt" <<'EOF' || _rd_ok=0
+# 每行一个文件路径
+EOF
+        _rd_write "$CONFIG/skip_hide.txt" <<'EOF' || _rd_ok=0
+# 每行一个包名子串，命中则不隐藏其数据目录
+duckdetector
+appvisibility
+nativecheck
+EOF
+        _rd_write "$CONFIG/config.ini" <<'EOF' || _rd_ok=0
 # SUSFS 管理器配置
 auto_load=1
 hide_sus_mnts=1
 anonymous_stats=1
-avc_spoof=0
+avc_spoof=1
 replace_rules=0
 hide_ksu_loop=0
 hide_revanced=0
@@ -1050,27 +1118,34 @@ spoof_uname=0
 spoof_uname_release=
 spoof_uname_version=
 EOF
-        cat > "$CONFIG/sus_path.txt" <<'EOF'
+        _rd_write "$CONFIG/sus_path.txt" <<'EOF' || _rd_ok=0
 # 每行一个要隐藏的路径，支持以 # 开头的注释
 # 隐藏 /data/adb 后，SukiSU 和本模块 WebUI 仍可正常使用
 /data/adb
 EOF
-        cat > "$CONFIG/hide_modules.txt" <<'EOF'
+        _rd_write "$CONFIG/hide_modules.txt" <<'EOF' || _rd_ok=0
 # 每行一个模块名，写入 /proc/susfs_hide_modules
 kernelsu
 EOF
-        cat > "$CONFIG/sus_path_loop.txt" <<'EOF'
+        _rd_write "$CONFIG/sus_path_loop.txt" <<'EOF' || _rd_ok=0
 # 每行一个路径；路径可以暂时不存在，内核会在它出现后解析并隐藏
 # 适合会被删除后重建的路径；静态路径请继续放 sus_path.txt
 EOF
-        cat > "$CONFIG/sus_mount.txt" <<'EOF'
+        _rd_write "$CONFIG/sus_mount.txt" <<'EOF' || _rd_ok=0
 # 每行一个挂载点，调用 ksu_susfs add_sus_mount
 EOF
-        cat > "$CONFIG/try_umount.txt" <<'EOF'
+        _rd_write "$CONFIG/try_umount.txt" <<'EOF' || _rd_ok=0
 # 每行一个路径，调用 ksu_susfs add_try_umount <path> 1
 EOF
+
+        if [ "$_rd_ok" != "1" ]; then
+            # 有文件写失败：备份还在，提示用户从备份恢复
+            echo "failed: write (备份在 $(basename "$_rd_bak"))"
+            exit 1
+        fi
         rm -f "$MODDIR/disable_autoload"
         echo "reset"
+        echo "backup=$_rd_bak"
         ;;
     *)
         echo "unknown command: $1"

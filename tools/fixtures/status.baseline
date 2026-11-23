@@ -1,7 +1,6 @@
 # ctl.sh status 输出基线（1.2.8 抓取：设备 6.6.77 / android15-6.6 / SukiSU）
 # 用途：重构 status（去 fork）后逐字段比对；除 [volatile] 段列出的键外不得有差异。
 # 抓取：adb shell su -c 'cd /data/adb/modules/susfs_allinone && sh ctl.sh status'
-
 [keys]  # 顺序即输出顺序，重构后必须一致
 module_version
 install_id
@@ -52,7 +51,7 @@ try_umount
 bootloader
 force_bl_unlocked
 integrity
-
+anonymous_stats
 [volatile]  # 值随设备/时间变化，比对时只校验键存在
 apply_fails
 apply_result

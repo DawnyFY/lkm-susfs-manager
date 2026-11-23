@@ -24,7 +24,7 @@ if { [ "$rc" = "0" ] || [ "$rc" = "5" ]; } && susfs_kernel_ready; then
     printf "[i] 用户 sus_path 规则: "
     grep '^path=' /proc/susfs_path 2>/dev/null | grep -v '\[ours:' | sed 's/^path=//' | awk '{print $1}' | sort -u | wc -l
     printf "[i] kernelsu 隐藏: "
-    if grep -qw kernelsu /proc/susfs_hide_modules 2>/dev/null; then echo "是"; else echo "否"; fi
+    if grep -qw -- kernelsu /proc/susfs_hide_modules 2>/dev/null; then echo "是"; else echo "否"; fi
     echo "[i] ksu_susfs: ${BIN:-无}"
     echo "[i] 日志: $MODDIR/apply.log"
     _af=$(cat "$MODDIR/state/apply_fails" 2>/dev/null)

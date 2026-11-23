@@ -37,6 +37,7 @@ EXEC_NAMES = {
     "boot-completed.sh",
     "service.sh",
     "pid_guard.sh",
+    "uninstall.sh",
     "pid_guard_ctl.sh",
     "customize.sh",
     "bin/susfs_insmod",
