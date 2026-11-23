@@ -192,5 +192,8 @@
   "wizard.reapply": "",
   "wizard.hide.rec": "",
   "wizard.hide.risk": "",
-  "wizard.hide.risk.desc": ""
+  "wizard.hide.risk.desc": "",
+  "log.clear": "",
+  "log.clear.confirm": "",
+  "log.clear.done": ""
 }

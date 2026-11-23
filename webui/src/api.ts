@@ -104,6 +104,11 @@ export async function exportLog(): Promise<string> {
   return exec(`${CTL} export_log`);
 }
 
+/** 清理日志：当前日志轮转为 .1 备份，新日志从分隔头开始 */
+export async function clearLog(): Promise<string> {
+  return exec(`${CTL} clear_log`);
+}
+
 export interface PresetPath {
   path: string;
   /** 设备上是否真的存在（不存在就没必要隐藏） */

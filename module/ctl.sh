@@ -732,6 +732,31 @@ case "$1" in
         echo "===== apply.log ====="
         tail -n 120 "$MODDIR/apply.log" 2>/dev/null
         ;;
+    clear_log)
+        # WebUI 日志页的「清理」：把当前日志轮转成 .1（保留最后一轮便于回看），
+        # 新日志从一行分隔头开始，避免直接清空后排查时什么线索都没有。
+        _cl_n=0
+        for _cl_f in load.log apply.log; do
+            _cl_p="$MODDIR/$_cl_f"
+            [ -f "$_cl_p" ] || continue
+            _cl_sz=$(wc -c < "$_cl_p" 2>/dev/null)
+            case "$_cl_sz" in ''|*[!0-9]*) _cl_sz=0 ;; esac
+            [ "$_cl_sz" -gt 0 ] || continue
+            mv -f "$_cl_p" "$_cl_p.1" 2>/dev/null || : > "$_cl_p" 2>/dev/null
+            printf '=== %s 已被清理 %s（上一份保留为 %s.1）===\n' "$_cl_f" "$(now_stamp)" "$_cl_f" >> "$_cl_p" 2>/dev/null
+            _cl_n=$((_cl_n + 1))
+        done
+        printf 'cleared=%s\n' "$_cl_n"
+        ;;
+    clear_logs)
+        # 连 .1 备份一起删（用户明确要"全清"时用）
+        _cls_n=0
+        for _cls_f in "$MODDIR/load.log" "$MODDIR/apply.log" "$MODDIR/load.log.1" "$MODDIR/apply.log.1"; do
+            [ -f "$_cls_f" ] || continue
+            rm -f "$_cls_f" 2>/dev/null && _cls_n=$((_cls_n + 1))
+        done
+        printf 'removed=%s\n' "$_cls_n"
+        ;;
     get_config)
         cat "$CONFIG/config.ini" 2>/dev/null
         ;;

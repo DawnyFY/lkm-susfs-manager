@@ -192,5 +192,8 @@
   "wizard.reapply": "重新应用",
   "wizard.hide.rec": "推荐（默认已开）",
   "wizard.hide.risk": "谨慎（默认关，按需勾选）",
-  "wizard.hide.risk.desc": "下列项会改变行为语义：replace_rules 是「替换」而非追加既有规则；auto_try_umount 会自动卸载挂载点；vold_isolation 与 hide_vendor_sepolicy 会动 vendor/vold 行为，排查问题时建议先关。"
+  "wizard.hide.risk.desc": "下列项会改变行为语义：replace_rules 是「替换」而非追加既有规则；auto_try_umount 会自动卸载挂载点；vold_isolation 与 hide_vendor_sepolicy 会动 vendor/vold 行为，排查问题时建议先关。",
+  "log.clear": "清理日志",
+  "log.clear.confirm": "再点一次确认",
+  "log.clear.done": "日志已清理（上一份保留为 .1）"
 }

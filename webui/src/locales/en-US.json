@@ -192,5 +192,8 @@
   "wizard.reapply": "Apply again",
   "wizard.hide.rec": "Recommended (on)",
   "wizard.hide.risk": "Advanced (off, opt in)",
-  "wizard.hide.risk.desc": "These change semantics: replace_rules replaces existing rules instead of appending; auto_try_umount unmounts mount points; vold_isolation and hide_vendor_sepolicy alter vendor/vold behaviour."
+  "wizard.hide.risk.desc": "These change semantics: replace_rules replaces existing rules instead of appending; auto_try_umount unmounts mount points; vold_isolation and hide_vendor_sepolicy alter vendor/vold behaviour.",
+  "log.clear": "Clear logs",
+  "log.clear.confirm": "Click again to confirm",
+  "log.clear.done": "Logs cleared (previous kept as .1)"
 }
