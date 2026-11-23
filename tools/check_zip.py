@@ -50,7 +50,11 @@ REQUIRED = {
     "lib/pid_guard/6.6/generic_pid_guard.ko",
     "lib/pid_guard/6.12/generic_pid_guard.ko",
     "lib/pid_guard/6.18/generic_pid_guard.ko",
-}
+
+    "service.sh",
+    "kmi.sh",
+    "kmis",
+    "uninstall.sh",}
 EXEC_REQUIRED = {"load.sh", "apply.sh", "ctl.sh", "action.sh", "customize.sh", "service.sh",
                  "pid_guard.sh", "pid_guard_ctl.sh"}
 

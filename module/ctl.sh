@@ -289,11 +289,18 @@ status() {
 
     pg_status_fields
     _KP=$_P_KP
-    printf 'kernelpatch=%s\n' "$_KP"
+    # 两个字段语义区分开（audit-legacy m8）：此前它们取同一个值，等于白给两个字段
+    printf 'kernelpatch=%s\n' "$_P_KPS"
     printf 'apatch_userland=%s\n' "$_KP"
     printf 'kernelpatch_kernel=%s\n' "$_P_KPS"
     printf 'kernelpatch_version=%s\n' "$_P_KPV"
-    printf 'coexist_mode=%s\n' "$([ "$_KP" = "1" ] && echo apatch || echo none)"
+    # coexist_mode 说的是「内核里真的同时有 KernelPatch」，
+    # 光凭 APatch userland 存在（可能是换过管理器的残留）不足以判定（audit-legacy m8）
+    if [ "$_KP" = "1" ] && [ "$_P_KPS" = "1" ]; then
+        printf 'coexist_mode=apatch\n'
+    else
+        printf 'coexist_mode=none\n'
+    fi
     printf 'allow_lkm=%s\n' "$([ -f "$CONFIG/allow_lkm_on_kernelpatch" ] && echo 1 || echo 0)"
     printf 'config_ksu=%s\n' "$_P_CKSU"
     printf 'config_ksu_susfs=%s\n' "$_P_CKSUSFS"
@@ -814,7 +821,7 @@ case "$1" in
             exit 1
         fi
         # 写配置与 apply 互斥：否则 apply 可能读到半截文件（mv 是原子的，但两处同时改会互相覆盖）
-        if lock_acquire "$STATE/apply.lock" 30; then
+        if lock_acquire "$STATE/apply.lock" 30 200; then
             mv -f "$CONFIG/config.ini.tmp" "$CONFIG/config.ini"
             _sc_rc=$?
             # auto_load=0 要同步 disable_autoload，否则下次开机仍会自动加载
@@ -857,7 +864,7 @@ case "$1" in
         ;;
     set_bundle)
         # 和 apply 共用一把锁，避免写规则文件时被另一次 apply 读到半截
-        lock_acquire "$STATE/apply.lock" 900 || { echo "apply busy"; exit 1; }
+        lock_acquire "$STATE/apply.lock" 900 400 || { echo "apply busy"; exit 1; }
         trap 'lock_release "$STATE/apply.lock"' EXIT
         # 一次写入 config + 7 个规则文件（WebUI 保存从 8 次调用降到 1 次）。
         #

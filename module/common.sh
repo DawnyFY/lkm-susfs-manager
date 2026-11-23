@@ -1501,87 +1501,85 @@ is_ephemeral_path() {
 }
 
 lock_acquire() {
-    # 锁协议：所有「判定 + 建锁」都在二级目录锁内完成。
+    # 锁协议：所有「判定 + 建锁」都在二级目录锁（mutex）内完成。
     # 只在主锁目录上做 rm+mkdir 有竞态：两个进程同时判定过期，后者会删掉前者刚建的锁重建，
     # 实测 8 并发时出现 2-3 个进程同时持有。
-    _lk=$1; _ttl=${2:-180}
+    #
+    # 参数：$1 锁目录  $2 TTL（秒，超过则视为陈旧）  $3 最多等多少个 50ms 刻度（默认 40 ≈ 2s）
+    # 整个「抢 mutex → 判定主锁 → 建主锁」都放在重试循环里：
+    # 旧实现只重试 mutex，主锁被占时立刻返回失败，等于"等更久"根本没生效（audit-legacy m6）。
+    _lk=$1; _ttl=${2:-180}; _waits=${3:-40}
+    case "$_waits" in ''|*[!0-9]*) _waits=40 ;; esac
+    [ "$_waits" -gt 0 ] || _waits=40
+
     mkdir -p "$STATE" 2>/dev/null
     _bid=""
     read -r _bid < "${PROC_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}" 2>/dev/null
 
     _mutex="$STATE/.lock.mutex"
-    # 回收条件（任一成立即接管，避免 mutex 一旦残留就永久卡死）：
-    #   1) pid 是数字且进程已不在
-    #   2) pid 缺失/损坏且 mutex 已存在 ≥2 s（给自己写完 pid 的窗口留余量；
-    #      旧实现遇到这种情况直接放弃，apply 会永久「另一个 apply 正在运行」）
-    #   3) mutex 目录 mtime 超过 30 s（覆盖 pid 被别的进程复用的场景）
     _i=0
-    while [ "$_i" -lt 40 ]; do
+    while [ "$_i" -lt "$_waits" ]; do
+        _i=$((_i + 1))
         if mkdir "$_mutex" 2>/dev/null; then
             printf '%s\n' "$$" > "$_mutex/pid" 2>/dev/null
-            break
-        fi
-        _mo=""
-        read -r _mo < "$_mutex/pid" 2>/dev/null
-        _mnow=$(date +%s 2>/dev/null)
-        _mmt=$(stat -c %Y "$_mutex" 2>/dev/null)
-        _mage=0
-        case "$_mnow$_mmt" in
-            ''|*[!0-9]*) ;;
-            *) [ "$_mnow" -ge "$_mmt" ] && _mage=$((_mnow - _mmt)) ;;
-        esac
-        _mstale=0
-        case "$_mo" in
-            ''|*[!0-9]*) [ "$_mage" -ge 2 ] && _mstale=1 ;;
-            *) [ -d "/proc/$_mo" ] || _mstale=1 ;;
-        esac
-        [ "$_mage" -ge 30 ] && _mstale=1
-        if [ "$_mstale" = "1" ]; then
+
+            _reclaim=0
+            if [ -e "$_lk" ]; then
+                _line=""
+                read -r _line < "$_lk/pid" 2>/dev/null
+                _lk_pid=${_line%% *}
+                _lk_bid=${_line##* }
+                case "$_lk_pid" in ''|*[!0-9]*) _lk_pid="" ;; esac
+                # 持有者已不在
+                if [ -n "$_lk_pid" ] && [ ! -d "/proc/$_lk_pid" ]; then
+                    _reclaim=1
+                fi
+                # 跨 boot 的残留
+                if [ "$_reclaim" = "0" ] && [ -n "$_lk_bid" ] && [ -n "$_bid" ] && [ "$_lk_bid" != "$_bid" ]; then
+                    _reclaim=1
+                fi
+                # 超时
+                if [ "$_reclaim" = "0" ]; then
+                    _now=$(date +%s 2>/dev/null)
+                    _mt=$(stat -c %Y "$_lk" 2>/dev/null)
+                    case "$_now$_mt" in
+                        ''|*[!0-9]*) ;;
+                        *) [ $((_now - _mt)) -gt "$_ttl" ] && _reclaim=1 ;;
+                    esac
+                fi
+                if [ "$_reclaim" = "1" ]; then
+                    rm -rf "$_lk" 2>/dev/null
+                fi
+            fi
+
+            if [ ! -e "$_lk" ] && mkdir "$_lk" 2>/dev/null; then
+                printf '%s %s\n' "$$" "$_bid" > "$_lk/pid" 2>/dev/null
+                rm -rf "$_mutex" 2>/dev/null
+                return 0
+            fi
             rm -rf "$_mutex" 2>/dev/null
-        fi
-        # 退避：旧实现是无 sleep 的忙等，20 次在几毫秒内跑完，等于没等
-        sleep 0.05 2>/dev/null || sleep 1
-        _i=$((_i + 1))
-    done
-    [ "$_i" -lt 40 ] || return 1
-
-    _ok=0
-    if [ -e "$_lk" ]; then
-        _line=""
-        read -r _line < "$_lk/pid" 2>/dev/null
-        _lk_pid=${_line%% *}
-        _lk_bid=${_line##* }
-        case "$_lk_pid" in ''|*[!0-9]*) _lk_pid="" ;; esac
-
-        _reclaim=0
-        if [ -n "$_lk_pid" ] && [ ! -d "/proc/$_lk_pid" ]; then
-            _reclaim=1
-        fi
-        if [ "$_reclaim" = "0" ] && [ -n "$_lk_bid" ] && [ -n "$_bid" ] && [ "$_lk_bid" != "$_bid" ]; then
-            _reclaim=1
-        fi
-        if [ "$_reclaim" = "0" ]; then
-            _now=$(date +%s 2>/dev/null)
-            _mt=$(stat -c %Y "$_lk" 2>/dev/null)
-            case "$_now$_mt" in
-                ''|*[!0-9]*) ;;
-                *) [ $((_now - _mt)) -gt "$_ttl" ] && _reclaim=1 ;;
-            esac
-        fi
-        if [ "$_reclaim" = "1" ]; then
-            rm -rf "$_lk" 2>/dev/null
         else
-            rm -rf "$_mutex" 2>/dev/null
-            return 1
+            # mutex 被别人占着：按三条规则回收陈旧 mutex
+            _mo=""
+            read -r _mo < "$_mutex/pid" 2>/dev/null
+            _mnow=$(date +%s 2>/dev/null)
+            _mmt=$(stat -c %Y "$_mutex" 2>/dev/null)
+            _mage=0
+            case "$_mnow$_mmt" in
+                ''|*[!0-9]*) ;;
+                *) [ "$_mnow" -ge "$_mmt" ] && _mage=$((_mnow - _mmt)) ;;
+            esac
+            _mstale=0
+            case "$_mo" in
+                ''|*[!0-9]*) [ "$_mage" -ge 2 ] && _mstale=1 ;;
+                *) [ -d "/proc/$_mo" ] || _mstale=1 ;;
+            esac
+            [ "$_mage" -ge 30 ] && _mstale=1
+            [ "$_mstale" = "1" ] && rm -rf "$_mutex" 2>/dev/null
         fi
-    fi
-    if mkdir "$_lk" 2>/dev/null; then
-        printf '%s %s
-' "$$" "$_bid" > "$_lk/pid" 2>/dev/null
-        _ok=1
-    fi
-    rm -rf "$_mutex" 2>/dev/null
-    [ "$_ok" = "1" ]
+        sleep 0.05 2>/dev/null || sleep 1
+    done
+    return 1
 }
 
 lock_release() {

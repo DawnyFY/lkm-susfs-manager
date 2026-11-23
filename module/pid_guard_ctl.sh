@@ -36,6 +36,30 @@ uids_ok() {
     return 0
 }
 
+# comm 通配只允许"尾部一个 *"（前缀匹配）；中间/开头/多个 * 会匹配到几乎全部进程，
+# 等于把整个系统藏起来，直接拒绝（audit-legacy m7）
+comms_wildcard_ok() {
+    [ -n "$1" ] || return 0
+    _cw_r=$1
+    while :; do
+        case "$_cw_r" in
+            *,*) _cw_t=${_cw_r%%,*}; _cw_r=${_cw_r#*,} ;;
+            *) _cw_t=$_cw_r; _cw_r="" ;;
+        esac
+        case "$_cw_t" in
+            *'*'*)
+                # 去掉尾部一个 * 后不允许再出现 *
+                _cw_rest=${_cw_t%'*'}
+                case "$_cw_rest" in
+                    ''|*'*'*) return 1 ;;
+                esac
+                ;;
+        esac
+        [ -n "$_cw_r" ] || break
+    done
+    return 0
+}
+
 fail() { echo "rejected: $1" >&2; exit 1; }
 
 validate() {
@@ -51,6 +75,7 @@ validate() {
     value_ok "$_v_exc"   || fail "exclude_comms illegal char / empty item / space"
     [ -n "$_v_uids$_v_comms" ] || fail "target_uids and target_comms cannot both be empty"
     case "$_v_uids$_v_exc" in *'*'*) fail "wildcard * not allowed in uid/exclude" ;; esac
+    comms_wildcard_ok "$_v_comms" || fail "comm wildcard * only allowed as a trailing *"
     case ",$_v_comms," in
         *",*,"*|*",**,"*) fail "comm wildcard * must be a suffix; bare * hits every process" ;;
     esac
