@@ -373,6 +373,29 @@ _skip_revert() {
     return 0
 }
 
+# 历史遗留清理（与当前开关无关）：我们以前可能把 App 安装目录记进过自己的规则账本
+# （1.3.0 之前的 hide_gapps 就会这么干）。这类规则必然造成「安装记录与 APK 不符」，
+# 关掉开关也不会自动消失（replace_rules=0 是只追加），所以每次 apply 都主动撤销一遍。
+_prune_ledger_dirs() {
+    _pl_f=$(our_paths_file)
+    [ -s "$_pl_f" ] || return 0
+    _pl_tmp="$_pl_f.prune.$$"
+    _pl_n=0
+    : > "$_pl_tmp" 2>/dev/null
+    while IFS= read -r _pl_p || [ -n "$_pl_p" ]; do
+        [ -n "$_pl_p" ] || continue
+        if is_app_install_dir "$_pl_p" && susfs_path_del "$_pl_p"; then
+            echo "[i] 已撤销历史遗留的安装目录规则：$_pl_p"
+            _pl_n=$((_pl_n + 1))
+            continue
+        fi
+        printf '%s\n' "$_pl_p" >> "$_pl_tmp" 2>/dev/null
+    done < "$_pl_f"
+    mv -f "$_pl_tmp" "$_pl_f" 2>/dev/null
+    return 0
+}
+_prune_ledger_dirs
+
 # 5. sus_path
 # replace_rules=1：只移除本模块上次写入的规则（不影响其他隐藏模块）
 # replace_rules=2：整表清空（显式高危，会连同其他模块的规则一起清掉）

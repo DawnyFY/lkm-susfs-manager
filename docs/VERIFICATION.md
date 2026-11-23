@@ -33,8 +33,8 @@
 
 ## 1.3.0（待发布 · 2026-11-22）
 
-构建：13,202,987 B，sha256 `dcd3569281638abe7c4ecee4a800af8de1552d2f7078b36f95b5529b2b828868`，manifest `0f81c77f…`。
-离线 **47/47**、Vitest **56/56**、门禁 **5/5**、`I18N_OK keys=194`；两次构建字节一致。
+构建：13,204,032 B，sha256 `b845f3bcda7af0acb2b5c71226623c05e45bcab2f470edb5b477f46f7a053f66`，manifest `520fb1b8…`。
+离线 **49/49**、Vitest **56/56**、门禁 **5/5**、`I18N_OK keys=194`；两次构建字节一致。
 
 - 首次配置向导（五步）与启动动画；`wizard.ts` 的 `buildWizardBundle()` 在规则未加载时抛错（audit B1）
 - `state/.lock.mutex` 按 mtime/pid 回收（audit B2）；AVC 开启时记录原值、关闭仅在"当前确为伪装值"时还原（audit M1/R2-1）

@@ -323,8 +323,7 @@ pstore_crash_ack() {
     _pa_fp=$(_pstore_fingerprint 2>/dev/null)
     [ -n "$_pa_fp" ] || return 1
     mkdir -p "$STATE" 2>/dev/null
-    printf '%s
-' "$_pa_fp" > "$STATE/crash_ack" 2>/dev/null
+    printf '%s\n' "$_pa_fp" > "$STATE/crash_ack" 2>/dev/null
 }
 
 # 崩溃归属只判定一次：none / mine / foreign / acked，避免 suspect 与 foreign 各扫一遍
@@ -362,8 +361,7 @@ _pstore_classify() {
         # 读得到但没有崩溃关键词：就是干净的开机日志（Qualcomm 设备每次开机都有），
         # 不能算 unknown —— 否则这些设备的 crash_evidence 会永久显示异常（audit N1）
         [ -n "$_pc_ctx" ] || continue
-        _pc_cul=$(printf '%s
-' "$_pc_ctx" | _pstore_culprit_from_text)
+        _pc_cul=$(printf '%s\n' "$_pc_ctx" | _pstore_culprit_from_text)
         # 只有故障现场的调用栈里出现本模块符号才算自己的
         if printf '%s\n' "$_pc_ctx" | grep -v "Modules linked in" | grep -qE "susfs_guard_lkm|susfs_allinone"; then
             _PC_KIND=mine
