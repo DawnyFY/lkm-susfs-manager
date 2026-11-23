@@ -361,6 +361,18 @@ clean_entry() {
     strip_comment "$1"
 }
 
+# 被守卫跳过的路径：如果内核里还留着旧规则，撤掉它，避免升级后仍然出现同样的问题
+_skip_revert() {
+    _sr_p=$1
+    [ -n "$_sr_p" ] || return 0
+    grep -F -q "path=$_sr_p " /proc/susfs_path 2>/dev/null || return 0
+    if susfs_path_del "$_sr_p" 2>/dev/null; then
+        unrecord_our_path "$_sr_p" 2>/dev/null
+        echo "[i]   已撤销内核中的旧规则：$_sr_p"
+    fi
+    return 0
+}
+
 # 5. sus_path
 # replace_rules=1：只移除本模块上次写入的规则（不影响其他隐藏模块）
 # replace_rules=2：整表清空（显式高危，会连同其他模块的规则一起清掉）
@@ -427,6 +439,11 @@ if [ -f "$CONFIG/sus_path.txt" ]; then
         fi
         if is_ephemeral_path "$path"; then
             echo "[i] sus_path $path (虚拟/临时路径，内核不接受；建议从 sus_path 移除)"
+            continue
+        fi
+        if is_app_install_dir "$path"; then
+            echo "[i] sus_path $path (系统 App 安装目录，隐藏会造成「安装记录与 APK 不符」，跳过)"
+            _skip_revert "$path"
             continue
         fi
         if [ "$_sp_present" = "1" ]; then
@@ -550,6 +567,11 @@ add_sus_path_safe() {
     [ -n "$_p" ] || return 0
     if is_ephemeral_path "$_p"; then
         echo "[i] sus_path $_p (虚拟/临时路径，跳过)"
+        return 0
+    fi
+    if is_app_install_dir "$_p"; then
+        echo "[i] sus_path $_p (系统 App 安装目录，隐藏会造成「安装记录与 APK 不符」，跳过)"
+        _skip_revert "$_p"
         return 0
     fi
     if grep -F -q "path=$_p " /proc/susfs_path 2>/dev/null; then
@@ -782,12 +804,14 @@ fi
 # 5d. GAPPS / DEX2OAT 隐藏
 if [ "$hide_gapps" = "1" ]; then
     _n=0
-    for _p in /system/app/GmsCore /system/priv-app/GmsCore /product/app/GmsCore               /product/priv-app/GmsCore /system/app/GoogleServicesFramework               /system/priv-app/GoogleServicesFramework /system/app/Phonesky               /product/app/Phonesky /system/app/Vending /product/app/Vending; do
+    # 只隐藏 GMS 的数据目录：安装目录不能隐藏 —— PackageManager 的 sourceDir 仍指向它，
+    # 隐藏后 App 侧核对会得到「记录在、文件没了」，检测器判定「安装记录与 APK 不符」。
+    for _p in /data/data/com.google.android.gms /data/user_de/0/com.google.android.gms               /data/data/com.google.android.gsf /data/user_de/0/com.google.android.gsf               /data/data/com.android.vending /data/user_de/0/com.android.vending; do
         [ -e "$_p" ] || continue
         _n=$((_n + 1))
         add_sus_path_safe "$_p"
     done
-    [ "$_n" = "0" ] && echo "[i] 未发现 GAPPS 路径，跳过（国行系统属正常）"
+    [ "$_n" = "0" ] && echo "[i] 未发现 GAPPS 数据目录，跳过（未装 GMS 或系统属正常）"
 fi
 
 if [ "$hide_dex2oat" = "1" ]; then

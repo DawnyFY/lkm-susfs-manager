@@ -1462,6 +1462,27 @@ try_umount_add_once() {
 
 # ---- 运行时锁与耗时判断 ----
 # mkdir 是原子的：用它做简单互斥，避免开机 apply 与 WebUI apply 同时写规则
+# 系统 App 的安装目录：隐藏它会让 PackageManager 的 sourceDir 指向不存在的文件，
+# 第三方检测器交叉核对会判定「安装记录与 APK 不符」（实测发现：/product/priv-app/GmsCore）。
+# 只拦「根目录 + 一级包名」这一层；包内更深路径不参与 sourceDir 核对，不在拦截范围。
+is_app_install_dir() {
+    for _aid_root in /system/app /system/priv-app \
+                     /system_ext/app /system_ext/priv-app \
+                     /product/app /product/priv-app \
+                     /vendor/app /odm/app /oem/app; do
+        case "$1" in
+            "$_aid_root"/*)
+                _aid_rest=${1#"$_aid_root"/}
+                case "$_aid_rest" in
+                    ''|*/*) return 1 ;;
+                    *) return 0 ;;
+                esac
+                ;;
+        esac
+    done
+    return 1
+}
+
 # 虚拟/临时文件系统下的路径不适合做 sus_path 规则：
 #   /sys/fs/cgroup/apps/uid_XXXX 这类目录随进程生灭，加进去必然失败；
 #   /dev/cpuset、/proc、/sys/fs/bpf 同理。
