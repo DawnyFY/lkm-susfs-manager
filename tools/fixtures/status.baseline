@@ -28,6 +28,7 @@ pid_guard_hidden
 pid_guard_result
 pid_guard_uids
 pid_guard_comms
+pid_guard_matched
 kernelpatch
 apatch_userland
 kernelpatch_kernel

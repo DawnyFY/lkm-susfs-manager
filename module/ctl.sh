@@ -61,6 +61,8 @@ pg_status_fields() {
     printf 'pid_guard_result=%s\n' "${_PG_RES:-unknown}"
     printf 'pid_guard_uids=%s\n' "$_PG_UIDS"
     printf 'pid_guard_comms=%s\n' "$_PG_COMMS"
+    # 规则命中多少个进程（0 = 规则没匹配到任何进程，通常说明配置写错了）
+    printf 'pid_guard_matched=%s\n' "$(sed -n 's/^matched=//p' "$STATE/pid_guard.status" 2>/dev/null | head -n 1)"
 }
 
 # status 的探测缓存：同一 boot 内只算一次。
@@ -393,13 +395,17 @@ validate_config_file() {
         esac
         case "$_key" in
             # cmdline 值天然含空格；只放行空白与普通字符，元字符仍然拒绝
-            fake_cmdline_value)
-                # 允许空白；引号/反斜杠仍然拒绝（之前空白分支把检查跳过了）
+            fake_cmdline_value|spoof_uname_version)
+                # 允许空白；引号/反斜杠仍然拒绝（uname 版本串形如 "#1 SMP PREEMPT"）
                 case "$_val" in
                     *\"*|*'"'*|*\\*) _bad="line $_ln: quote or backslash in value"; break ;;
                 esac
                 ;;
             *)
+                # 只有 fake_cmdline_value / spoof_uname_version 允许含 '#'（uname 版本串形如 "#1 SMP PREEMPT"）
+                case "$_val" in
+                    *'#'*) _bad="line $_ln: shell metacharacter in value"; break ;;
+                esac
                 case "$_val" in
                     *[[:space:]]*) _bad="line $_ln: whitespace in value"; break ;;
                     *\"*|*'"'*|*\\*) _bad="line $_ln: quote or backslash in value"; break ;;
@@ -407,7 +413,7 @@ validate_config_file() {
                 ;;
         esac
         case "$_val" in
-            *[\`\$\;\&\|\<\>\(\)\#\{\}\!\?\~\*]*|*\[*|*\]*)
+            *[\`\$\;\&\|\<\>\(\)\{\}\!\?\~\*]*|*\[*|*\]*)
                 _bad="line $_ln: shell metacharacter in value"; break ;;
         esac
     done < "$_vf"
@@ -1064,6 +1070,14 @@ case "$1" in
         # 每步写入都检查返回值，任何一步失败就报 failed 并保留备份（audit M2）
         _rd_stamp=$(date +%Y%m%d-%H%M%S 2>/dev/null)
         case "$_rd_stamp" in ''|*[!0-9-]*) _rd_stamp=manual ;; esac
+        # 同一秒内连续 reset 不能互相覆盖（audit-legacy2 MIN-6）
+        _rd_seq=0
+        while [ -e "$MODDIR/config.bak.$_rd_stamp" ] && [ "$_rd_seq" -lt 100 ]; do
+            _rd_seq=$((_rd_seq + 1))
+            _rd_stamp=$(date +%Y%m%d-%H%M%S 2>/dev/null)
+            case "$_rd_stamp" in ''|*[!0-9-]*) _rd_stamp=manual ;; esac
+            [ "$_rd_seq" -gt 1 ] && _rd_stamp="$_rd_stamp-$_rd_seq"
+        done
         _rd_bak="$MODDIR/config.bak.$_rd_stamp"
         _rd_ok=1
         mkdir -p "$_rd_bak" 2>/dev/null || _rd_ok=0
@@ -1098,11 +1112,14 @@ duckdetector
 appvisibility
 nativecheck
 EOF
+        # 隐私开关不能因为「恢复默认」被静默打开：先记下现值，模板里替换（audit-legacy2 MAJ-6）
+        _rd_stats=$(cfg_get anonymous_stats 1)
+        case "$_rd_stats" in 0|1) ;; *) _rd_stats=1 ;; esac
         _rd_write "$CONFIG/config.ini" <<'EOF' || _rd_ok=0
 # SUSFS 管理器配置
 auto_load=1
 hide_sus_mnts=1
-anonymous_stats=1
+anonymous_stats=__KEEP_STATS__
 avc_spoof=1
 replace_rules=0
 hide_ksu_loop=0
@@ -1145,12 +1162,20 @@ EOF
 # 每行一个路径，调用 ksu_susfs add_try_umount <path> 1
 EOF
 
+        if [ "$_rd_ok" = "1" ]; then
+            sed -i "s/^anonymous_stats=__KEEP_STATS__$/anonymous_stats=$_rd_stats/" "$CONFIG/config.ini" 2>/dev/null
+        fi
+
         if [ "$_rd_ok" != "1" ]; then
             # 有文件写失败：备份还在，提示用户从备份恢复
             echo "failed: write (备份在 $(basename "$_rd_bak"))"
             exit 1
         fi
         rm -f "$MODDIR/disable_autoload"
+        # 备份只留最近 3 份，避免设备上堆一长串 config.bak.*
+        ls -1d "$MODDIR"/config.bak.* 2>/dev/null | sort | head -n -3 | while IFS= read -r _rb; do
+            rm -rf "$_rb" 2>/dev/null
+        done
         echo "reset"
         echo "backup=$_rd_bak"
         ;;

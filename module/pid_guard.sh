@@ -41,12 +41,63 @@ now_stamp() {
 loaded() { [ -d "$SYS_MOD/$MODNAME" ]; }
 conf_hash() { cksum "$CONF" 2>/dev/null | awk '{print $1 "-" $2}'; }
 
+# 规则命中多少个进程（只读 /proc，纯观测；用于让 status 有可核对的事实，
+# 而不是只报 ok —— audit-legacy2 MAJ-5）
+count_matched() {
+    _cm_n=0
+    [ -d /proc ] || { echo 0; return 0; }
+    for _cm_p in /proc/[0-9]*; do
+        _cm_pid=${_cm_p#/proc/}
+        _cm_uid=""
+        _cm_comm=""
+        read -r _cm_uid < "$_cm_p/status" 2>/dev/null
+        _cm_uid=${_cm_uid##*Uid:}
+        _cm_uid=${_cm_uid%%[!0-9]*}
+        [ -n "$_cm_uid" ] || continue
+        _cm_comm=$(cat "$_cm_p/comm" 2>/dev/null)
+        case ",$EXCLUDES," in
+            *",$_cm_comm,"*) continue ;;
+        esac
+        # UID 命中
+        _cm_hit=0
+        _cm_r=$UIDS
+        while [ -n "$_cm_r" ]; do
+            case "$_cm_r" in
+                *,*) _cm_t=${_cm_r%%,*}; _cm_r=${_cm_r#*,} ;;
+                *) _cm_t=$_cm_r; _cm_r="" ;;
+            esac
+            case "$_cm_t" in
+                *-*) _cm_lo=${_cm_t%%-*}; _cm_hi=${_cm_t##*-}
+                     [ "$_cm_uid" -ge "$_cm_lo" ] 2>/dev/null && [ "$_cm_uid" -le "$_cm_hi" ] 2>/dev/null && _cm_hit=1 ;;
+                '') ;;
+                *) [ "$_cm_uid" = "$_cm_t" ] && _cm_hit=1 ;;
+            esac
+            [ "$_cm_hit" = "1" ] && break
+        done
+        # comm 前缀命中（只支持尾部 *）
+        [ "$_cm_hit" = "0" ] && _cm_r=$COMMS
+        while [ "$_cm_hit" = "0" ] && [ -n "$_cm_r" ]; do
+            case "$_cm_r" in
+                *,*) _cm_t=${_cm_r%%,*}; _cm_r=${_cm_r#*,} ;;
+                *) _cm_t=$_cm_r; _cm_r="" ;;
+            esac
+            case "$_cm_t" in
+                *'*') _cm_pre=${_cm_t%'*'}; case "$_cm_comm" in "$_cm_pre"*) _cm_hit=1 ;; esac ;;
+                *) [ "$_cm_comm" = "$_cm_t" ] && _cm_hit=1 ;;
+            esac
+        done
+        [ "$_cm_hit" = "1" ] && _cm_n=$((_cm_n + 1))
+    done
+    echo "$_cm_n"
+}
+
 write_status() {
     {
         echo "result=$1"
         echo "kmi=${2:-}"
         echo "short=${3:-}"
         echo "rc=${4:-0}"
+        [ -n "${5:-}" ] && echo "matched=${5}"
         echo "ts=$(now_stamp)"
     } > "$STATE/pid_guard.status" 2>/dev/null
 }
@@ -126,6 +177,28 @@ pg_uids_ok() {
     return 0
 }
 
+# comm 通配只允许尾部一个 *（与 pid_guard_ctl.sh 的写入口校验保持同一套，audit-legacy2 MAJ-4）
+pg_comms_wildcard_ok() {
+    [ -n "$1" ] || return 0
+    _pw_r=$1
+    while :; do
+        case "$_pw_r" in
+            *,*) _pw_t=${_pw_r%%,*}; _pw_r=${_pw_r#*,} ;;
+            *) _pw_t=$_pw_r; _pw_r="" ;;
+        esac
+        case "$_pw_t" in
+            *'*'*)
+                _pw_rest=${_pw_t%'*'}
+                case "$_pw_rest" in
+                    ''|*'*'*) return 1 ;;
+                esac
+                ;;
+        esac
+        [ -n "$_pw_r" ] || break
+    done
+    return 0
+}
+
 [ -f "$CONF" ] || exit 0
 
 ENABLED=$(conf_get enabled)
@@ -142,6 +215,7 @@ case "$UIDS$EXCLUDES" in *'*'*) pg_reject "UID/排除项不允许 *" ;; esac
 case ",$COMMS," in
     *",*,"*|*",**,"*) pg_reject "目标 comm 的 * 只能作后缀，不能是裸 *" ;;
 esac
+pg_comms_wildcard_ok "$COMMS" || pg_reject "目标 comm 的 * 只能出现在末尾（前缀匹配）"
 [ -n "$UIDS$COMMS" ] || pg_reject "target_uids 与 target_comms 不能同时为空"
 
 if [ -n "$PG_BAD" ]; then
@@ -183,7 +257,7 @@ HASH=$(conf_hash)
 PREV=$(cat "$STATE/pid_guard.conf_hash" 2>/dev/null)
 if loaded && [ -n "$HASH" ] && [ "$HASH" = "$PREV" ]; then
     hide_self
-    write_status ok "$KMI_FULL" "$SHORT" 0
+    write_status ok "$KMI_FULL" "$SHORT" 0 "$(count_matched)"
     exit 0
 fi
 if loaded; then
@@ -223,5 +297,5 @@ echo "$HASH" > "$STATE/pid_guard.conf_hash" 2>/dev/null
 # 再打一遍日志里就是两行一模一样的内容
 log "[i] pid_guard 已加载（KMI $SHORT，参数已生效）"
 hide_self
-write_status ok "$KMI_FULL" "$SHORT" 0
+write_status ok "$KMI_FULL" "$SHORT" 0 "$(count_matched)"
 exit 0

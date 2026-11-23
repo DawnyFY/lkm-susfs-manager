@@ -229,15 +229,22 @@ echo "[i] 加载: $KO"
 : > "$STATE/loading"
 # 捕获加载输出：内核拒绝时需要给出可执行的诊断提示
 if command -v timeout >/dev/null 2>&1; then
-    _ins_out=$(timeout 12 "$MODDIR/bin/susfs_insmod" "$KO" expose_proc=1 2>&1); rc=$?
+    # -k 3：超时后 3 秒强杀，避免 load.sh 被外层 timeout 直接砍掉后留下 loading/boot_guard 残留
+    _ins_out=$(timeout -k 3 12 "$MODDIR/bin/susfs_insmod" "$KO" expose_proc=1 2>&1); rc=$?
 else
     _ins_out=$("$MODDIR/bin/susfs_insmod" "$KO" expose_proc=1 2>&1); rc=$?
 fi
 printf '%s\n' "$_ins_out"
 rm -f "$STATE/loading"
 if [ "$rc" != "0" ]; then
+    # 精确取 errno 数字再比较：子串匹配 "errno 1" 会把 10/11/12/13/14/17/19 全误判成 EPERM
+    # （EEXIST=17 就是常见的一种：模块已在，重新加载被拒）（audit-legacy2 MAJ-1）
+    _ins_errno=""
     case "$_ins_out" in
-        *"errno 1"*|*EPERM*)
+        *"errno "*) _ins_errno=${_ins_out##*errno }; _ins_errno=${_ins_errno%%[!0-9]*} ;;
+    esac
+    case "$_ins_errno:$_ins_out" in
+        1:*|*EPERM*)
             echo "[!] 内核拒绝加载模块（EPERM / Operation not permitted）"
             echo "    常见原因（按概率）:"
             echo "    1) /proc/sys/kernel/modules_disabled=1 —— 模块加载已被内核锁定"

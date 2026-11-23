@@ -54,9 +54,13 @@ REQUIRED = {
     "service.sh",
     "kmi.sh",
     "kmis",
-    "uninstall.sh",}
+    "uninstall.sh",
+    "config/config.ini.default",
+    "bin/susfs_insmod",
+    "bin/ksu_susfs_good",}
 EXEC_REQUIRED = {"load.sh", "apply.sh", "ctl.sh", "action.sh", "customize.sh", "service.sh",
-                 "pid_guard.sh", "pid_guard_ctl.sh"}
+                 "pid_guard.sh", "pid_guard_ctl.sh",
+                 "boot-completed.sh", "post-fs-data.sh", "uninstall.sh"}
 
 
 def _webui_fingerprint() -> str:

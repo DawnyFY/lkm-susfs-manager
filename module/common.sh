@@ -562,8 +562,11 @@ cfg_get() {
             "$_k="*) _v=${_line#*=} ;;
         esac
     done < "$_f"
-    # 去掉行内注释与尾随空白（空格 / TAB / CR）；有界循环 + 变化检测，避免空模式死循环
-    _v=${_v%%#*}
+    # 去掉行内注释与尾随空白（空格 / TAB / CR）；有界循环 + 变化检测，避免空模式死循环。
+    # 只剥「空白 + #」：uname 版本串本身就长这样（"#1 SMP PREEMPT"），按第一个 # 切会把值切空
+    case "$_v" in
+        *" #"*) _v=${_v%%" #"*} ;;
+    esac
     _i=0
     while [ "$_i" -lt 16 ]; do
         _i=$((_i + 1))
@@ -586,7 +589,8 @@ cfg_load() {
     _f="$CONFIG/config.ini"
     [ -f "$_f" ] || return 0
     # 一次 sed 去除行内注释/尾空白，避免每行 spawn 一个 sed（约 300ms）
-    _cfg_raw=$(sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//' "$_f" 2>/dev/null)
+    # 同样只剥「空白 + #」：否则 spoof_uname_version="#1 SMP PREEMPT" 会被切空（audit-legacy2 MAJ-2）
+    _cfg_raw=$(sed 's/[[:space:]]#.*$//; s/[[:space:]]*$//' "$_f" 2>/dev/null)
     while IFS= read -r _line || [ -n "$_line" ]; do
         case "$_line" in
             ""|"#"*) continue ;;

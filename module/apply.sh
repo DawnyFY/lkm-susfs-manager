@@ -786,7 +786,15 @@ if has_feature CONFIG_KSU_SUSFS_SPOOF_UNAME; then
         _r=${spoof_uname_release:-default}
         _v=${spoof_uname_version:-default}
         if "$BIN" set_uname "$_r" "$_v" >/dev/null 2>&1; then
-            echo "[i] uname 伪装已生效: $_r / $_v"
+            # 命令返回 0 不等于真的生效：回读 uname -r 核对（audit-legacy2 MAJ-2）
+            _un_r=$(uname -r 2>/dev/null)
+            if [ "$_r" != "default" ] && [ -n "$_r" ] && [ "$_un_r" != "$_r" ]; then
+                echo "[!] uname 伪装未生效：命令成功但 uname -r 仍为 $_un_r（要的是 $_r）"
+                _rule_fails=$((_rule_fails + 1))
+            else
+                echo "[i] uname 伪装已生效: $_r / $_v（uname -r=$_un_r）"
+                echo "[i] 注意：部分内核只伪装 uname -r，uname -v 可能仍是真实值"
+            fi
         else
             echo "[!] uname 伪装设置失败"
             _rule_fails=$((_rule_fails + 1))
@@ -960,6 +968,18 @@ backup_config
 
 # 9. WebUI 兼容标记 + 统计
 touch_marker
+
+# 9b. 关掉开关不会自动撤销旧规则：只在「配置确实变过 + replace_rules=0」时提示一次
+# （replace_rules=0 是只追加，用户以为关掉就没了）（audit-legacy2 MAJ-3）
+_cfg_digest=$( { cat "$CONFIG/config.ini" "$CONFIG/sus_path.txt" "$CONFIG/sus_path_loop.txt" \
+                    "$CONFIG/hide_modules.txt" 2>/dev/null; } | cksum 2>/dev/null | awk '{print $1"-"$2}')
+_dg_old=$(cat "$STATE/.cfg_digest" 2>/dev/null)
+if [ "$replace_rules" = "0" ] && [ -n "$_cfg_digest" ] && [ "$_cfg_digest" != "$_dg_old" ] \
+   && [ -s "$STATE/our_paths.txt" ]; then
+    echo "[i] 提示：replace_rules=0（只追加），关掉某个隐藏开关不会自动撤销内核里的旧规则"
+    echo "    本模块已记录 $(grep -c . "$STATE/our_paths.txt" 2>/dev/null) 条自己写入的规则；如需清理请把 replace_rules 设为 1"
+fi
+[ -n "$_cfg_digest" ] && printf '%s\n' "$_cfg_digest" > "$STATE/.cfg_digest" 2>/dev/null
 
 RULES=$(grep '^path=' /proc/susfs_path 2>/dev/null | grep -v '\[ours:' | sed 's/^path=//' | awk '{print $1}' | sort -u | wc -l | tr -d ' ')
 RULES=${RULES:-0}

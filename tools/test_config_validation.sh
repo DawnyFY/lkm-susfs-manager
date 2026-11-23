@@ -26,7 +26,11 @@ R=$(run_cfg "$(printf "fake_cmdline_value=ok \"x\"\n")")
 case "$R" in rejected:*) echo "PASS  fake_cmdline 拒绝引号" ;; *) echo "FAIL  fake_cmdline 拒绝引号 got=[$R]"; fail=1 ;; esac
 
 # 值内空白 / 命令 / 引号：source 时会被拆成"赋值 + 命令"
-chk "拒绝值内命令（空格）" "$(run_cfg "$(printf "spoof_uname_version=ok touch /tmp/PWNED\n")")" "rejected: line 1: whitespace in value"
+# spoof_uname_version 允许空白（uname 版本串形如 "#1 SMP PREEMPT"，audit-legacy2 MAJ-2），
+# 但命令注入必须仍然被元字符检查挡住
+chk "spoof_uname_version 允许空白" "$(run_cfg "$(printf 'spoof_uname_version=#1 SMP PREEMPT\n')")" "saved"
+chk "spoof_uname_version 仍拒绝 ;" "$(run_cfg "$(printf 'spoof_uname_version=ok;touch /tmp/PWNED\n')")" "rejected: line 1: shell metacharacter in value"
+chk "拒绝值内命令（空格）" "$(run_cfg "$(printf "auto_load=1 touch /tmp/PWNED\n")")" "rejected: line 1: whitespace in value"
 chk "拒绝行内多命令" "$(run_cfg "$(printf "auto_load=1 STATE=/tmp/x export STATE\n")")" "rejected: line 1: whitespace in value"
 R26=$(run_cfg "$(printf "manager_name=x\x27;id;\x27\n")")
 case "$R26" in rejected:*) echo "PASS  拒绝值内引号（不同 shell 文案不同）" ;; *) echo "FAIL  拒绝值内引号 got=[$R26]"; fail=1 ;; esac
