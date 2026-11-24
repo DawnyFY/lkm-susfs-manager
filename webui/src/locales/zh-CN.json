@@ -156,8 +156,6 @@
   "about.group.id": "群号",
   "about.group.join": "加入群聊",
   "about.group.desc": "使用问题、规则配置、日志排查都可以在群里问；Bug 与功能请求请走 GitHub Issues。",
-  "splash.eyebrow": "KERNEL · RULES · WEBUI",
-  "splash.skip": "轻触跳过",
   "wizard.title": "首次配置向导",
   "wizard.prev": "上一步",
   "wizard.next": "下一步",

@@ -33,10 +33,10 @@
 
 ## 1.3.0（待发布 · 2026-11-22）
 
-构建：13,210,109 B，sha256 `4a65f2904ea3c35acd69743196cce986f0269e8500357d97dce86c8c931a59a9`，manifest `fabc6f11…`。
-离线 **55/55**、Vitest **56/56**、门禁 **6/6**、`I18N_OK keys=199`；两次构建字节一致。
+构建：13,208,268 B，sha256 `b4777ac9856560a2336227f58b162d35465a01049a9a73a769ee0a8829424552`，manifest `417d27de…`。
+离线 **55/55**、Vitest **56/56**、门禁 **6/6**、`I18N_OK keys=197`；两次构建字节一致。
 
-- 首次配置向导（五步）与启动动画；`wizard.ts` 的 `buildWizardBundle()` 在规则未加载时抛错（audit B1）
+- 首次配置向导（五步）；`wizard.ts` 的 `buildWizardBundle()` 在规则未加载时抛错（audit B1）
 - `state/.lock.mutex` 按 mtime/pid 回收（audit B2）；AVC 开启时记录原值、关闭仅在"当前确为伪装值"时还原（audit M1/R2-1）
 - pstore 崩溃归属单次分类 + 递增窗口（512 KB → 4 MB → 全文件），解析不出触发行时标 `crash_evidence=unknown`（audit R2-2）
 - `withBusy` 改用任务计数，并发时 busy 不提前复位（audit R2-3）
