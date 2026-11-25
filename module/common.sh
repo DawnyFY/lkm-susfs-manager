@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: GPL-3.0-only
 # 共享的 root 管理器与 ksu_susfs 路径检测。
 # 兼容 KernelSU 官方版及 SukiSU / ReSukiSU / KernelSU Next 等分支，
 # 也兼容 APatch 的二进制目录（模块安装仍以 KernelSU 系列为主）。

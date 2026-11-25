@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: GPL-3.0-only
 # 开机早期：只负责加载 LKM，规则留到 boot-completed 再应用。
 MODDIR=/data/adb/modules/susfs_allinone
 . "$MODDIR/common.sh"

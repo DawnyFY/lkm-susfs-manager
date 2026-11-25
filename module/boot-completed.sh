@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: GPL-3.0-only
 # 开机完成：应用 sus_path / hide_modules 等规则（每次开机只执行一次）。
 MODDIR=/data/adb/modules/susfs_allinone
 . "$MODDIR/common.sh"

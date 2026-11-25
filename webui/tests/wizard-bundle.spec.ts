@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 // 向导写盘的回归（audit B1）：规则没加载成功时，绝不能生成"空规则"的 payload。
 import { describe, expect, it } from "vitest";
 import { assertRulesReady, buildWizardBundle, rulesReady } from "../src/wizard";

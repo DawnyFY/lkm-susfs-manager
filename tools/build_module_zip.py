@@ -67,7 +67,7 @@ def module_version() -> str:
     return match.group(1).strip() if match else "unknown"
 
 
-LEGAL_FILES = ("LICENSE", "LICENSE-AGPL-3.0", "NOTICE", "provenance.json")
+LEGAL_FILES = ("LICENSE", "LICENSE-GPL-2.0", "LICENSE-AGPL-3.0", "NOTICE", "provenance.json")
 
 
 def collect_files():

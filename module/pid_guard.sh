@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: GPL-3.0-only
 # Optional PID guard bundled with the SUSFS manager.
 # $1 is the KMI selected by load.sh (e.g. android15-6.6); do not guess.
 # 幂等：enabled=1 且已加载时只补隐藏；enabled=0 时主动卸载（不必重启）。

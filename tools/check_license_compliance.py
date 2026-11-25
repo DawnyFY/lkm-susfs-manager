@@ -33,9 +33,15 @@ def check(path: Path) -> list[str]:
         if not cond:
             gaps.append(msg)
 
-    need("LICENSE" in names, "缺少 LICENSE（GPL-2.0 全文）")
+    need("LICENSE" in names, "缺少 LICENSE（GPL-3.0 全文）")
     lic = z.read("LICENSE").decode("utf-8", "replace") if "LICENSE" in names else ""
-    need("GNU GENERAL PUBLIC LICENSE" in lic and "Version 2" in lic, "LICENSE 不是 GPLv2 全文")
+    need("GNU GENERAL PUBLIC LICENSE" in lic and "Version 3" in lic, "LICENSE 不是 GPLv3 全文")
+    need("LICENSE-GPL-2.0" in names, "缺少 LICENSE-GPL-2.0 全文（内核模块与上游 .ko 用）")
+    g2 = z.read("LICENSE-GPL-2.0").decode("utf-8", "replace") if "LICENSE-GPL-2.0" in names else ""
+    need("Version 2" in g2, "LICENSE-GPL-2.0 不是 GPLv2 全文")
+    notice = z.read("NOTICE").decode("utf-8", "replace") if "NOTICE" in names else ""
+    need("GPL-3.0-only" in notice, "NOTICE 未声明自有代码为 GPL-3.0-only")
+    need("分层许可" in notice or "layered" in notice.lower(), "NOTICE 未说明分层许可关系")
     need("LICENSE-AGPL-3.0" in names, "缺少 AGPL-3.0 全文（bundled ksu_susfs 为 sidex15/ksu_module_susfs, AGPL-3.0）")
     need("NOTICE" in names or "THIRD_PARTY.md" in names, "缺少 NOTICE/THIRD_PARTY 第三方声明")
 

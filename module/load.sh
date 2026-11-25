@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: GPL-3.0-only
 # 只负责按当前内核匹配并加载 SUSFS LKM，不应用规则。
 # 兼容 KernelSU 官方版及 SukiSU / ReSukiSU / KernelSU Next 等分支。
 MODDIR=/data/adb/modules/susfs_allinone

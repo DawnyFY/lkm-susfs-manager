@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: GPL-3.0-only
 # WebUI 后端：只接受白名单命令，所有操作以 root 身份执行。
 # 模块路径必须固定：不允许调用方用环境变量把配置写到模块目录以外
 MODDIR=/data/adb/modules/susfs_allinone

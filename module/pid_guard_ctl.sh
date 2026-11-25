@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: GPL-3.0-only
 # 读/写 config/pid_guard.conf。写入前先校验：pid_guard.sh 只按固定键解析该文件、
 # 不 source，这里挡在入口，避免把空格、裸 *、shell 元字符写进配置。
 # 无路径调用（sh pid_guard.sh）时 ${0%/*} 会退化成脚本名，这里兜底到模块目录

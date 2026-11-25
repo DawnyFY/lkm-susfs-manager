@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 // 向导的配置拼装逻辑抽成纯函数：可单测，且把「规则没加载成功」变成硬错误。
 // 背景（audit B1）：getBundle 失败时 rules 为 null，旧实现展开成 {} 后照旧写盘，
 // 线格式出现 7 个空段，ctl.sh 仍回 saved → 用户的规则文件被清空。

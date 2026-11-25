@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: GPL-3.0-only
 # 卸载钩子：KernelSU/Magisk 会删除模块目录本身，这里只清理模块在开机后
 # 可能残留在其它位置的运行痕迹，并尽量让内核侧规则回到"未隐藏"状态。
 # 不触碰 /data/adb/modules 下的其它模块。

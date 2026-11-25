@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: GPL-2.0-only -->
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import {

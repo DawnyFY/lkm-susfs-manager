@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: GPL-3.0-only
 # 不重启就把 modules_update 里已安装的新版本就地补齐到活动模块目录（临时 root 场景）。
 # 用法（root）：sh promote_pending_update.sh [模块id，默认 susfs_allinone]
 # 说明：只补运行期文件，config/ 与 state/ 保持用户现有内容；最后清掉 update 标记，

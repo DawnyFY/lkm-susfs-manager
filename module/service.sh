@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: GPL-3.0-only
 # Magisk 兼容入口：Magisk 没有 boot-completed，规则在 service（late_start）阶段应用。
 # KernelSU / APatch 仍走 boot-completed.sh，这里直接跳过，避免重复应用。
 MODDIR=/data/adb/modules/susfs_allinone

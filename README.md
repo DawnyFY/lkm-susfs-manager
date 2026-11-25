@@ -146,12 +146,22 @@ sh tools/build_webui.sh          # npm ci（首次）+ 类型检查 + vite build
 
 提交前请附 `load.log`、`apply.log`、`ctl.sh status`；APatch 反馈另附 KernelPatch 版本与 `allow_lkm` 状态。
 
-## 许可证
+## 许可证（1.3.1 起为分层许可）
 
-- 本项目脚本/安装器/WebUI：**GPL-2.0**（`LICENSE`）
-- 第三方二进制：`lib/susfs_guard_lkm-*.ko`、`bin/susfs_insmod`（GPL-2.0）、`bin/ksu_susfs_good`（AGPL-3.0）
-- 自研内核模块：`lib/pid_guard/<kmi>/generic_pid_guard.ko`（GPL-2.0），源码 `source/generic_pid_guard/`
-- 版权与许可证归原作者所有，详见 [上游关系与许可](docs/UPSTREAM.md)、`NOTICE`、`provenance.json`
+本发行包采用**分层许可**，各部分保持各自许可证，整体属聚合分发：
+
+| 部分 | 许可证 | 全文 |
+|---|---|---|
+| 本项目自有代码：脚本 / 安装器 / WebUI / tools | **GPL-3.0-only** | `LICENSE` |
+| 自研内核模块 `generic_pid_guard.ko` | GPL-2.0-only（受内核许可约束） | `LICENSE-GPL-2.0` |
+| 上游内核模块 `susfs_guard_lkm-*.ko`、`bin/susfs_insmod` | GPL-2.0（inforcqb / simonpunk） | `LICENSE-GPL-2.0` |
+| 上游用户态工具 `bin/ksu_susfs_good` | AGPL-3.0（sidex15） | `LICENSE-AGPL-3.0` |
+
+**为什么内核模块不跟随 GPLv3**：内核模块属于 Linux 内核（GPL-2.0-only）的衍生作品，
+必须与内核许可兼容；GPLv2-only 与 GPLv3 不兼容。因此本项目不对 `.ko` 再许可，
+也不以 GPLv3 名义分发它们。
+
+版权与许可证归原作者所有，详见 `NOTICE`、[上游关系与许可](docs/UPSTREAM.md)、`provenance.json`。
 
 ---
 

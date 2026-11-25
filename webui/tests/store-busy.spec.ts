@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 // withBusy 的回归：嵌套调用不能自锁。
 // 曾经的 bug：向导的「保存并应用」在 withBusy 里又调了一个包着 withBusy 的函数，
 // runSerial 是串行队列 → 内层等外层 → 自己等自己 → busy 永远 true（界面卡在"处理中"）。

@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: GPL-3.0-only
 # 安装脚本：KernelSU 系列（官方版 / SukiSU / ReSukiSU / KernelSU Next）、Magisk、APatch。
 # 开机阶段：KernelSU 系列与 APatch 都有 boot-completed，Magisk 只有 service（late_start）。
 # 注意：APatch 会把 MAGISK_VER_CODE 设成 27000，所以必须先认 APatch，否则会被误标成 Magisk。
