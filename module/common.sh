@@ -1972,3 +1972,124 @@ compat_check() {
     [ "${auto_try_umount:-0}" = "1" ] && [ "$_found" -gt 0 ] && echo "  · 存在其他隐藏模块时，auto_try_umount 建议关掉再排查"
     echo "  · 出现异常时的最快排查：replace_rules=0、auto_try_umount=0"
 }
+
+# ---- 加载失败诊断：errno 解释 + 共存模块冲突 ----
+# 只在加载失败时调用，可以慢一点；所有输入都留了环境变量缝，便于离线测试
+_LD_MODULES_DIR=${LD_MODULES_DIR:-/data/adb/modules}
+_LD_SELF=susfs_allinone
+
+errno_meaning() {
+    case "$1" in
+        1)  echo "EPERM（内核拒绝加载：modules_disabled / 强制签名 / lockdown）" ;;
+        12) echo "ENOMEM（内核内存不足）" ;;
+        13) echo "EACCES（权限不足，常见于 SELinux 或只读 /proc）" ;;
+        14) echo "EFAULT（模块镜像与内核结构不匹配：多半是 KMI/布局不对）" ;;
+        16) echo "EBUSY（模块正被占用或正在加载）" ;;
+        17) echo "EEXIST（同名模块已经在内核里）" ;;
+        22) echo "EINVAL（镜像头或参数非法）" ;;
+        38) echo "ENOSYS（内核没实现 finit_module）" ;;
+        61) echo "ENODATA（内核读不到模块数据：镜像被截断或缺签名信息）" ;;
+        *)  echo "" ;;
+    esac
+}
+
+# 列出「其它会加载内核模块的模块」：装了的、未停用的、且带 .ko 的
+list_lkm_modules() {
+    [ -d "$_LD_MODULES_DIR" ] || return 0
+    for _lm_d in "$_LD_MODULES_DIR"/*; do
+        [ -d "$_lm_d" ] || continue
+        _lm_n=$(basename "$_lm_d")
+        [ "$_lm_n" = "$_LD_SELF" ] && continue
+        [ -f "$_lm_d/disable" ] && continue
+        _lm_k=$(find "$_lm_d" -name '*.ko' 2>/dev/null | head -n 3 | sed "s#^$_lm_d/##" | tr '\n' ' ')
+        [ -n "$_lm_k" ] || continue
+        printf '%s|%s\n' "$_lm_n" "$_lm_k"
+    done
+}
+
+# 内核日志来源（可注入）
+_klog_read() {
+    if [ -n "${LD_KLOG_SRC:-}" ] && [ -r "${LD_KLOG_SRC}" ]; then
+        cat "$LD_KLOG_SRC" 2>/dev/null
+    else
+        dmesg 2>/dev/null
+    fi
+}
+
+diag_load_failure() {
+    _dl_errno=${1:-}
+    echo "[i] ---- 加载失败诊断 ----"
+    _dl_mean=$(errno_meaning "$_dl_errno")
+    [ -n "$_dl_mean" ] && echo "[i] errno $_dl_errno = $_dl_mean"
+
+    # 1) 内核里已经有的相关模块（EEXIST/EBUSY 的头号原因）
+    _dl_loaded=""
+    # 优先看 /sys/module：hide_modules 只过滤 /proc/modules 与 kallsyms，/sys/module 仍可见。
+    # 否则在开了隐藏的设备上，这条诊断永远"看不见冲突"（真机验证过：/proc/modules 0 条，/sys/module 有）
+    _dl_sysmod=${LD_SYS_MODULE_DIR:-/sys/module}
+    if [ -d "$_dl_sysmod" ]; then
+        _dl_loaded=$(ls "$_dl_sysmod" 2>/dev/null \
+            | grep -E '^(susfs|kernelsu|ksu|kpatch|apatch|generic_pid_guard)' \
+            | head -n 6 | tr '\n' ' ')
+    fi
+    if [ -z "$_dl_loaded" ] && [ -r "${LD_PROC_MODULES:-/proc/modules}" ]; then
+        _dl_loaded=$(grep -E '^(susfs|kernelsu|ksu|kpatch|apatch|generic_pid_guard|kernelsu_next)' \
+            "${LD_PROC_MODULES:-/proc/modules}" 2>/dev/null | awk '{print $1"(used=" $3 ")"}' | head -n 6 | tr '\n' ' ')
+    fi
+    if [ -n "$_dl_loaded" ]; then
+        echo "[i] 内核里已有相关模块（来自 /sys/module；/proc/modules 可能被隐藏）: $_dl_loaded"
+        case "$_dl_errno" in
+            17|16) echo "    [!] 这与 errno 17/16 一致：大概率是别的模块/上次的自己已经把同名模块加载了" ;;
+        esac
+    fi
+
+    # 2) 其它会加载内核模块的模块
+    _dl_others=$(list_lkm_modules)
+    if [ -n "$_dl_others" ]; then
+        echo "[!] 同时装了会加载内核模块的模块（可能互相冲突）:"
+        printf '%s\n' "$_dl_others" | while IFS='|' read -r _dl_n _dl_k; do
+            echo "    - $_dl_n : $_dl_k"
+        done
+        echo "    [i] 建议：在管理器里先停用上面这些模块，单独验证本模块能否加载；"
+        echo "        如果能加载，说明是共存冲突（它们先占用了符号或先加载了同类模块）"
+    fi
+
+    # 3) 是否有别的进程正在 insmod（并发加载）
+    _dl_busy=""
+    for _dl_c in /proc/[0-9]*/comm; do
+        _dl_v=$(cat "$_dl_c" 2>/dev/null)
+        case "$_dl_v" in
+            insmod|ksud|susfs_insmod) _dl_pid=${_dl_c#/proc/}; _dl_busy="$_dl_busy ${_dl_pid%/*}" ;;
+        esac
+    done
+    if [ -n "$_dl_busy" ]; then
+        echo "[!] 检测到其它进程正在加载模块（并发 insmod/ksud）:$ _dl_busy"
+        echo "    [i] 建议：等它结束再重试；开机阶段多个模块同时 insmod 容易撞 EBUSY/EEXIST"
+    fi
+
+    # 4) 内核日志里的关键行（真正的原因通常只在这里）
+    _dl_log=$(_klog_read | tail -n 400 | grep -Ei \
+        "unknown symbol|disagrees about version|module verification failed|key was rejected|exec format error|version magic|no symbol version|invalid module format|module layout" \
+        | tail -n 6)
+    if [ -n "$_dl_log" ]; then
+        echo "[!] 内核日志关键行:"
+        printf '%s\n' "$_dl_log" | sed 's/^/    /'
+        case "$_dl_log" in
+            *"disagrees about version"*|*"no symbol version"*)
+                echo "    [i] 说明：符号版本对不上 —— KMI 选错了或内核开了 CONFIG_MODVERSIONS，换相邻 KMI 试" ;;
+            *"unknown symbol"*)
+                echo "    [i] 说明：内核缺少该符号（多半是 KMI 不匹配或厂商改过内核）" ;;
+            *"module verification failed"*|*"Key was rejected"*)
+                echo "    [i] 说明：模块签名校验失败（内核开了强制签名）" ;;
+            *"exec format error"*|*"invalid module format"*)
+                echo "    [i] 说明：镜像格式/架构不符（KMI 或 arm64 目标不对）" ;;
+        esac
+    fi
+
+    # 5) 收集建议
+    echo "[i] 建议一并提供的诊断信息:"
+    echo "    uname -r、cat /proc/sys/kernel/modules_disabled 2>/dev/null"
+    echo "    ls /data/adb/modules（看还有哪些模块在加载 .ko）"
+    echo "    sh ctl.sh kmiinfo（含 suggest_kmi 建议值）"
+    return 0
+}

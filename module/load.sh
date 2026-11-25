@@ -172,6 +172,19 @@ fi
 
 restore_config_if_missing
 
+# 共存提示：内核里已有同族模块时，本次加载大概率撞 EEXIST/EBUSY。
+# 这里只提示不阻断 —— 有些设备是「别的模块先加载了同类 LKM」，我们要照常尝试并在失败时给出诊断。
+# 优先 /sys/module：本模块自己会隐藏 /proc/modules 里的条目，否则这个提示永远是空的
+_dl_prev=$(ls /sys/module 2>/dev/null | grep -E '^(susfs|kernelsu|ksu|kpatch|apatch|generic_pid_guard)' | head -n 6 | tr '\n' ' ')
+if [ -z "$_dl_prev" ]; then
+    _dl_prev=$(grep -E '^(susfs|kernelsu|ksu|kpatch|apatch|generic_pid_guard)' /proc/modules 2>/dev/null \
+        | awk '{print $1"(" $3 ")"}' | head -n 6 | tr '\n' ' ')
+fi
+if [ -n "$_dl_prev" ]; then
+    echo "[i] 注意：内核里已有相关模块：$_dl_prev"
+    echo "    若这些是别的模块加载的，本次加载可能失败（EEXIST/EBUSY）；失败时会打印共存诊断"
+fi
+
 # 用真实内核选 KMI：/proc/sys/kernel/osrelease 可能被本模块的 uname 伪装改写，
 # 直接拿它匹配会在伪装开启时选错 .ko（例如 6.12 内核选成 android15-6.6）。
 REL=$(real_kernel_release 2>/dev/null)
@@ -287,7 +300,12 @@ if [ "$rc" != "0" ]; then
             ;;
     esac
     if [ "$rc" != "0" ]; then
-        fail "$(susfs_hint insmod) (rc=$rc)"
+        # 共存/冲突诊断：其它加载内核模块的模块、并发 insmod、内核日志关键行
+        # （用户反馈：只看到「加载内核失败」，看不出是不是跟别的模块打架）
+        diag_load_failure "$_ins_errno"
+        _dl_hint=""
+        _dl_hint=$(errno_meaning "$_ins_errno")
+        fail "$(susfs_hint insmod)（errno ${_ins_errno:-?}${_dl_hint:+ · $_dl_hint}）(rc=$rc)"
     fi
 fi
 
