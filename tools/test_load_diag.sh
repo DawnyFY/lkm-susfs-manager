@@ -63,6 +63,16 @@ chk "sys/module 优先发现已有模块" "$(has x "$outsys" "susfs_guard_lkm")"
 chk "sys/module 过滤无关模块" "$(has x "$outsys" "not_related")" "no"
 chk "说明 /proc/modules 可能被隐藏" "$(has x "$outsys" "可能被隐藏")" "yes"
 
+# errno 61：应指向签名并给出实测检查（可注入 config.gz 文本）
+CONF="$TMP/config.txt"
+printf 'CONFIG_MODULES=y
+CONFIG_MODULE_SIG=y
+CONFIG_MODULE_SIG_FORCE=y
+' > "$CONF"
+out61=$(MODDIR="$TMP" LD_MODULES_DIR="$EMPTY" LD_KLOG_SRC=/dev/null LD_PROC_MODULES=/dev/null         LD_SYS_MODULE_DIR="$EMPTY"         sh -c '. "'"$REPO"'/common.sh" >/dev/null 2>&1; _dl_gz=/dev/null; errno_meaning 61' 2>&1)
+chk "errno 61 指向签名" "$(has x "$out61" "SIG_FORCE")" "yes"
+chk "errno 61 提到验签失败" "$(has x "$out61" "验签")" "yes"
+
 rm -rf "$TMP"
 [ "$fail" = 0 ] && echo "ALL PASS" || echo "HAS FAILURE"
 exit "$fail"

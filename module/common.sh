@@ -516,6 +516,15 @@ kernel_load_preflight() {
             esac
             # MODULE_SIG_FORCE 是否真的拒载取决于管理器/内核实现，预检无法判断，
             # 不在这里硬拒绝；由 loader 的实际返回值和 boot guard 处理。
+            # 但据服务器日志，5.15.194 等内核上的失败正是 errno 61（验签失败），
+            # 所以这里给出明确预告，避免日志里只剩「加载内核失败」。
+            case "$_klp_cfg" in
+                *CONFIG_MODULE_SIG_FORCE=y*)
+                    echo "[!] 该内核开启了强制模块签名（CONFIG_MODULE_SIG_FORCE=y）"
+                    echo "    未签名的 SUSFS LKM 大概率加载失败（表现多为 errno 61 或 1）"
+                    echo "    若失败，只能改用内核内置 SUSFS 的内核，或在自编内核里关掉该选项"
+                    ;;
+            esac
         fi
     fi
     return 0
@@ -1988,7 +1997,7 @@ errno_meaning() {
         17) echo "EEXIST（同名模块已经在内核里）" ;;
         22) echo "EINVAL（镜像头或参数非法）" ;;
         38) echo "ENOSYS（内核没实现 finit_module）" ;;
-        61) echo "ENODATA（内核读不到模块数据：镜像被截断或缺签名信息）" ;;
+        61) echo "ENODATA（内核侧模块验签失败/缺签名：多半开了 CONFIG_MODULE_SIG_FORCE）" ;;
         *)  echo "" ;;
     esac
 }
@@ -2085,6 +2094,33 @@ diag_load_failure() {
                 echo "    [i] 说明：镜像格式/架构不符（KMI 或 arm64 目标不对）" ;;
         esac
     fi
+
+    # 4b) 内核加载限制实测（errno 61/1 最相关：验签失败 / 禁载）
+    case "$_dl_errno" in
+        1|61)
+            _dl_msd=$(cat /proc/sys/kernel/modules_disabled 2>/dev/null)
+            [ -n "$_dl_msd" ] && echo "[i] modules_disabled=$_dl_msd"
+            if [ -r /sys/kernel/security/lockdown ]; then
+                echo "[i] lockdown=$(cat /sys/kernel/security/lockdown 2>/dev/null)"
+            fi
+            _dl_gz=${LD_CONFIG_GZ:-/proc/config.gz}
+            if [ -r "$_dl_gz" ] && command -v zcat >/dev/null 2>&1; then
+                _dl_sig=$(zcat "$_dl_gz" 2>/dev/null | grep -E '^CONFIG_MODULE_SIG(_FORCE|_ALL)?=|^CONFIG_MODULES=' | tr '
+' ' ')
+                if [ -n "$_dl_sig" ]; then
+                    echo "[i] 内核配置: $_dl_sig"
+                    case "$_dl_sig" in
+                        *CONFIG_MODULE_SIG_FORCE=y*)
+                            echo "    [!] 该内核强制模块签名：未签名的第三方 LKM 无法加载"
+                            echo "        只能改用「内核内置 SUSFS」的内核，或在自编内核里关掉 CONFIG_MODULE_SIG_FORCE"
+                            ;;
+                    esac
+                fi
+            else
+                echo "[i] 读不到 /proc/config.gz，无法直接确认签名配置（可用自编内核的 .config 对照）"
+            fi
+            ;;
+    esac
 
     # 5) 收集建议
     echo "[i] 建议一并提供的诊断信息:"
