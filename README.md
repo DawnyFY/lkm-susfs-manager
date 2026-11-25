@@ -116,7 +116,7 @@ sh tools/build_webui.sh          # npm ci（首次）+ 类型检查 + vite build
 |---|---|
 | [安装与卸载](docs/INSTALL.md) | KSU / Magisk / APatch 安装、升级、回滚 |
 | [APatch 实验性支持](docs/APATCH.md) | 已验证/未验证范围、放行步骤、风险 |
-| [KMI 匹配](docs/KMI.md) | KMI 表、dirty 内核、强制指定、排错 |
+| [KMI 匹配](docs/KMI.md) | KMI 表（含社区分布与未覆盖内核）、dirty 内核、强制指定、排错 |
 | [配置与 WebUI](docs/CONFIG.md) | `config.ini`、规则文件、WebUI 页面 |
 | [常见问题](docs/FAQ.md) | 加载失败、APatch 卡片、Magisk、Zygisk |
 | [验证记录与限制](docs/VERIFICATION.md) | 真机/QEMU/离线记录、已知限制 |
@@ -128,7 +128,11 @@ sh tools/build_webui.sh          # npm ci（首次）+ 类型检查 + vite build
 
 - KSU 系：1.2.4 冷启动加载 r18.9（3,101,664 B / 116 symbols），规则/完整性正常；热重启后 LSPosed 保持 connected。
 - QEMU GKI：SUSFS LKM 加载/隐藏/恢复；模块级 APatch 路径 14/14。
-- 离线：35/35 测试通过。
+- 离线：55/55 测试通过、前端 56/56、门禁 6/6。
+- KMI 覆盖：8 个 KMI 中仅 `android15-6.6` 做过真机冷启动验证；其余 7 套只做编译 + QEMU/离线。
+- 社区分布（匿名统计，2026-11-25：437 次安装 / 135 种内核串）：**91% 的安装落在已打包的 8 个 KMI 内**，
+  其余 22 种内核串（35 次）匹配不到，其中 4 种是 4.x/5.4 旧内核（不支持）。
+  逐项清单与处理方式见 [KMI 匹配 · 未覆盖内核](docs/KMI.md#未覆盖内核社区实测分布2026-11-25)。
 - 未验证：Magisk 真机冷启动、APatch 真机全链路、其余 7 个 KMI。
 - PID Guard：真机仅 6.6.77 验证装载 / 隐藏 / 参数即时重载 / 关闭卸载；其余 5 套 KMI 只编译未运行。
 - `sus_path` 目录重建：1.2.7 起普通规则也按 inode 比对，下次 apply 会撤销旧规则并按新 inode 重加；即时恢复仍需内核事件钩子（原型未合并）。

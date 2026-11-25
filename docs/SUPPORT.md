@@ -39,3 +39,9 @@ APatch 反馈额外附：
 - `kernelpatch_kernel` / `allow_lkm` 状态；
 - 是否内核已内置 SUSFS；
 - 是否使用 APatch Manager 安装。
+
+## 内核兼容性反馈
+
+如果某个内核匹配不到 KMI、或你想报告某个 KMI 在你的机型上跑通了，请用
+[「内核兼容性反馈（KMI）」](../../issues/new?template=kmi_compatibility.yml) 模板，
+结论会补进 [KMI 匹配](KMI.md) 的支持表。

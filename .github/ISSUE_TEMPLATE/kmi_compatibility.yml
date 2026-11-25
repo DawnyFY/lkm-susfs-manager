@@ -1,0 +1,84 @@
+name: 内核兼容性反馈（KMI）
+description: 报告某个内核 KMI 能否正常加载 / 需要强制指定哪一个（用于补全 docs/KMI.md 的兼容表）
+title: "[KMI] "
+labels: ["kmi", "compatibility"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        这个模板用来收集**内核与 KMI 的对应关系**，结论会补进 [docs/KMI.md](../blob/main/docs/KMI.md) 的支持表。
+
+        目前只有 `android15-6.6` 做过真机冷启动验证，其余 7 套 KMI 只做了编译与 QEMU/离线验证。
+        如果你在别的 KMI 上跑通了（或明确跑不通），这里就是记录的地方。
+
+  - type: input
+    id: kernel
+    attributes:
+      label: 内核串（uname -r 的完整输出）
+      placeholder: 5.15.149-g646109032ca3-dirty
+    validations:
+      required: true
+
+  - type: input
+    id: android
+    attributes:
+      label: 系统版本与机型
+      placeholder: Android 14 / 某机型
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kmi
+    attributes:
+      label: 实际使用的 KMI
+      description: 自动匹配的结果，或你手动「强制指定 KMI」时填的值
+      options:
+        - android12-5.10
+        - android13-5.10
+        - android13-5.15
+        - android14-5.15
+        - android14-6.1
+        - android15-6.6
+        - android16-6.12
+        - android17-6.18
+        - 以上都不匹配（自动匹配失败）
+    validations:
+      required: true
+
+  - type: dropdown
+    id: result
+    attributes:
+      label: 结果
+      options:
+        - 加载成功，规则正常下发
+        - 加载成功但部分规则失败
+        - 加载失败（init_module 返回 errno）
+        - 未尝试
+    validations:
+      required: true
+
+  - type: textarea
+    id: loadlog
+    attributes:
+      label: load.log（关键片段）
+      description: "至少包含 susfs_insmod 的 resolved N/116 行，以及 init_module failed: errno 行（如果有）"
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: kmiinfo
+    attributes:
+      label: ctl.sh kmiinfo 输出
+      description: "在模块目录执行 sh ctl.sh kmiinfo，把输出贴在这里（含 suggest_kmi 的建议值）"
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: ack
+    attributes:
+      label: 确认
+      options:
+        - label: 已确认使用的是官方包（GitHub Releases 或 susfs.stdawns.top），未使用二次打包版本
+          required: true
