@@ -167,6 +167,7 @@ for _j in /data/local/tmp/.susfs_probe_dir /data/local/tmp/.susfs_cap_probe /dat
 done
 
 _rule_fails=0
+_rule_missing=0
 
 # 1. 确保内核侧 SUSFS：LKM 已加载，或内核已内置（内置时无需也无法再加载）
 if ! susfs_kernel_ready; then
@@ -477,6 +478,12 @@ if [ -f "$CONFIG/sus_path.txt" ]; then
         fi
         if [ "$_sp_present" = "1" ]; then
             echo "[=] sus_path $path (已存在)"
+        elif [ ! -e "$path" ]; then
+            # 路径不存在：内核必然拒绝，但这属于「用户配置里的失效条目」，
+            # 不该计入规则失败 —— 服务器日志里有用户因此累积到 70 条失败，
+            # 真正需要看到的是「这些路径不存在」这一条信息（audit 现场：游戏反作弊临时文件）
+            echo "[i] sus_path $path (路径不存在，跳过；临时路径请改用 sus_path_loop.txt)"
+            _rule_missing=$((_rule_missing + 1))
         elif "$BIN" add_sus_path "$path" >/dev/null 2>&1; then
             record_our_path "$path"
             echo "[+] sus_path $path"
@@ -990,9 +997,14 @@ printf '%s\n' "${_rule_fails:-0}" > "$STATE/apply_fails" 2>/dev/null
 # 可选组件，成败不影响本次 apply 的结果（自己写 state/pid_guard.status）
 sh "$MODDIR/pid_guard.sh" "$KMI" >/dev/null 2>&1 || true
 
+if [ "${_rule_missing:-0}" -gt 0 ] 2>/dev/null; then
+    echo "[i] 另有 $_rule_missing 条规则的目标路径不存在，已跳过（不算失败）"
+    echo "    临时/可能不存在的路径请改用 sus_path_loop.txt，它会在路径出现后自动隐藏"
+fi
+
 if [ "${_rule_fails:-0}" -gt 0 ] 2>/dev/null; then
     echo "[!] 本次有 $_rule_fails 条规则下发失败，详见 apply.log"
-    set_description "⚠️ 运行中 | $RULES 条规则 | $KMI | $_rule_fails 条失败（见 apply.log）"
+    set_description "⚠️ 运行中 | $RULES 条规则 | $KMI | $_rule_fails 条失败${_rule_missing:+（另有 $_rule_missing 条路径不存在）}（见 apply.log）"
     echo "=== apply done with warnings ==="
     _set_apply_result partial
     # 5 = 已执行但部分规则失败：调用方可视为"本 boot 已完成"，不能当全部成功
