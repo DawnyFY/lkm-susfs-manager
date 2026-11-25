@@ -19,7 +19,7 @@ chk "描述里带不存在计数" "$(grep -c '另有 \$_rule_missing 条路径�
 # 行为断言：把 apply.sh 里这段循环原样抽出来跑（函数与变量从 apply.sh 里取）
 TMP=$(mktemp -d)
 mkdir -p "$TMP/config" "$TMP/state"
-printf '/data/definitely-not-exist-xyz\n/storage/emulated/0/Android/data/com.tencent.tmgp.cf/files/ano_tmp\n/data/adb\n' > "$TMP/config/sus_path.txt"
+printf '/data/definitely-not-exist-xyz\n/storage/emulated/0/Android/data/com.tencent.tmgp.cf/files/ano_tmp\n/\n' > "$TMP/config/sus_path.txt"
 
 # 抽出 clean_entry 函数体
 sed -n '/^clean_entry() {/,/^}/p' "$A" > "$TMP/clean.sh"
