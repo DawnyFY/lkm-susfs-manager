@@ -58,4 +58,15 @@ susfs_insmod: init_module failed: errno 61
 - 真机（6.6.77 / KernelSU）：诊断链路实测通过；
   本机 `CONFIG_MODULE_SIG=y` 但无 `FORCE`，所以加载正常 —— 正好验证了判定条件
 
-产物 13,224,574 B / `b98cd81d738955a5bef21a168947aac17787c0c69667602db419aef7bf85523e` / manifest `1f673976…`（40 文件）
+产物 13,224,863 B / `aee0fbe94ade4632db8cd246691bbf00e557f93acb834879fc1abe43427f5585` / manifest `1f673976…`（40 文件）
+
+## 附带：sus_path 里「不存在的路径」不再计入规则失败
+
+服务器日志里出现「30 条规则 / 70 条失败」这类状态：用户把游戏反作弊的临时文件写进
+sus_path，路径本来就不存在，于是每次 apply 都记一次失败、逐日累积。
+
+现在这类条目单独计数并提示：
+
+
+
+apply 结果不再因此降级为 partial；真有内核拒绝时仍会照常报失败。
