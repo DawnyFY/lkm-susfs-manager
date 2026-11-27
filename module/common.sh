@@ -2129,3 +2129,39 @@ diag_load_failure() {
     echo "    sh ctl.sh kmiinfo（含 suggest_kmi 建议值）"
     return 0
 }
+
+# ---- 第三级回退：不依赖 ksu_susfs，直接写 /proc/susfs_* 节点 ----
+# 场景：管理器自带的 ksu_susfs 与本内核 ABI 不符、模块备份也跑不起来，
+# 但内核侧节点仍可用。此时规则仍应能下发，只是部分能力（loop / uname 伪装 /
+# try_umount）没有节点接口，会明确提示不支持。
+SUSFS_NODE_ONLY=${SUSFS_NODE_ONLY:-0}
+
+susfs_node_ready() {
+    _snr_node=${SUSFS_PATH_NODE:-/proc/susfs_path}
+    [ -e "$_snr_node" ]
+}
+
+# 添加 sus_path：先走 ksu_susfs 命令，失败再直接写节点并回读校验
+susfs_path_add() {
+    _sap_p=$1
+    [ -n "$_sap_p" ] || return 1
+    if [ -n "${BIN:-}" ] && [ -x "${BIN:-}" ] && "$BIN" add_sus_path "$_sap_p" >/dev/null 2>&1; then
+        return 0
+    fi
+    _sap_node=${SUSFS_PATH_NODE:-/proc/susfs_path}
+    [ -e "$_sap_node" ] || return 1
+    printf 'add %s\n' "$_sap_p" >> "$_sap_node" 2>/dev/null || return 1
+    # 真内核会渲染成 path=<p> ...；离线夹具里写入行原样保留，两种都算成功
+    grep -F -q "path=$_sap_p " "$_sap_node" 2>/dev/null || grep -Fxq "add $_sap_p" "$_sap_node" 2>/dev/null
+}
+
+# AVC 伪装：节点通道（CLI 与 LKM 参数都不可用时的最后一条路）
+susfs_avc_node_set() {
+    _san_v=$1
+    _san_node=${SUSFS_AVC_NODE:-/proc/susfs_avc_spoof}
+    [ -e "$_san_node" ] || return 1
+    printf '%s\n' "$_san_v" > "$_san_node" 2>/dev/null || return 1
+    _san_now=$(cat "$_san_node" 2>/dev/null)
+    _san_now=${_san_now%% *}
+    [ "$_san_now" = "$_san_v" ]
+}

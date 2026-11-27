@@ -217,9 +217,25 @@ if [ "$(susfs_kernel_kind)" = "builtin" ]; then
 fi
 
 # 2. 选择可用的 ksu_susfs：优先当前管理器/分支自带，失败回退模块备份
-BIN=$(select_susfs_bin) || { echo "[!] 缺少 ksu_susfs"; set_description "❌ $(susfs_hint missing)"; _set_apply_result failed; exit 1; }
-echo "[i] ksu_susfs: $BIN"
-VARIANT=$("$BIN" show variant 2>/dev/null)
+NODE_ONLY=0
+if BIN=$(select_susfs_bin); then
+    echo "[i] ksu_susfs: $BIN"
+elif susfs_node_ready; then
+    # 第三级回退：没有可用的 ksu_susfs，但内核节点还在 → 直接写节点下发规则
+    echo "[!] 未找到可用的 ksu_susfs，改用 /proc/susfs_* 节点直接下发"
+    echo "[i] 节点后端支持：sus_path / hide_mounts / sus_map / hide_modules；"
+    echo "    不支持：sus_path_loop / uname 伪装 / try_umount（这些需要 ioctl，节点没有接口）"
+    NODE_ONLY=1
+    BIN=""
+    USES_NODE=1
+else
+    echo "[!] 缺少 ksu_susfs"
+    set_description "❌ $(susfs_hint missing)"
+    _set_apply_result failed
+    exit 1
+fi
+VARIANT=""
+[ "$NODE_ONLY" = "1" ] || VARIANT=$("$BIN" show variant 2>/dev/null)
 if [ -z "$VARIANT" ] && ! susfs_bin_runnable "$BIN"; then
     echo "[!] 当前 ksu_susfs 无法执行（可能是架构不符或文件损坏）: $BIN"
     echo "[i] 建议重装管理器，或让模块改用内置备份（apply 会自动回退）"
@@ -229,7 +245,9 @@ if [ -z "$VARIANT" ] && [ -x "$MODDIR/bin/ksu_susfs_good" ] && [ "$BIN" != "$MOD
     BIN="$MODDIR/bin/ksu_susfs_good"
     VARIANT=$("$BIN" show variant 2>/dev/null)
 fi
-[ -n "$VARIANT" ] || { echo "[!] ksu_susfs 无法与内核通信"; set_description "❌ $(susfs_hint comm)"; _set_apply_result failed; exit 1; }
+if [ "$NODE_ONLY" != "1" ]; then
+    [ -n "$VARIANT" ] || { echo "[!] ksu_susfs 无法与内核通信"; set_description "❌ $(susfs_hint comm)"; _set_apply_result failed; exit 1; }
+fi
 # 回退到模块备份二进制时，它可能比 LKM 旧：缺 avc_log_spoofing / set_sdcard_root_path /
 # try_umount 等新命令，现象很像「内核不支持」。这里把真实原因说出来，避免误判。
 USING_BACKUP_BIN=0
@@ -323,8 +341,10 @@ if has_feature CONFIG_KSU_SUSFS_AVC_LOG_SPOOFING || [ -e /proc/susfs_avc_spoof ]
                 echo "[!] avc_log_spoofing 无法开启：CLI 无该命令，参数写入被拒绝"
                 : > "$STATE/avc_unsupported" 2>/dev/null
             fi
+        elif susfs_avc_node_set 1; then
+            echo "[i] avc_log_spoofing=1（经 /proc/susfs_avc_spoof 节点）"
         else
-            echo "[!] avc_log_spoofing 不可用：CLI 无该命令，LKM 也未暴露 avc_su_ctx 参数"
+            echo "[!] avc_log_spoofing 不可用：CLI 无该命令，LKM 未暴露 avc_su_ctx，节点也不可用"
             : > "$STATE/avc_unsupported" 2>/dev/null
         fi
     else
@@ -484,7 +504,7 @@ if [ -f "$CONFIG/sus_path.txt" ]; then
             # 真正需要看到的是「这些路径不存在」这一条信息（audit 现场：游戏反作弊临时文件）
             echo "[i] sus_path $path (路径不存在，跳过；临时路径请改用 sus_path_loop.txt)"
             _rule_missing=$((_rule_missing + 1))
-        elif "$BIN" add_sus_path "$path" >/dev/null 2>&1; then
+        elif susfs_path_add "$path"; then
             record_our_path "$path"
             echo "[+] sus_path $path"
         else
@@ -612,7 +632,7 @@ add_sus_path_safe() {
     fi
     if grep -F -q "path=$_p " /proc/susfs_path 2>/dev/null; then
         echo "[=] sus_path $_p (已存在)"
-    elif "$BIN" add_sus_path "$_p" >/dev/null 2>&1; then
+    elif susfs_path_add "$_p"; then
         record_our_path "$_p"
         echo "[+] sus_path $_p"
     else

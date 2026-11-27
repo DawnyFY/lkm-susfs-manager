@@ -139,7 +139,16 @@ fi
 if susfs_kernel_ready; then
     rm -f "$STATE/loading"
     echo "[i] 内核侧 SUSFS 已就绪（$(susfs_kernel_kind)），跳过 LKM 加载"
-    BIN=$(select_susfs_bin) || fail "$(susfs_hint missing)（模块内也没有备份）"
+    if ! BIN=$(select_susfs_bin); then
+    if susfs_node_ready; then
+        echo "[!] 未找到可用的 ksu_susfs，改用 /proc/susfs_* 节点（部分能力不可用）"
+        BIN=""
+        VERSION="node-only"
+        SUSFS_NODE_ONLY=1
+    else
+        fail "$(susfs_hint missing)（模块内也没有备份）"
+    fi
+fi
     echo "[i] 使用: $BIN"
     VERSION=$("$BIN" show version 2>/dev/null)
     if [ -z "$VERSION" ]; then
@@ -309,7 +318,16 @@ if [ "$rc" != "0" ]; then
     fi
 fi
 
-BIN=$(select_susfs_bin) || fail "$(susfs_hint missing)（模块内也没有备份）"
+if ! BIN=$(select_susfs_bin); then
+    if susfs_node_ready; then
+        echo "[!] 未找到可用的 ksu_susfs，改用 /proc/susfs_* 节点（部分能力不可用）"
+        BIN=""
+        VERSION="node-only"
+        SUSFS_NODE_ONLY=1
+    else
+        fail "$(susfs_hint missing)（模块内也没有备份）"
+    fi
+fi
 echo "[i] 使用: $BIN"
 VARIANT=$("$BIN" show variant 2>/dev/null)
 if [ -z "$VARIANT" ] && [ -x "$MODDIR/bin/ksu_susfs_good" ] && [ "$BIN" != "$MODDIR/bin/ksu_susfs_good" ]; then
