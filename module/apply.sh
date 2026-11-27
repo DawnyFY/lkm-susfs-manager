@@ -1030,7 +1030,17 @@ if [ "${_rule_fails:-0}" -gt 0 ] 2>/dev/null; then
     # 5 = 已执行但部分规则失败：调用方可视为"本 boot 已完成"，不能当全部成功
     exit 5
 fi
-set_description "✅ 运行中 | $RULES 条规则 | $KMI | ${VERSION:-unknown}"
+if [ "${RULES:-0}" = "0" ] && [ "${_rule_missing:-0}" -gt 0 ] 2>/dev/null; then
+    echo "[!] 没有任何规则被下发（$_rule_missing 条路径不存在），判为 partial"
+    set_description "⚠️ 运行中 | 0 条规则 | $KMI | $_rule_missing 条路径不存在未下发"
+    _set_apply_result partial
+    exit 5
+fi
+if [ "${_rule_missing:-0}" -gt 0 ] 2>/dev/null; then
+    set_description "✅ 运行中 | $RULES 条规则 | $KMI | $_rule_missing 条路径不存在未下发"
+else
+    set_description "✅ 运行中 | $RULES 条规则 | $KMI | ${VERSION:-unknown}"
+fi
 _set_apply_result success
 echo "=== apply ok ==="
 exit 0

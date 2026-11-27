@@ -70,3 +70,5 @@ sus_path，路径本来就不存在，于是每次 apply 都记一次失败、�
 
 
 apply 结果不再因此降级为 partial；真有内核拒绝时仍会照常报失败。
+
+产物 13,226,467 B / `c8136d8fbf79aca543d3680590fdbb3d1fe78dd89d1040dbba4f284bf79b5376` / manifest `c364e981…`（40 文件）

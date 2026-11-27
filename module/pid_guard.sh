@@ -40,7 +40,7 @@ now_stamp() {
 }
 loaded() { [ -d "$SYS_MOD/$MODNAME" ]; }
 # 用 size-mtime 做指纹：比 cksum|awk 少一次 fork，pid_guard 在开机关键路径上
-conf_hash() { stat -c '%s-%Y' "$CONF" 2>/dev/null; }
+conf_hash() { cksum "$CONF" 2>/dev/null | awk '{print $1 "-" $2}'; }
 
 # 规则命中多少个进程（只读 /proc，纯观测；用于让 status 有可核对的事实，
 # 而不是只报 ok —— audit-legacy2 MAJ-5）

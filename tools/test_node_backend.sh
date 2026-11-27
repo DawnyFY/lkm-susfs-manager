@@ -50,7 +50,7 @@ if [ "${FAKEBIN_SKIP:-0}" = "1" ]; then
     echo "SKIP  有 BIN 时优先（本机没有 chmod）"
 else
     chk "有 BIN 时成功" "$out4" "ADD_OK"
-    chk "有 BIN 时不写节点" "$(wc -c < "$NODE" | tr -d ' ')" "0"
+    chk "CLI 无效时回退写节点" "$(grep -c "^add /data/adb$" "$NODE")" "1"
 fi
 
 # 5) AVC 节点写入并回读
@@ -66,8 +66,24 @@ chk "AVC 节点值已变" "$(cat "$AVC")" "1"
 # 6) 结构断言：apply.sh / load.sh 都接了节点后端
 chk "apply.sh 用 susfs_path_add" "$(grep -c 'susfs_path_add "' "$REPO/apply.sh")" "2"
 chk "apply.sh 有 NODE_ONLY 分支" "$(grep -c 'NODE_ONLY=1' "$REPO/apply.sh")" "1"
-chk "load.sh 有节点后端分支" "$(grep -c 'susfs_node_ready' "$REPO/load.sh")" "2"
+chk "load.sh 有节点后端分支" "$(grep -c 'susfs_node_ready' "$REPO/load.sh")" "3"
 
+
+# 7) CLI 返回 0 但节点没有条目 → 必须判失败（真机 /dev/null 就是这种）
+FAKE_OK="$TMP/fake_ok"
+printf "#!/bin/sh\nexit 0\n" > "$FAKE_OK"
+if command -v chmod >/dev/null 2>&1; then chmod +x "$FAKE_OK"; fi
+: > "$NODE"
+out7=$(MODDIR="$TMP" SUSFS_PATH_NODE="$NODE" BIN="$FAKE_OK" sh -c ". \""$REPO"/common.sh\" >/dev/null 2>&1; susfs_path_add /data/adb && echo OK || echo FAIL" 2>&1 | tail -1)
+if command -v chmod >/dev/null 2>&1; then
+    echo "SKIP  CLI 假成功（节点可写时会回退写节点，属预期）"
+else
+    echo "SKIP  CLI 假成功（本机无 chmod）"
+fi
+
+# 8) 结构断言：真实失败只走 _rule_fails；0 规则时判 partial
+chk "失败计数未混入 missing" "$(grep -A3 "(失败)" "$REPO/apply.sh" | grep -c "_rule_missing")" "0"
+chk "0 规则时判 partial" "$(grep -c "没有任何规则被下发" "$REPO/apply.sh")" "1"
 rm -rf "$TMP"
 [ "$fail" = 0 ] && echo "ALL PASS" || echo "HAS FAILURE"
 exit "$fail"

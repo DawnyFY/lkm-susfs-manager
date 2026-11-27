@@ -827,7 +827,7 @@ case "$1" in
             exit 1
         fi
         # 写配置与 apply 互斥：否则 apply 可能读到半截文件（mv 是原子的，但两处同时改会互相覆盖）
-        if lock_acquire "$STATE/apply.lock" 30 200; then
+        if lock_acquire "$STATE/apply.lock" 180 200; then
             mv -f "$CONFIG/config.ini.tmp" "$CONFIG/config.ini"
             _sc_rc=$?
             # auto_load=0 要同步 disable_autoload，否则下次开机仍会自动加载

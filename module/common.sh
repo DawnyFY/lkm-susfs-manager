@@ -2151,7 +2151,12 @@ susfs_path_add() {
     _sap_p=$1
     [ -n "$_sap_p" ] || return 1
     if [ -n "${BIN:-}" ] && [ -x "${BIN:-}" ] && "$BIN" add_sus_path "$_sap_p" >/dev/null 2>&1; then
-        return 0
+        _sap_vnode=${SUSFS_PATH_NODE:-/proc/susfs_path}
+        if [ -e "$_sap_vnode" ]; then
+            grep -F -q "path=$_sap_p " "$_sap_vnode" 2>/dev/null && return 0
+        else
+            return 0
+        fi
     fi
     _sap_node=${SUSFS_PATH_NODE:-/proc/susfs_path}
     [ -e "$_sap_node" ] || return 1

@@ -139,19 +139,19 @@ fi
 if susfs_kernel_ready; then
     rm -f "$STATE/loading"
     echo "[i] 内核侧 SUSFS 已就绪（$(susfs_kernel_kind)），跳过 LKM 加载"
-    if ! BIN=$(select_susfs_bin); then
-    if susfs_node_ready; then
+    NODE_ONLY=0
+    if BIN=$(select_susfs_bin); then
+        echo "[i] 使用: $BIN"
+        VERSION=$("$BIN" show version 2>/dev/null)
+    elif susfs_node_ready; then
         echo "[!] 未找到可用的 ksu_susfs，改用 /proc/susfs_* 节点（部分能力不可用）"
         BIN=""
         VERSION="node-only"
-        SUSFS_NODE_ONLY=1
+        NODE_ONLY=1
     else
         fail "$(susfs_hint missing)（模块内也没有备份）"
     fi
-fi
-    echo "[i] 使用: $BIN"
-    VERSION=$("$BIN" show version 2>/dev/null)
-    if [ -z "$VERSION" ]; then
+    if [ "$NODE_ONLY" != "1" ] && [ -z "$VERSION" ]; then
         # 管理器自带的二进制可能与内核 susfs ABI 不匹配，先试模块备份
         _bak="$MODDIR/bin/ksu_susfs_good"
         if [ -x "$_bak" ] && [ "$BIN" != "$_bak" ]; then
@@ -163,8 +163,7 @@ fi
             fi
         fi
     fi
-    if [ -z "$VERSION" ]; then
-        # LKM 已加载但工具通信失败：属环境/版本问题，不当作加载失败
+    if [ "$NODE_ONLY" != "1" ] && [ -z "$VERSION" ]; then
         echo "[!] ksu_susfs 无法通信（可能与内核 ABI 不匹配），规则由 apply 用备份尝试"
         set_description "⚠️ LKM 已加载，但 $(susfs_hint comm)"
         echo 0 > "$STATE/fail_count"
@@ -173,7 +172,11 @@ fi
     fi
     echo 0 > "$STATE/fail_count"
     apply_hide_modules
-    set_description "✅ LKM 已加载 | ${VERSION} | 等待应用规则"
+    if [ "$NODE_ONLY" = "1" ]; then
+        set_description "⚠️ LKM 已加载 | 节点后端（无 ksu_susfs）| 等待应用规则"
+    else
+        set_description "✅ LKM 已加载 | ${VERSION} | 等待应用规则"
+    fi
     _cf_run 2>&1 || true
     echo "=== load ok ==="
     exit 0
@@ -318,27 +321,37 @@ if [ "$rc" != "0" ]; then
     fi
 fi
 
-if ! BIN=$(select_susfs_bin); then
-    if susfs_node_ready; then
-        echo "[!] 未找到可用的 ksu_susfs，改用 /proc/susfs_* 节点（部分能力不可用）"
-        BIN=""
-        VERSION="node-only"
-        SUSFS_NODE_ONLY=1
-    else
-        fail "$(susfs_hint missing)（模块内也没有备份）"
-    fi
-fi
-echo "[i] 使用: $BIN"
-VARIANT=$("$BIN" show variant 2>/dev/null)
-if [ -z "$VARIANT" ] && [ -x "$MODDIR/bin/ksu_susfs_good" ] && [ "$BIN" != "$MODDIR/bin/ksu_susfs_good" ]; then
-    echo "[i] 当前 ksu_susfs 无法通信，切换到模块备份"
-    BIN="$MODDIR/bin/ksu_susfs_good"
+NODE_ONLY=0
+if BIN=$(select_susfs_bin); then
+    echo "[i] 使用: $BIN"
     VARIANT=$("$BIN" show variant 2>/dev/null)
+    if [ -z "$VARIANT" ] && [ -x "$MODDIR/bin/ksu_susfs_good" ] && [ "$BIN" != "$MODDIR/bin/ksu_susfs_good" ]; then
+        echo "[i] 当前 ksu_susfs 无法通信，切换到模块备份"
+        BIN="$MODDIR/bin/ksu_susfs_good"
+        VARIANT=$("$BIN" show variant 2>/dev/null)
+    fi
+    if [ -z "$VARIANT" ] && susfs_node_ready; then
+        echo "[!] ksu_susfs 无法与内核通信，改为 /proc/susfs_* 节点后端（部分能力不可用）"
+        BIN=""
+        NODE_ONLY=1
+    fi
+    [ "$NODE_ONLY" = "1" ] || [ -n "$VARIANT" ] || fail "$(susfs_hint comm)"
+elif susfs_node_ready; then
+    echo "[!] 未找到可用的 ksu_susfs，改用 /proc/susfs_* 节点（部分能力不可用）"
+    BIN=""
+    NODE_ONLY=1
+else
+    fail "$(susfs_hint missing)（模块内也没有备份）"
 fi
-[ -n "$VARIANT" ] || fail "$(susfs_hint comm)"
-VERSION=$("$BIN" show version 2>/dev/null)
-echo "[i] variant: $VARIANT"
-echo "[i] version: $VERSION"
+if [ "$NODE_ONLY" = "1" ]; then
+    VARIANT="node"
+    VERSION="node-only"
+    echo "[i] variant: node（无 ksu_susfs）"
+else
+    VERSION=$("$BIN" show version 2>/dev/null)
+    echo "[i] variant: $VARIANT"
+    echo "[i] version: $VERSION"
+fi
 echo 0 > "$STATE/fail_count"
 # 本次是真实加载，清掉可能由"未加载时"的探测、旧 LKM 写下的能力缓存
 rm -f "$STATE/caps" "$STATE/hide_sus_unsupported" "$STATE/avc_unsupported" 2>/dev/null
