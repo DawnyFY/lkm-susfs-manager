@@ -195,5 +195,7 @@
   "log.clear.confirm": "",
   "log.clear.done": "",
   "config.reset.confirm": "",
-  "msg.reset.bak": ""
+  "msg.reset.bak": "",
+  "pid.matched": "",
+  "pid.matched.zero": ""
 }

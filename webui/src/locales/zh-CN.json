@@ -195,5 +195,7 @@
   "log.clear.confirm": "再点一次确认",
   "log.clear.done": "日志已清理（上一份保留为 .1）",
   "config.reset.confirm": "再点一次确认（会覆盖规则）",
-  "msg.reset.bak": "已恢复默认，原配置备份在 {p}"
+  "msg.reset.bak": "已恢复默认，原配置备份在 {p}",
+  "pid.matched": "命中进程",
+  "pid.matched.zero": "0 命中：当前规则没有匹配到任何进程，检查 UID/进程名是否写对"
 }

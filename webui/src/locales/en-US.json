@@ -195,5 +195,7 @@
   "log.clear.confirm": "Click again to confirm",
   "log.clear.done": "Logs cleared (previous kept as .1)",
   "config.reset.confirm": "Click again to confirm (overwrites rules)",
-  "msg.reset.bak": "Defaults restored; previous config backed up to {p}"
+  "msg.reset.bak": "Defaults restored; previous config backed up to {p}",
+  "pid.matched": "Matched",
+  "pid.matched.zero": "0 matched: no process matches the current rule; check the UID / comm values"
 }

@@ -39,43 +39,39 @@ now_stamp() {
     esac
 }
 loaded() { [ -d "$SYS_MOD/$MODNAME" ]; }
-conf_hash() { cksum "$CONF" 2>/dev/null | awk '{print $1 "-" $2}'; }
+# 用 size-mtime 做指纹：比 cksum|awk 少一次 fork，pid_guard 在开机关键路径上
+conf_hash() { stat -c '%s-%Y' "$CONF" 2>/dev/null; }
 
 # 规则命中多少个进程（只读 /proc，纯观测；用于让 status 有可核对的事实，
 # 而不是只报 ok —— audit-legacy2 MAJ-5）
+# 规则命中多少个进程（只读 /proc，纯观测）：让 status 有可核对的事实。
+# 优化点：uid 用 stat 取（原来读整个 status 文本）、结果缓存 30 秒、
+# 只在 enabled=1 且 LKM 已加载时统计 —— 否则每次 apply 都要全扫一遍 /proc。
 count_matched() {
+    _cm_cache="$STATE/pid_guard.matched"
+    if [ -s "$_cm_cache" ]; then
+        read -r _cm_n _cm_ts < "$_cm_cache" 2>/dev/null
+        case "$_cm_n$_cm_ts" in
+            ''|*[!0-9]*) ;;
+            *)
+                _cm_now=$(date +%s 2>/dev/null)
+                case "$_cm_now" in
+                    ''|*[!0-9]*) ;;
+                    *) [ $((_cm_now - _cm_ts)) -lt 30 ] && { echo "$_cm_n"; return 0; } ;;
+                esac
+                ;;
+        esac
+    fi
     _cm_n=0
     [ -d /proc ] || { echo 0; return 0; }
     for _cm_p in /proc/[0-9]*; do
-        _cm_pid=${_cm_p#/proc/}
-        _cm_uid=""
-        _cm_comm=""
-        read -r _cm_uid < "$_cm_p/status" 2>/dev/null
-        _cm_uid=${_cm_uid##*Uid:}
-        _cm_uid=${_cm_uid%%[!0-9]*}
-        [ -n "$_cm_uid" ] || continue
         _cm_comm=$(cat "$_cm_p/comm" 2>/dev/null)
+        [ -n "$_cm_comm" ] || continue
         case ",$EXCLUDES," in
             *",$_cm_comm,"*) continue ;;
         esac
-        # UID 命中
         _cm_hit=0
-        _cm_r=$UIDS
-        while [ -n "$_cm_r" ]; do
-            case "$_cm_r" in
-                *,*) _cm_t=${_cm_r%%,*}; _cm_r=${_cm_r#*,} ;;
-                *) _cm_t=$_cm_r; _cm_r="" ;;
-            esac
-            case "$_cm_t" in
-                *-*) _cm_lo=${_cm_t%%-*}; _cm_hi=${_cm_t##*-}
-                     [ "$_cm_uid" -ge "$_cm_lo" ] 2>/dev/null && [ "$_cm_uid" -le "$_cm_hi" ] 2>/dev/null && _cm_hit=1 ;;
-                '') ;;
-                *) [ "$_cm_uid" = "$_cm_t" ] && _cm_hit=1 ;;
-            esac
-            [ "$_cm_hit" = "1" ] && break
-        done
-        # comm 前缀命中（只支持尾部 *）
-        [ "$_cm_hit" = "0" ] && _cm_r=$COMMS
+        _cm_r=$COMMS
         while [ "$_cm_hit" = "0" ] && [ -n "$_cm_r" ]; do
             case "$_cm_r" in
                 *,*) _cm_t=${_cm_r%%,*}; _cm_r=${_cm_r#*,} ;;
@@ -86,11 +82,31 @@ count_matched() {
                 *) [ "$_cm_comm" = "$_cm_t" ] && _cm_hit=1 ;;
             esac
         done
+        if [ "$_cm_hit" = "0" ] && [ -n "$UIDS" ]; then
+            _cm_uid=$(stat -c %u "$_cm_p" 2>/dev/null)
+            case "$_cm_uid" in ''|*[!0-9]*) _cm_uid="" ;; esac
+            if [ -n "$_cm_uid" ]; then
+                _cm_r=$UIDS
+                while [ -n "$_cm_r" ]; do
+                    case "$_cm_r" in
+                        *,*) _cm_t=${_cm_r%%,*}; _cm_r=${_cm_r#*,} ;;
+                        *) _cm_t=$_cm_r; _cm_r="" ;;
+                    esac
+                    case "$_cm_t" in
+                        *-*) _cm_lo=${_cm_t%%-*}; _cm_hi=${_cm_t##*-}
+                             [ "$_cm_uid" -ge "$_cm_lo" ] 2>/dev/null && [ "$_cm_uid" -le "$_cm_hi" ] 2>/dev/null && _cm_hit=1 ;;
+                        '') ;;
+                        *) [ "$_cm_uid" = "$_cm_t" ] && _cm_hit=1 ;;
+                    esac
+                    [ "$_cm_hit" = "1" ] && break
+                done
+            fi
+        fi
         [ "$_cm_hit" = "1" ] && _cm_n=$((_cm_n + 1))
     done
+    printf '%s %s\n' "$_cm_n" "$(date +%s 2>/dev/null)" > "$_cm_cache" 2>/dev/null
     echo "$_cm_n"
 }
-
 write_status() {
     {
         echo "result=$1"
@@ -125,6 +141,7 @@ unload() {
     loaded || { write_status skipped "" "" 0; return 0; }
     if command -v rmmod >/dev/null 2>&1 && rmmod "$MODNAME" >/dev/null 2>&1; then
         log "[-] pid_guard 已卸载（rmmod）"
+        rm -f "$STATE/pid_guard.matched" 2>/dev/null
         rm -f "$STATE/pid_guard.conf_hash" 2>/dev/null
         unhide_self
         write_status unloaded
@@ -132,6 +149,7 @@ unload() {
     fi
     if [ -x "$KSUD" ] && "$KSUD" rmmod "$MODNAME" >/dev/null 2>&1; then
         log "[-] pid_guard 已卸载（ksud rmmod）"
+        rm -f "$STATE/pid_guard.matched" 2>/dev/null
         rm -f "$STATE/pid_guard.conf_hash" 2>/dev/null
         unhide_self
         write_status unloaded
@@ -262,6 +280,7 @@ if loaded && [ -n "$HASH" ] && [ "$HASH" = "$PREV" ]; then
 fi
 if loaded; then
     # 参数改了就按新参数重载：否则 UID/comm 变更要等重启才生效
+    rm -f "$STATE/pid_guard.matched" 2>/dev/null
     if ! unload; then
         log "[!] pid_guard 参数已变更但卸载失败，暂时沿用旧参数"
         write_status stale "$KMI_FULL" "$SHORT" 1

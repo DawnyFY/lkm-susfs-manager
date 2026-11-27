@@ -94,7 +94,14 @@ async function doRefresh(): Promise<void> {
 <template>
   <div>
     <div class="grid-stats">
-      <div class="stat" :class="{ ok: st.pid_guard_enabled === '1' }">
+      <div class="stat">
+      <b>{{ t("pid.matched") }}</b>
+      <span>{{ st.pid_guard_matched === "" || st.pid_guard_matched === undefined ? "-" : st.pid_guard_matched }}</span>
+    </div>
+    <p v-if="st.pid_guard_enabled === '1' && st.pid_guard_matched === '0'" class="hint">
+      {{ t("pid.matched.zero") }}
+    </p>
+    <div class="stat" :class="{ ok: st.pid_guard_enabled === '1' }">
         <b>{{ t("pid.enabled") }}</b><span>{{ st.pid_guard_enabled === "1" ? t("common.yes") : t("common.no") }}</span>
       </div>
       <div class="stat" :class="{ ok: st.pid_guard_loaded === '1' }">
