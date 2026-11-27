@@ -1567,10 +1567,15 @@ lock_acquire() {
 
             if [ ! -e "$_lk" ] && mkdir "$_lk" 2>/dev/null; then
                 printf '%s %s\n' "$$" "$_bid" > "$_lk/pid" 2>/dev/null
+                # 二次确认自己确实是持有者：并发下 pid 文件可能被别的进程覆盖，
+                # 此时应当放手重来而不是直接返回成功（否则两个进程同时进临界区）
+                _own_check=""
+                read -r _own_check _ < "$_lk/pid" 2>/dev/null
                 rm -rf "$_mutex" 2>/dev/null
-                return 0
+                [ "$_own_check" = "$$" ] && return 0
+            else
+                rm -rf "$_mutex" 2>/dev/null
             fi
-            rm -rf "$_mutex" 2>/dev/null
         else
             # mutex 被别人占着：按三条规则回收陈旧 mutex
             _mo=""
