@@ -35,7 +35,8 @@ for f in "$T"/proc/susfs_*; do chmod 600 "$f"; done
 # MSYS 的 chmod 只模拟读位，无法精确到 600；这里断言「组/其他写位已关闭」
 for f in "$T"/proc/susfs_*; do
     m=$(stat -c %a "$f")
-    if [ $((m & 022)) -eq 0 ]; then echo "PASS  $(basename "$f") 组/其他不可写（$m）"; else echo "FAIL  $(basename "$f") 仍可被其他用户写（$m）"; fail=1; fi
+    # 注意：stat -c %a 输出的是八进制字符串，必须写成 0$m 才会按八进制解析
+       if [ $((0$m & 0022)) -eq 0 ]; then echo "PASS  $(basename "$f") 组/其他不可写（$m）"; else echo "FAIL  $(basename "$f") 仍可被其他用户写（$m）"; fail=1; fi
 done
 
 rm -rf "$T"
