@@ -2474,3 +2474,45 @@ susfs_log_apply() {
     [ "$_sl_done" = "1" ] && return 0
     return 1
 }
+
+# ---- 1.3.3：老配置补新键（只追加缺失项，绝不覆盖用户已设的值）----
+cfg_ensure_missing_keys() {
+    _ck_def="$MODDIR/config/config.ini.default"
+    _ck_cfg="$CONFIG/config.ini"
+    [ -f "$_ck_def" ] || return 0
+    [ -f "$_ck_cfg" ] || return 0
+    _ck_added=0
+    while IFS= read -r _ck_l || [ -n "$_ck_l" ]; do
+        case "$_ck_l" in
+            ''|"#"*) continue ;;
+            *=*) ;;
+            *) continue ;;
+        esac
+        _ck_k=${_ck_l%%=*}
+        grep -q "^$_ck_k=" "$_ck_cfg" 2>/dev/null && continue
+        if printf '%s\n' "$_ck_l" >> "$_ck_cfg" 2>/dev/null; then
+            _ck_added=$((_ck_added + 1))
+        fi
+    done < "$_ck_def"
+    [ "$_ck_added" -gt 0 ] && echo "[i] 配置补齐 $_ck_added 个新键（只追加缺失项，已有值不动）"
+    return 0
+}
+
+# ---- 1.3.3：pstore 为空时的 dmesg 崩溃取证 ----
+# 这台机器上 pstore 永远是空的（WARN 不落盘、panic 走 Qualcomm minidump），
+# 所以把 dmesg 里的告警上下文存下来，作为唯一可留存的证据。
+dmesg_crash_capture() {
+    _dc_bin=${DMESG_BIN:-dmesg}
+    command -v "$_dc_bin" >/dev/null 2>&1 || return 0
+    _dc_hit=$("$_dc_bin" 2>/dev/null | grep -cE "cut here|Kernel panic|Internal error|Unable to handle|BUG: ")
+    case "$_dc_hit" in ''|*[!0-9]*) return 0 ;; esac
+    [ "$_dc_hit" = "0" ] && return 0
+    _dc_out="$STATE/crash_dmesg.txt"
+    {
+        printf '# captured %s boot=%s\n' "$(date '+%F %T' 2>/dev/null)" "$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)"
+        "$_dc_bin" 2>/dev/null | grep -E -A40 "cut here|Kernel panic|Internal error|Unable to handle" | head -n 240
+    } > "$_dc_out" 2>/dev/null
+    echo "[!] dmesg 里有 $_dc_hit 处内核告警，已存 state/crash_dmesg.txt（pstore 为空时这是唯一证据）"
+    grep -E "WARNING:|Call trace|^[.*] [a-zA-Z_]+\+" "$_dc_out" 2>/dev/null | head -n 3
+    return 0
+}

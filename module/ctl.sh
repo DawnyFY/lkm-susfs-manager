@@ -667,6 +667,16 @@ case "$1" in
     crash_ack)
         if pstore_crash_ack; then echo "acked"; else echo "failed"; exit 1; fi
         ;;
+    crash_dmesg)
+        # pstore 为空时的替代证据（1.3.3）：开机/apply 时抓到的 dmesg 告警上下文
+        _cd_f="$STATE/crash_dmesg.txt"
+        if [ -s "$_cd_f" ]; then
+            echo "captured=$(sed -n 's/^# captured //p' "$_cd_f" 2>/dev/null | head -n1)"
+            tail -n 40 "$_cd_f"
+        else
+            echo "无 dmesg 告警记录（pstore 也可能为空）"
+        fi
+        ;;
     crash_report)
         if pstore_crash_suspect; then echo "crash_suspect=yes"; else echo "crash_suspect=no"; fi
         _PCR=$(_pstore_dir)

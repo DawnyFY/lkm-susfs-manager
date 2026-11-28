@@ -77,6 +77,7 @@ restore_config_if_missing
 ensure_skip_hide_file
 cfg_ensure
 cfg_load
+cfg_ensure_missing_keys
 # 配置不能改变这些路径：否则可借 MODDIR/STATE 加载任意脚本或写入任意位置
 MODDIR=/data/adb/modules/susfs_allinone
 CONFIG=$MODDIR/config

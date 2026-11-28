@@ -20,6 +20,7 @@ cfg_load
 
 # 与 boot-completed 一致：只有应用真正跑完才清除开机守卫标记。
 # 少了这一步，Magisk 下守卫永远不会清除，下一次开机会误判为“上次没启动成功”。
+dmesg_crash_capture 2>/dev/null || true
 AUTOLOAD=1 sh "$MODDIR/apply.sh"
 rc=$?
 case "$rc" in

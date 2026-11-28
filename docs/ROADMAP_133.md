@@ -64,3 +64,32 @@
   `suggest_kmi`、`doctor`、掉线看护
 - 1.3.3 才做：ioctl 设备、交叉编译、loop/uname/try_umount 的真实节点通道
 - **不把 ioctl 的半成品放进 1.3.2**：没有 .ko 的部分等于死代码，审计已经踩过一次这个坑
+
+## 2026-11-28 更新：实施前调研结论（改变了方案）
+
+动工前先确认了两件硬事实：
+
+1. **上游 `susfs_guard_lkm` 不导出任何符号**：解析 `ver2.3.0` 的 .ko，`__ksymtab` 节为空（0 条），
+   全局符号只有 `init_module` / `cleanup_module` 之类。也就是说**另一个模块无法调用它的
+   `sus_path_add_loop` / `uname spoof` 内部实现** —— 「自研 LKM 加 ioctl 去补上游能力」这条路不成立。
+2. **上游提供的是 supercall 接口**：字符串里有 `susfs supercall: armed via sys_call_table`、
+   `sus_path supercall copy_to_user failed`、`uname supercall`、`avc supercall` 等，说明命令是
+   通过一次系统调用（reboot ABI 或 kprobe 回退）进入内核 worker 的。
+   **真正缺的不是内核能力，而是一个能正确说这套 ABI 的用户态调用方** —— 这正是 `ksu_susfs`
+   二进制做的事，也是「管理器自带二进制 ABI 不符」时唯一断掉的一环。
+
+### 因此 1.3.3 拆成两段
+
+| 段 | 内容 | 前置条件 |
+|---|---|---|
+| **切片 1（已完成）** | 配置补键、dmesg 崩溃取证、`ctl.sh crash_dmesg` | 无（纯 shell，可离线验证） |
+| **切片 2（待做）** | 用 CI 交叉编译出一个**只做 supercall 的小工具**（替代 ABI 不符的 `ksu_susfs`），
+|  | 覆盖 `add_sus_path_loop` / `set_uname` / `try_umount` 三条命令 | 需要内核头文件 + 交叉编译链（本机没有） |
+
+### 为什么不用「自己实现 loop/uname」
+
+- loop 的语义是「把路径交给 SUSFS 的 inode 表并重试解析」，路径必须进上游的表；
+  自己另建一张表不会影响 SUSFS 的隐藏逻辑，等于没做
+- uname 伪装可以由我们自己的 kretprobe 做（`__arm64_sys_newuname` 覆盖返回结构，约 100 行），
+  但会和上游的 uname spoof 抢同一个入口，需要先确认谁生效，风险大于收益
+- 结论：**先打通 supercall 调用方**，比复制上游能力更小、更稳
