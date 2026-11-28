@@ -25,6 +25,7 @@
   之后用户手动再开不会被改；哨兵文件 `state/migrated_avc_132`）
 - **清理残留**：若 LKM 参数当前仍停在伪装值（老版本留下的），apply 时自动还原成原值
 - 想继续用的人可以自己开，但会看到「会被判审计被改写」的提示
+
 ## 1.3.2：同步上游 ver2.3.0 的 LKM
 
 上游 `inforcqb/susfs4ksu-for-lkm` 于 2026-11-27 发布 `ver2.3.0`（此前打包的是 `v2.3.0-r18.9-1`）。
@@ -37,7 +38,7 @@
 | 符号需求 | 113~124 | 122~132 |
 | 日志量 | 少 | **明显变多**（一次加载近千行） |
 
-接口未变：`/proc/susfs_*` 8 个节点、`avc_su_ctx` 等参数都在。
+接口未变：`/proc/susfs_*` 9 个节点（`path` / `hide_modules` / `hide_mounts` / `kstat` / `map` / `opath` / `open_redirect` / `avc_spoof` / `enable_log`）、`avc_su_ctx` 等参数都在。
 
 `module/lib/symbols/*.symbols` 已按新 `.ko` 重新生成（122~132 条），
 `provenance.json` 的 9 个 sha256 全部重算、`tag` 改为 `ver2.3.0`。
@@ -45,7 +46,7 @@
 
 ## 1.3.2：`/proc/susfs_*` 节点收成 0600
 
-上游这些节点默认 **0777**，任何应用都能直接读到：
+上游这些节点默认 **0777**（旧版实测），任何应用都能直接读到 —— 升级前读到的样子：
 
 ```
 /proc/susfs_avc_spoof     → "1 (su_sid=… priv_app_sid=…)"
@@ -58,22 +59,29 @@
 真机验证（`adb shell` 在该设备是 root，用 `su 10123` 降成应用 uid 复测）：
 
 ```
-之前  uid 10123 读 /proc/susfs_avc_spoof → "1 (su_sid=…)"
-现在  uid 10123 读 /proc/susfs_avc_spoof → Permission denied；节点 -rw------- root root
+$ ls -l /proc/susfs_avc_spoof
+-rw------- 1 root root 0 … /proc/susfs_avc_spoof
+$ su 10123 -c 'cat /proc/susfs_avc_spoof'
+cat: /proc/susfs_avc_spoof: Permission denied
 ```
+
+（旧版节点默认对所有人可读，实测 0777。把节点临时放开成 0666 再跑一次 `harden_susfs_nodes`，会重新收成 0600
+—— 覆盖「重载/重启后节点重建」的情况。注：本机对非 root 另有一层 `/proc` 过滤，放开权限后该 uid 得到的是
+ENOENT 而不是内容，所以「0777 时应用能读到具体值」这一半未能在当前 LKM 上复现。）
 
 ## 1.3.2：新增 `susfs_log`（默认 0）
 
-新 `.ko` 的日志比旧版多得多，而且带模块名与内核地址（`lsm_hook: … offset 0x1a8`、list head 指针），
+新 `.ko` 的日志比旧版多得多，而且带模块名与内核地址（如 `[lkmhook] inline m_show addr=0x… tramp=0x… words=16 br_x17=1`、`sus_path: command written, N rule(s) removed`），
 本身就是检测面。新增配置键 `susfs_log`（默认 **0**）：
 
 - `apply` 时写 `/proc/susfs_enable_log`（不可写则退回 `/sys/module/susfs_guard_lkm/parameters/enable_log`）
 - 真机实测：置 0 后，一次加载 + apply 期间新增的 `susfs_guard_lkm` 日志行为 **0**
 - 需要诊断时改 1 即可恢复
+
 ## 1.3.2 新增（本轮）
 
 ### 符号级预检
-打包 8 份 `module/lib/symbols/<KMI>.symbols`（由 `tools/gen_lkm_symbols.py` 从 .ko 的 ELF 未定义符号生成，113~124 条）。
+打包 8 份 `module/lib/symbols/<KMI>.symbols`（由 `tools/gen_lkm_symbols.py` 从 .ko 的 ELF 未定义符号生成，ver2.3.0 下为 122~132 条）。
 `load.sh` 在 insmod 之前用 `/proc/kallsyms` 逐字段精确比对，缺符号时直接列出前 5 个名字，
 而不是等 errno 14/22 再猜。
 
@@ -100,6 +108,7 @@ hide_modules 当前不存在、pid_guard 空规则与 `*` 位置、挂载前缀�
 `lock_acquire` 写完 pid 后回读确认等于 `$$` 才算抢到，堵住并发双持有。
 TTL 语义是「持有者承诺的最长持锁时间」，超过即回收；三处取值按各自最长持锁时间设定（apply 180s /
 set_config 180s / set_bundle 300s），双持有风险由 pid 归属回读兜住。
+
 ## 为什么做这个
 
 服务器失败日志里 `[!] LKM 加载失败，请查看日志 (rc=N)` 是最常见的一条，
