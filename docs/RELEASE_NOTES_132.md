@@ -25,6 +25,51 @@
   之后用户手动再开不会被改；哨兵文件 `state/migrated_avc_132`）
 - **清理残留**：若 LKM 参数当前仍停在伪装值（老版本留下的），apply 时自动还原成原值
 - 想继续用的人可以自己开，但会看到「会被判审计被改写」的提示
+## 1.3.2：同步上游 ver2.3.0 的 LKM
+
+上游 `inforcqb/susfs4ksu-for-lkm` 于 2026-11-27 发布 `ver2.3.0`（此前打包的是 `v2.3.0-r18.9-1`）。
+本版把 8 个 KMI 的 `.ko` 与 `susfs_insmod` 同步到该版本：
+
+| 项 | 旧（r18.9-1） | 新（ver2.3.0） |
+|---|---|---|
+| 构建标识 | 2.3.0-gki | 2.3.0-gki（同版本重建） |
+| 单 KMI 体积 | 3.1~7.8 MB | 4.5~10.4 MB |
+| 符号需求 | 113~124 | 122~132 |
+| 日志量 | 少 | **明显变多**（一次加载近千行） |
+
+接口未变：`/proc/susfs_*` 8 个节点、`avc_su_ctx` 等参数都在。
+
+`module/lib/symbols/*.symbols` 已按新 `.ko` 重新生成（122~132 条），
+`provenance.json` 的 9 个 sha256 全部重算、`tag` 改为 `ver2.3.0`。
+真机（6.6.77）：**符号预检 124/124 全部可解析**；`ksu_susfs version=v2.3.0 variant=GKI-LKM`。
+
+## 1.3.2：`/proc/susfs_*` 节点收成 0600
+
+上游这些节点默认 **0777**，任何应用都能直接读到：
+
+```
+/proc/susfs_avc_spoof     → "1 (su_sid=… priv_app_sid=…)"
+/proc/susfs_hide_modules  → "names: susfs_guard_lkm kernelsu"
+```
+
+等于把「隐藏了哪个模块」「AVC 伪装开没开」直接告诉检测器。本版在 `apply.sh` / `load.sh` 里调用
+`harden_susfs_nodes`，把 9 个节点统一 `chmod 600`（模块重载/重启后节点会重建，所以每次都做一次）。
+
+真机验证（`adb shell` 在该设备是 root，用 `su 10123` 降成应用 uid 复测）：
+
+```
+之前  uid 10123 读 /proc/susfs_avc_spoof → "1 (su_sid=…)"
+现在  uid 10123 读 /proc/susfs_avc_spoof → Permission denied；节点 -rw------- root root
+```
+
+## 1.3.2：新增 `susfs_log`（默认 0）
+
+新 `.ko` 的日志比旧版多得多，而且带模块名与内核地址（`lsm_hook: … offset 0x1a8`、list head 指针），
+本身就是检测面。新增配置键 `susfs_log`（默认 **0**）：
+
+- `apply` 时写 `/proc/susfs_enable_log`（不可写则退回 `/sys/module/susfs_guard_lkm/parameters/enable_log`）
+- 真机实测：置 0 后，一次加载 + apply 期间新增的 `susfs_guard_lkm` 日志行为 **0**
+- 需要诊断时改 1 即可恢复
 ## 1.3.2 新增（本轮）
 
 ### 符号级预检
