@@ -46,7 +46,3 @@ export function t(key: string, params?: Record<string, string | number>): string
   return s;
 }
 
-// 供单测使用
-export function dictFor(v: Locale): Record<string, string> {
-  return DICTS[v];
-}

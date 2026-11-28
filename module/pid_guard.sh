@@ -16,7 +16,6 @@ STATE="$MODDIR/state"
 LOG="$MODDIR/load.log"
 # 设备默认路径；PG_* 只是离线测试替换缝，设备上不会设置
 SYS_MOD=${PG_SYS_MOD:-/sys/module}
-PROC_MODULES=${PG_PROC_MODULES:-/proc/modules}
 HIDE_LIST=${PG_HIDE_LIST:-/proc/susfs_hide_modules}
 KSUD=${PG_KSUD:-/data/adb/ksu/bin/ksud}
 
@@ -180,7 +179,6 @@ pg_value_ok() {
 # UID 只接受数字或数字-数字（99000 / 99000-99999）
 pg_uids_ok() {
     [ -n "$1" ] || return 0
-    _pu=""
     _pr=$1
     while :; do
         case "$_pr" in

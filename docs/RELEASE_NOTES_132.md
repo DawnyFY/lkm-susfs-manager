@@ -58,7 +58,7 @@ susfs_insmod: init_module failed: errno 61
 - 真机（6.6.77 / KernelSU）：诊断链路实测通过；
   本机 `CONFIG_MODULE_SIG=y` 但无 `FORCE`，所以加载正常 —— 正好验证了判定条件
 
-产物 13,224,863 B / `aee0fbe94ade4632db8cd246691bbf00e557f93acb834879fc1abe43427f5585` / manifest `1f673976…`（40 文件）
+产物 13,226,189 B / `0ee601d6813facc8dd8c387fc507d20f8867635b0f1cefc740ca1a446c06c5ef` / manifest `a5db66d8…`（40 文件）
 
 ## 附带：sus_path 里「不存在的路径」不再计入规则失败
 
@@ -71,4 +71,4 @@ sus_path，路径本来就不存在，于是每次 apply 都记一次失败、�
 
 apply 结果不再因此降级为 partial；真有内核拒绝时仍会照常报失败。
 
-产物 13,226,467 B / `c8136d8fbf79aca543d3680590fdbb3d1fe78dd89d1040dbba4f284bf79b5376` / manifest `c364e981…`（40 文件）
+产物 13,226,189 B / `0ee601d6813facc8dd8c387fc507d20f8867635b0f1cefc740ca1a446c06c5ef` / manifest `a5db66d8…`（40 文件）

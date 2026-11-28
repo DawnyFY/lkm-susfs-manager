@@ -557,7 +557,6 @@ susfs_hint() {
 # 制表符常量：供 cfg_get 去尾随空白用，模块级只算一次
 _CFG_TAB=$(printf '\t')
 _CFG_CR=$(printf '\r')
-CFG_KEYS="auto_load hide_sus_mnts avc_spoof replace_rules hide_ksu_loop hide_revanced hide_custom_rom hide_compat_matrix hide_gapps hide_dex2oat hide_scene auto_try_umount skip_legit_mounts skip_detection_paths fake_cmdline fake_cmdline_value force_kmi manager_name spoof_uname spoof_uname_release spoof_uname_version hide_vendor_sepolicy vold_isolation force_bl_unlocked"
 
 # 读单个键（$1=键，$2=默认值）
 cfg_get() {
@@ -2139,7 +2138,6 @@ diag_load_failure() {
 # 场景：管理器自带的 ksu_susfs 与本内核 ABI 不符、模块备份也跑不起来，
 # 但内核侧节点仍可用。此时规则仍应能下发，只是部分能力（loop / uname 伪装 /
 # try_umount）没有节点接口，会明确提示不支持。
-SUSFS_NODE_ONLY=${SUSFS_NODE_ONLY:-0}
 
 susfs_node_ready() {
     _snr_node=${SUSFS_PATH_NODE:-/proc/susfs_path}

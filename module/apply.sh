@@ -227,7 +227,6 @@ elif susfs_node_ready; then
     echo "    不支持：sus_path_loop / uname 伪装 / try_umount（这些需要 ioctl，节点没有接口）"
     NODE_ONLY=1
     BIN=""
-    USES_NODE=1
 else
     echo "[!] 缺少 ksu_susfs"
     set_description "❌ $(susfs_hint missing)"
@@ -275,8 +274,8 @@ until [ -d /sdcard/Android/data ] || [ "$count" -ge 15 ]; do
 done
 if [ -d /sdcard/Android/data ]; then
     # 部分内核不支持这两个命令（需要 susfs v1.5.8+），按返回码如实记录
-    _sd_out=$("$BIN" set_sdcard_root_path /sdcard 2>&1); _sd_rc=$?
-    _ad_out=$("$BIN" set_android_data_root_path /sdcard/Android/data 2>&1); _ad_rc=$?
+    _sd_rc=$("$BIN" set_sdcard_root_path /sdcard >/dev/null 2>&1; echo $?)
+    _ad_rc=$("$BIN" set_android_data_root_path /sdcard/Android/data >/dev/null 2>&1; echo $?)
     if [ "$_sd_rc" = "0" ] && [ "$_ad_rc" = "0" ]; then
         echo "[i] sdcard 根路径已设置"
     else

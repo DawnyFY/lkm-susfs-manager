@@ -31,14 +31,6 @@ export async function applyRules(): Promise<ExecResult> {
   return execCode(`${CTL} apply`);
 }
 
-export async function getConfigText(): Promise<string> {
-  return exec(`${CTL} get_config`);
-}
-
-export async function getRuleText(name: RuleName): Promise<string> {
-  return exec(`${CTL} get_file ${name}`);
-}
-
 const EMPTY_RULES = (): Record<RuleName, string> => ({
   sus_path: "",
   sus_path_loop: "",
@@ -159,10 +151,6 @@ export async function setStats(on: boolean): Promise<string> {
 
 export async function reportInstall(): Promise<ExecResult> {
   return execCode(`${CTL} report_install`);
-}
-
-export async function pgGet(): Promise<Record<string, string>> {
-  return parseKV(await exec(`${PG_CTL} get`));
 }
 
 // ctl.sh pid_guard_bundle 的输出：首行 conf:<b64>，其后是 pid_guard_* 状态字段
