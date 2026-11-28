@@ -581,8 +581,14 @@ if [ -f "$CONFIG/sus_path_loop.txt" ]; then
                 *pending*) echo "[~] sus_path_loop $path (已注册，等待路径出现)" ;;
                 *) echo "[+] sus_path_loop $path" ;;
             esac
+        elif susfs_path_loop_node_add "$path"; then
+            # 1.3.3：节点自带 add_loop（fork 补丁 P1）—— 真正的 loop 语义，
+            # 路径不存在时由内核 pending 重试，不依赖 ksu_susfs
+            printf '%s\n' "$path" >> "$_spl_ledger" 2>/dev/null
+            record_our_path "$path"
+            echo "[+] sus_path_loop $path（经 /proc/susfs_path add_loop）"
         else
-            # 节点后端（或 CLI 不支持 loop）时：路径已存在就退化成普通 sus_path，
+            # 节点也不支持时：路径已存在就退化成普通 sus_path，
             # 有限退让，不是常驻循环 —— 至少不会让整条规则白配
             if [ "$NODE_ONLY" = "1" ] && [ -e "$path" ] && susfs_path_add "$path"; then
                 echo "[i] sus_path_loop $path（节点后端无 loop 接口，已按普通 sus_path 下发）"

@@ -2516,3 +2516,17 @@ dmesg_crash_capture() {
     grep -E "WARNING:|Call trace|^[.*] [a-zA-Z_]+\+" "$_dc_out" 2>/dev/null | head -n 3
     return 0
 }
+
+# ---- 1.3.3：loop 规则的节点通道 ----
+# 上游 proc 节点原本只认 add/del/clear；fork 补丁 P1 给它加了 add_loop，
+# 语义等于 CMD_SUSFS_ADD_SUS_PATH_LOOP（路径不存在时注册 pending，后台重试）。
+# 这样在 ksu_susfs 不可用的设备上也能下发 loop 规则，不再退化成普通 sus_path。
+susfs_path_loop_node_add() {
+    _sln_p=${1:-}
+    [ -n "$_sln_p" ] || return 1
+    _sln_node=${SUSFS_PATH_NODE:-/proc/susfs_path}
+    [ -e "$_sln_node" ] || return 1
+    printf 'add_loop %s\n' "$_sln_p" >> "$_sln_node" 2>/dev/null || return 1
+    # 回读确认：内核渲染成 path=<p> ...（pending 条目也会出现在列表里）
+    grep -F -q "path=$_sln_p " "$_sln_node" 2>/dev/null
+}

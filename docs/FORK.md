@@ -52,6 +52,27 @@
 再把指针传进去；或者把 supercall 里 `copy_from_user` 之后的核心逻辑抽成 `_locked` 版本。
 **这一点要在 Phase 1 先读透 `sus_path.c:3110` 再定**，不能想当然。
 
+
+### 实施结论（2026-11-28，读透源码后修正方案）
+
+原计划「新增 `/dev/susfs_guard` 字符设备」被源码调研推翻：
+
+- 上游**已经有**可写的 proc 节点：`proc_create("susfs_path", 0777, ...)` + `sus_path_proc_write()`
+  → `sus_path_command()`，原生支持 `add` / `del` / `clear`
+- loop 的 pending 机制（`sus_path_pending_arm()` / `sus_path_resolve_pending()` / 延迟重试）**已经存在**，
+  只是只有 supercall 的 `CMD_SUSFS_ADD_SUS_PATH_LOOP` 能触发
+- `try_umount` 已在上游标为 deprecated（`CMD_SUSFS_ADD_TRY_UMOUNT /* deprecated */`），全仓无实现
+  —— 设备 dmesg 里「本内核未实现 try_umount」是准确的
+
+所以 P1 改成两步小改：
+
+1. 把 supercall 里「允许 pending 的建条目逻辑」抽成 `sus_path_add_entry(pathname, allow_pending, self_protect)`
+2. `sus_path_command()` 增加 `add_loop <path>` 分支，调用该函数（`allow_pending=true`）
+
+`sus_path_command_check()` 同步接受 `add_loop`，否则参数路径（`hide_list=`）会判非法。
+
+编译验证：WSL 6.6 树，`make ... KBUILD_MODPOST_WARN=1 modules` rc=0，产物 4,518,976 B
+（未打补丁 4,517,480 B），`strings` 命中 `add_loop`。
 ## 构建
 
 上游自带 `.github/workflows/build-ddk.yml`（Android DDK）。fork 后照抄同一套：
@@ -82,6 +103,6 @@ module/lib/<kmi>.ko           上游原版（保留，作为回退）
 | Phase | 内容 | 状态 |
 |---|---|---|
 | 0 | vendor 源码 + 本文档 + 补丁规划 | ✅ 完成 |
-| 1 | P1 补丁（`/dev/susfs_guard` 文本协议）+ shell 侧接线 + 离线测试 | 待做 |
+| 1 | P1 补丁（`/proc/susfs_path` 增加 `add_loop`）+ shell 侧接线 + 离线测试 | ✅ 已实现（补丁 +54/-39，WSL 编译通过，`git apply` 干净）|
 | 2 | DDK CI 产出 8 个 KMI，进 `module/lib/fork/`，带回退 | 待做 |
 | 3 | 真机验证（6.6 + 一台 5.15/6.1）后默认启用 | 待做 |

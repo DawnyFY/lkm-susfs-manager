@@ -2200,6 +2200,9 @@ static bool sus_path_path_is_ours(const char *path)
     return ours;
 }
 
+/* 1.3.3 fork patch P1: 定义在文件后部，proc 解析器先用到 */
+int sus_path_add_entry(const char *pathname, bool allow_pending, bool self_protect);
+
 static int sus_path_command(const char *val, int *removed_out)
 {
     char cmd[SUS_PATH_LEN + 16];
@@ -2214,10 +2217,14 @@ static int sus_path_command(const char *val, int *removed_out)
     if (!strcmp(cmd, "clear")) {
         while (removed < SUS_PATH_MAX_ENTRIES && sus_path_release_one(NULL, NULL, true))
             removed++;
-    } else if (!strncmp(cmd, "add ", 4) || !strncmp(cmd, "del ", 4)) {
+    } else if (!strncmp(cmd, "add ", 4) || !strncmp(cmd, "del ", 4)
+               || !strncmp(cmd, "add_loop ", 9)) {
         bool adding = (cmd[0] == 'a');
+        /* 1.3.3 fork patch P1: add_loop 允许路径尚不存在（与 CMD_SUSFS_ADD_SUS_PATH_LOOP 等价），
+         * 由 pending 延迟工作重试解析；不加这条分支时 shell 只能下发已存在的路径。 */
+        bool looping = !strncmp(cmd, "add_loop ", 9);
 
-        arg = cmd + 4;
+        arg = looping ? cmd + 9 : cmd + 4;
         while (*arg == ' ')
             arg++;
         if (!*arg)
@@ -2233,7 +2240,8 @@ static int sus_path_command(const char *val, int *removed_out)
         if (!adding && sus_path_path_is_ours(arg))
             return -EPERM;
         if (adding) {
-            int rc = sus_path_add_hidden(arg);
+            int rc = looping ? sus_path_add_entry(arg, true, false)
+                             : sus_path_add_hidden(arg);
 
             if (rc)
                 return rc;
@@ -2303,9 +2311,12 @@ static int sus_path_command_check(const char *val)
 
 	if (!strcmp(cmd, "clear"))
 		return 0;
-	if (strncmp(cmd, "add ", 4) && strncmp(cmd, "del ", 4))
+	if (!strncmp(cmd, "add_loop ", 9))
+		arg = cmd + 9;
+	else if (!strncmp(cmd, "add ", 4) || !strncmp(cmd, "del ", 4))
+		arg = cmd + 4;
+	else
 		return -EINVAL;
-	arg = cmd + 4;
 	while (*arg == ' ')
 		arg++;
 	return *arg ? 0 : -EINVAL;
@@ -3107,46 +3118,38 @@ void sus_path_exit(void)
  * the moment the background walk resolves its inode; what the pending state delays is every
  * layer - the LSM hooks (by inode) and the dirent filter ((ino, name)) - because none of them can
  * match an inode that does not exist yet. */
-void sus_path_supercall(unsigned int cmd, void __user **arg)
+/* 1.3.3 fork patch P1: 把「允许 pending（路径稍后出现）」的建条目逻辑抽出来，
+ * 让 supercall 与 /proc/susfs_path 共用同一套实现。
+ * allow_pending=true 时，kern_path() 返回 -ENOENT 不当作失败，而是建 pending 条目，
+ * 由 sus_path_pending_arm() 的延迟工作重试解析（这正是 CMD_SUSFS_ADD_SUS_PATH_LOOP 的语义）。 */
+int sus_path_add_entry(const char *pathname, bool allow_pending, bool self_protect)
 {
-    struct st_susfs_sus_path info = {0};
     struct sus_path_entry *e;
     struct path path;
     struct inode *inode = NULL;
     bool have_path = false;
-    bool pending_ok = (cmd == CMD_SUSFS_ADD_SUS_PATH_LOOP);
     int rc;
 
-    if (copy_from_user(&info, (void __user *)*arg, sizeof(info))) {
-        info.err = -EFAULT;
-        goto out;
-    }
-    if (!info.target_pathname[0]) {
-        info.err = -EINVAL;
-        goto out;
-    }
-    if (!susfs_abi_path_ok(info.target_pathname, sizeof(info.target_pathname))) {
-        info.err = -ENAMETOOLONG;
-        goto out;
-    }
-    if (READ_ONCE(sus_path_stopping)) {
-        info.err = -ESHUTDOWN;
-        goto out;
-    }
-    rc = kern_path(info.target_pathname, LOOKUP_FOLLOW, &path);
+    if (!pathname || !pathname[0])
+        return -EINVAL;
+    if (!susfs_abi_path_ok(pathname, SUS_PATH_LEN))
+        return -ENAMETOOLONG;
+    if (READ_ONCE(sus_path_stopping))
+        return -ESHUTDOWN;
+
+    rc = kern_path(pathname, LOOKUP_FOLLOW, &path);
     if (!rc) {
         have_path = true;
         inode = d_inode(path.dentry);
         if (!inode)
             rc = -ENOENT;
     }
-    if (rc && (rc != -ENOENT || !pending_ok)) {
-        info.err = rc;
+    if (rc && (rc != -ENOENT || !allow_pending))
         goto out;
-    }
+
     e = kzalloc(sizeof(*e), GFP_KERNEL);
     if (!e) {
-        info.err = -ENOMEM;
+        rc = -ENOMEM;
         goto out;
     }
     if (inode) {
@@ -3154,30 +3157,28 @@ void sus_path_supercall(unsigned int cmd, void __user **arg)
         e->dev = (u64)inode->i_sb->s_dev;
         e->ino = (u64)inode->i_ino;
         e->inode = inode;
+        e->self_protect = self_protect;
         ihold(inode);
         if (sus_path_iop_arm(e))
             atomic_inc(&n_iop_arm_fail);
         strscpy(e->name, path.dentry->d_name.name, sizeof(e->name));
     }
-    sus_path_entry_set_path(e, info.target_pathname);
+    sus_path_entry_set_path(e, pathname);
     if (!inode)
         sus_path_basename(e->path, e->name, sizeof(e->name));
     INIT_LIST_HEAD(&e->list);
-    rc = sus_path_publish_entry(e, true);
+    rc = sus_path_publish_entry(e, self_protect);
     if (rc) {
         if (e->inode) {
             sus_path_iop_restore(e);
             iput(e->inode);
         }
         kfree(e);
-    }
-    if (rc < 0) {
-        info.err = rc;
         goto out;
     }
     if (inode && !inode->i_ino)
         pr_warn("sus_path: '%s' reports ino 0 - hidden by inode, but a directory listing cannot be filtered for it\n",
-                info.target_pathname);
+                pathname);
     if (have_path) {
         path_put(&path);
         have_path = false;
@@ -3192,11 +3193,26 @@ void sus_path_supercall(unsigned int cmd, void __user **arg)
         sus_path_save_caller_cred();
         sus_path_pending_arm();
     }
-    info.err = 0;
+    rc = 0;
 out:
     if (have_path)
         path_put(&path);
     sus_path_maybe_drop_caller_cred();
+    return rc;
+}
+
+void sus_path_supercall(unsigned int cmd, void __user **arg)
+{
+    struct st_susfs_sus_path info = {0};
+
+    if (copy_from_user(&info, (void __user *)*arg, sizeof(info))) {
+        info.err = -EFAULT;
+        goto out;
+    }
+    info.err = sus_path_add_entry(info.target_pathname,
+                                  cmd == CMD_SUSFS_ADD_SUS_PATH_LOOP, true);
+out:
+    /* Input commands write only err, never the payload fields. */
     if (copy_to_user(&((struct st_susfs_sus_path __user *)*arg)->err,
                      &info.err, sizeof(info.err)))
         pr_warn("sus_path supercall copy_to_user failed\n");
