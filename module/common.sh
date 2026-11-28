@@ -2431,3 +2431,27 @@ harden_susfs_nodes() {
     [ "$_hs_fail" -gt 0 ] && echo "[!] 有 $_hs_fail 个节点权限收紧失败（内核拒绝 chmod）"
     return 0
 }
+
+# ---- 1.3.2 一次性迁移：把老配置里的 avc_spoof=1 关掉 ----
+# 1.3.0/1.3.1 出厂默认是 1，而真机实测 avc_spoof=1 会被能读 dmesg 的检测器判
+# 「SELinux 审计记录被改写」（危险级）。升级时替用户关一次，只做一次：
+# 用哨兵文件记录，之后用户若手动再开，本函数不再动它。
+migrate_avc_spoof_132() {
+    _ma_sentinel="$STATE/migrated_avc_132"
+    [ -e "$_ma_sentinel" ] && return 0
+    _ma_cfg="$CONFIG/config.ini"
+    [ -f "$_ma_cfg" ] || { : > "$_ma_sentinel" 2>/dev/null; return 0; }
+    _ma_v=$(grep -m1 "^avc_spoof=" "$_ma_cfg" 2>/dev/null | cut -d= -f2-)
+    if [ "$_ma_v" = "1" ]; then
+        if sed -i "s/^avc_spoof=1\\([[:space:]]*\\)$/avc_spoof=0\\1/" "$_ma_cfg" 2>/dev/null \
+           && [ "$(grep -m1 '^avc_spoof=' "$_ma_cfg" | cut -d= -f2-)" = "0" ]; then
+            echo "[!] 升级兼容：avc_spoof 已由 1 改为 0（1.3.2 起默认关闭）"
+            echo "    原因：真机实测 avc_spoof=1 会被能读 dmesg 的检测器判「SELinux 审计被改写」（危险级）"
+            echo "    如需恢复：在配置里把 avc_spoof 改回 1 并 apply，本模块不会再自动改它"
+        else
+            echo "[!] avc_spoof 迁移失败（配置不可写），保持原值；可手动改为 0"
+        fi
+    fi
+    : > "$_ma_sentinel" 2>/dev/null
+    return 0
+}

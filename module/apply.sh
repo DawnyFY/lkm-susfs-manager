@@ -82,6 +82,7 @@ MODDIR=/data/adb/modules/susfs_allinone
 CONFIG=$MODDIR/config
 STATE=$MODDIR/state
 hide_sus_mnts=${hide_sus_mnts:-1}
+migrate_avc_spoof_132
 avc_spoof=${avc_spoof:-0}
 replace_rules=${replace_rules:-0}
 hide_compat_matrix=${hide_compat_matrix:-0}
@@ -315,75 +316,55 @@ if [ "$hide_sus_mnts" = "1" ]; then
         echo "[i] 内核未提供 hide_sus_mnts 接口（无特性位、无 /proc/susfs_hide_mounts），跳过"
     fi
 fi
-# AVC 日志伪装的三条路径，按可用性依次尝试：
-#   1) ksu_susfs enable_avc_log_spoofing（新版 CLI 才有）
-#   2) LKM 参数 /sys/module/susfs_guard_lkm/parameters/avc_su_ctx
-#      （官方 KernelSU 常见：功能在 LKM 里，但 CLI 没有对应命令）
-#   3) 都没有 → 标记不可用，本次开机不再重试
+# 1.3.2 起：移除 1.3.0 引入的「LKM 参数通道」（写 /sys/module/susfs_guard_lkm/parameters/avc_su_ctx）。
+# 理由：真机实测 avc_spoof 一旦真的生效，就会被能读 dmesg 的检测器判「SELinux 审计记录被改写」
+# （危险级）；而这个通道唯一的作用就是在没有官方 CLI 的 KernelSU 上把功能打开 —— 属于「能开，但开了更糟」。
+# 现在只保留：ksu_susfs 命令（新版 CLI 自带）与 /proc/susfs_avc_spoof 节点。
 AVC_PARAM=/sys/module/susfs_guard_lkm/parameters/avc_su_ctx
 AVC_REAL_CTX="u:r:ksu:s0"
 AVC_SPOOF_CTX="u:r:priv_app:s0:c512,c768"
-if has_feature CONFIG_KSU_SUSFS_AVC_LOG_SPOOFING || [ -e /proc/susfs_avc_spoof ] || [ -e "$AVC_PARAM" ]; then
+
+# 清理：老版本可能把参数停在伪装值上，升级后要还原，否则 AVC 日志会继续被改写
+restore_avc_param_leftover() {
+    [ -r "$AVC_PARAM" ] || return 0
+    _rp_cur=$(cat "$AVC_PARAM" 2>/dev/null)
+    [ "$_rp_cur" = "$AVC_SPOOF_CTX" ] || return 0
+    _rp_t=$AVC_REAL_CTX
+    if [ -s "$STATE/avc_orig_ctx" ]; then
+        _rp_s=$(cat "$STATE/avc_orig_ctx" 2>/dev/null)
+        case "$_rp_s" in
+            ''|"$AVC_SPOOF_CTX") ;;
+            *) _rp_t=$_rp_s ;;
+        esac
+    fi
+    if printf '%s\n' "$_rp_t" > "$AVC_PARAM" 2>/dev/null; then
+        echo "[i] 已还原老版本留下的 AVC 伪装参数：$_rp_cur → $_rp_t"
+    fi
+    rm -f "$STATE/avc_orig_ctx" 2>/dev/null
+    return 0
+}
+restore_avc_param_leftover
+
+if has_feature CONFIG_KSU_SUSFS_AVC_LOG_SPOOFING || [ -e /proc/susfs_avc_spoof ]; then
     if [ "$avc_spoof" = "1" ]; then
         if "$BIN" enable_avc_log_spoofing 1 >/dev/null 2>&1; then
             echo "[i] avc_log_spoofing=1（ksu_susfs 命令）"
-        elif [ -w "$AVC_PARAM" ]; then
-            _avc_cur=$(cat "$AVC_PARAM" 2>/dev/null)
-            if [ "$_avc_cur" = "$AVC_SPOOF_CTX" ]; then
-                echo "[i] avc_log_spoofing=1（LKM 参数已生效：$_avc_cur）"
-            elif printf '%s\n' "$AVC_SPOOF_CTX" > "$AVC_PARAM" 2>/dev/null; then
-                # 记下开启前的原值，关闭时按原值还原（audit M1）：
-                # 硬编码 u:r:ksu:s0 会覆盖用户自定义的 su 域（Magisk/自定义 su 设备上这个硬编码值本身就是错的）
-                if [ ! -s "$STATE/avc_orig_ctx" ] && [ -n "$_avc_cur" ]; then
-                    printf '%s\n' "$_avc_cur" > "$STATE/avc_orig_ctx" 2>/dev/null
-                fi
-                _avc_now=$(cat "$AVC_PARAM" 2>/dev/null)
-                if [ "$_avc_now" = "$AVC_SPOOF_CTX" ]; then
-                    echo "[i] avc_log_spoofing=1（经 LKM 参数：$_avc_cur → $_avc_now）"
-                else
-                    echo "[!] avc_log_spoofing 写入参数后未生效（读回：$_avc_now）"
-                fi
-            else
-                echo "[!] avc_log_spoofing 无法开启：CLI 无该命令，参数写入被拒绝"
-                : > "$STATE/avc_unsupported" 2>/dev/null
-            fi
+            echo "[i] 提示：会把 su 的审计记录改写成伪装域；能读 dmesg 的检测器会判「审计被改写」"
         elif susfs_avc_node_set 1; then
             echo "[i] avc_log_spoofing=1（经 /proc/susfs_avc_spoof 节点）"
-            echo "[i] 提示：avc_spoof 会把 su 的审计记录改写成伪装域；能读 dmesg 的检测器会判「审计被改写」"
+            echo "[i] 提示：会把 su 的审计记录改写成伪装域；能读 dmesg 的检测器会判「审计被改写」"
         else
-            echo "[!] avc_log_spoofing 不可用：CLI 无该命令，LKM 未暴露 avc_su_ctx，节点也不可用"
+            echo "[!] avc_log_spoofing 不可用：CLI 无该命令、节点不可写（LKM 参数通道已在 1.3.2 移除）"
             : > "$STATE/avc_unsupported" 2>/dev/null
         fi
     else
         "$BIN" enable_avc_log_spoofing 0 >/dev/null 2>&1
-        # 参数通道打开的，关闭时要还原，否则 AVC 日志会继续被改写
-        if [ -w "$AVC_PARAM" ]; then
-            _avc_cur=$(cat "$AVC_PARAM" 2>/dev/null)
-            # 只有"当前确实是伪装值"才需要还原（audit R2-1）：
-            # 记录可能来自 1.2.9 的 avc_spoof.sh、或 LKM 重载后早已过期，
-            # 无条件信任会造成「配置关、伪装反而被打开」。
-            if [ "$_avc_cur" = "$AVC_SPOOF_CTX" ]; then
-                _avc_target=$AVC_REAL_CTX
-                if [ -s "$STATE/avc_orig_ctx" ]; then
-                    _avc_saved=$(cat "$STATE/avc_orig_ctx" 2>/dev/null)
-                    case "$_avc_saved" in
-                        ''|"$AVC_SPOOF_CTX") ;;   # 空 / 记录本身是伪装值 → 不可信，用默认
-                        *) _avc_target=$_avc_saved ;;
-                    esac
-                fi
-                if printf '%s\n' "$_avc_target" > "$AVC_PARAM" 2>/dev/null; then
-                    echo "[i] avc_log_spoofing=0（参数已还原：$_avc_cur → $_avc_target）"
-                fi
-            else
-                echo "[i] avc_log_spoofing=0（当前值不是伪装值，无需还原）"
-            fi
-            rm -f "$STATE/avc_orig_ctx" 2>/dev/null
-        fi
+        susfs_avc_node_set 0 >/dev/null 2>&1 || true
+        rm -f "$STATE/avc_orig_ctx" 2>/dev/null
     fi
 else
-    echo "[i] 内核未提供 avc_log_spoofing 接口（LKM 无该特性，也无 avc_su_ctx 参数），跳过"
-fi
-# 读取配置文件的第一个字段，忽略注释和空行
+    echo "[i] 内核未提供 avc_log_spoofing 接口（无特性位、无 /proc/susfs_avc_spoof），跳过"
+fi# 读取配置文件的第一个字段，忽略注释和空行
 # 清洗单行：去 \r、去注释、去首尾空白
 
 # 被守卫跳过的路径：如果内核里还留着旧规则，撤掉它，避免升级后仍然出现同样的问题

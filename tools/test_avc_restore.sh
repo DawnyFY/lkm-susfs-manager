@@ -1,23 +1,20 @@
 #!/bin/sh
-# 回归：AVC 参数开启/还原必须尊重"原值"（audit M1）
-# 旧实现关闭时硬编码写回 u:r:ksu:s0，会覆盖用户自定义的 su 域。
+# 1.3.2 契约：apply 不再写 LKM 参数（1.3.0 的通道已移除），但必须能还原老版本残留的伪装值
 set -u
 REPO="$1"
-ROOT="$REPO"
-if [ -f "$REPO/module/module.prop" ]; then REPO="$REPO/module"; fi
+[ -f "$REPO/module/module.prop" ] && REPO="$REPO/module"
 S="$REPO/apply.sh"
 fail=0
 chk() { if [ "$2" = "$3" ]; then echo "PASS  $1"; else echo "FAIL  $1 expect=[$3] got=[$2]"; fail=1; fi; }
 
-# 结构断言：必须有原值记录与按原值还原
-chk "记录原值到 state/avc_orig_ctx" "$(grep -c 'STATE/avc_orig_ctx' "$S" | awk '{print ($1>=3)?"yes":"no"}')" "yes"
-chk "关闭时优先用原值" "$(grep -c '_avc_target=\$_avc_saved' "$S")" "1"
-chk "还原后清理记录文件" "$(grep -c 'rm -f \"\$STATE/avc_orig_ctx\"' "$S")" "1"
-chk "缺少记录时退回 u:r:ksu:s0" "$(grep -c 'AVC_REAL_CTX=\"u:r:ksu:s0\"' "$S")" "1"
-chk "写入前不覆盖已保存的原值" "$(grep -c '! -s \"\$STATE/avc_orig_ctx\"' "$S")" "1"
+chk "有残留还原函数" "$(grep -c '^restore_avc_param_leftover()' "$S")" "1"
+chk "还原函数被调用" "$(grep -c '^restore_avc_param_leftover$' "$S")" "1"
+chk "只在当前是伪装值时才还原" "$(grep -c '\[ "\$_rp_cur" = "\$AVC_SPOOF_CTX" \] || return 0' "$S")" "1"
+chk "优先用记录的原值" "$(grep -c '_rp_t=\$AVC_REAL_CTX' "$S")" "1"
+chk "还原后清记录" "$(grep -c 'rm -f "\$STATE/avc_orig_ctx"' "$S" | awk '{print ($1>=2)?"yes":"no"}')" "yes"
 
-# 反证：不允许出现"关闭时直接用硬编码常量还原"的老写法
-chk "无硬编码还原直写" "$(grep -c 'printf .%s\\\\n. \"\$AVC_REAL_CTX\" > \"\$AVC_PARAM\"' "$S" || true)" "0"
+# 反证：不允许再往参数里写伪装值（1.3.0 的老行为）
+chk "不再写入伪装值" "$(grep -c 'printf .%s\\n. "\$AVC_SPOOF_CTX" > "\$AVC_PARAM"' "$S" || true)" "0"
 
 [ "$fail" = 0 ] && echo "ALL PASS" || echo "HAS FAILURE"
 exit "$fail"

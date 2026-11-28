@@ -3,6 +3,28 @@
 > 这一版以「加载失败时能看懂发生了什么」为主，另外修了 PID 命中统计、锁归属与若干门禁，
 > 并新增符号预检 / suggest_kmi / doctor / 掉线看护（默认关）。功能集合与 1.3.1 **不同**。
 
+
+## 1.3.2：移除 1.3.0 引入的 AVC LKM 参数通道
+
+1.3.0 为了让官方 KernelSU 也能开 `avc_spoof`，加了一条「直接写 LKM 参数
+`/sys/module/susfs_guard_lkm/parameters/avc_su_ctx`」的通道（提交 `697e2da`），
+并把出厂默认改成 `avc_spoof=1`（提交 `2ab496d`）。
+
+真机两轮实测证明这条通道**开了比不开更糟**：
+
+| 状态 | 检测器结论 |
+|---|---|
+| `avc_spoof=1`（参数通道生效） | **危险 1** —— 「SELinux 审计记录被改写 / 审计运行异常 / 审计上下文被改写」 |
+| `avc_spoof=0` | 危险 0、可疑 1（只剩 ADB 调试那条信息级） |
+
+因此 1.3.2：
+
+- **移除** LKM 参数通道（不再写 `avc_su_ctx`），只保留 `ksu_susfs` 命令与 `/proc/susfs_avc_spoof` 节点两条
+- **出厂默认改回 `avc_spoof=0`**
+- **升级时一次性迁移**：老配置里的 `avc_spoof=1` 自动改成 0（只在首次 apply 做一次，
+  之后用户手动再开不会被改；哨兵文件 `state/migrated_avc_132`）
+- **清理残留**：若 LKM 参数当前仍停在伪装值（老版本留下的），apply 时自动还原成原值
+- 想继续用的人可以自己开，但会看到「会被判审计被改写」的提示
 ## 1.3.2 新增（本轮）
 
 ### 符号级预检
@@ -89,7 +111,7 @@ susfs_insmod: init_module failed: errno 61
 - 真机（6.6.77 / KernelSU）：诊断链路实测通过；
   本机 `CONFIG_MODULE_SIG=y` 但无 `FORCE`，所以加载正常 —— 正好验证了判定条件
 
-产物 13,237,989 B / `6858a503fa3b0cec59975efb32659cd5816733b6142aefa961d7b265a066777c` / manifest `f941bc07…`（60 文件）
+产物 13,238,183 B / `897437750137cc67bb7f864f5b2dd8c31fe3c6e255f56d43af112eec889a2b62` / manifest `4a7a357c…`（60 文件）
 
 ## 附带：sus_path 里「不存在的路径」不再计入规则失败
 
@@ -102,4 +124,4 @@ sus_path，路径本来就不存在，于是每次 apply 都记一次失败、�
 
 apply 结果不再因此降级为 partial；真有内核拒绝时仍会照常报失败。
 
-产物 13,237,989 B / `6858a503fa3b0cec59975efb32659cd5816733b6142aefa961d7b265a066777c` / manifest `f941bc07…`（60 文件）
+产物 13,238,183 B / `897437750137cc67bb7f864f5b2dd8c31fe3c6e255f56d43af112eec889a2b62` / manifest `4a7a357c…`（60 文件）

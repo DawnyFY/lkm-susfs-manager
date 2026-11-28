@@ -21,7 +21,8 @@ for c in on off status install-boot remove-boot; do
 done
 
 # 关键路径：写入与还原都必须是内核参数，且还原值正确
-chk "使用 avc_su_ctx 参数" "$([ "$(grep -c 'parameters/avc_su_ctx' "$S")" -ge 1 ] && echo yes || echo no)" "yes"
+chk "脚本仍使用 avc_su_ctx 参数" "$([ "$(grep -c 'parameters/avc_su_ctx' "$S")" -ge 1 ] && echo yes || echo no)" "yes"
+chk "模块 apply 不再写该参数" "$(grep -c 'printf .%s\\n. "$AVC_SPOOF_CTX" > "$AVC_PARAM"' "$(dirname "$REPO")/module/apply.sh" || true)" "0"
 chk "还原值为 u:r:ksu:s0" "$(grep -c 'REAL_CTX="u:r:ksu:s0"' "$S")" "1"
 chk "伪装值为 priv_app" "$(grep -c 'SPOOF_CTX="u:r:priv_app:s0:c512,c768"' "$S")" "1"
 
