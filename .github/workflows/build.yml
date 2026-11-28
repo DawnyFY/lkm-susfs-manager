@@ -73,9 +73,12 @@ jobs:
       - name: License compliance gate
         run: python tools/check_license_compliance.py dist/*.zip
 
-      # 审计 B1 连续三次写错发布说明的数字，靠人眼没守住 —— 挪进门禁
-      - name: Release notes triple gate (size / sha256 / manifest / file count)
-        run: python tools/check_release_notes.py
+      # 审计 B1 连续三次写错发布说明的数字，靠人眼没守住 —— 挪进门禁。
+      # CI 只校验「文档里写了完整的四元组」：CI 重建的 zip 与发布机产物不保证同字节
+      # （zlib 版本不同，实测差 27KB），跨环境比字节会永远红。
+      # 发布机上的严格比对由 tools/sync_notes_numbers.py + 本地跑该门禁完成。
+      - name: Release notes triple gate (format only in CI)
+        run: python tools/check_release_notes.py . --format-only
 
       - name: Show SHA256
         run: sha256sum dist/*.zip

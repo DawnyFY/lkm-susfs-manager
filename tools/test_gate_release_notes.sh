@@ -9,6 +9,7 @@ fail=0
 chk() { if [ "$2" = "$3" ]; then echo "PASS  $1"; else echo "FAIL  $1 expect=[$3] got=[$2]"; fail=1; fi; }
 
 chk "CI 里有该门禁" "$(grep -c check_release_notes "$ROOT/.github/workflows/build.yml")" "1"
+chk "CI 用 format-only 模式" "$(grep -c -- "--format-only" "$ROOT/.github/workflows/build.yml")" "1"
 
 T=$(mktemp -d)
 # Windows 上的 python 不认 /tmp/... 这类 MSYS 路径，统一换成盘符形式

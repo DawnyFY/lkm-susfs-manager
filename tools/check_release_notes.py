@@ -6,7 +6,9 @@
 """
 import hashlib, re, sys, pathlib, zipfile
 
-root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else ".")
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+format_only = "--format-only" in sys.argv
+root = pathlib.Path(args[0] if args else ".")
 prop = (root / "module/module.prop").read_text(encoding="utf-8")
 ver = re.search(r"^version=(\S+)", prop, re.M).group(1)
 
@@ -43,6 +45,8 @@ for doc in docs:
     for m in re.finditer(r"([\d,]+) B[^\n]{0,12}?`([0-9a-f]{16,64})`[^\n]{0,40}?manifest `([0-9a-f]{8})[^`]*`[^\n]{0,8}?（(\d+) 文件）", text):
         checked += 1
         stated_size = int(m.group(1).replace(",", ""))
+        if format_only:
+            continue
         if stated_size != size:
             problems.append(f"{doc.name}: 尺寸 {stated_size} != 实测 {size}")
         if not sha.startswith(m.group(2)):
@@ -60,4 +64,7 @@ if problems:
     for p in problems:
         print("  " + p)
     sys.exit(1)
-print(f"OK: {checked} 处三元组与实测一致（{size} B / {sha[:16]}… / manifest {manifest[:8]}… / {files} 文件）")
+if format_only:
+    print(f"OK(格式): {checked} 处三元组完整；字节比对跳过（CI 构建与发布构建不保证同字节）")
+else:
+    print(f"OK: {checked} 处三元组与实测一致（{size} B / {sha[:16]}… / manifest {manifest[:8]}… / {files} 文件）")
