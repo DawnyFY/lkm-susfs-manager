@@ -2368,13 +2368,19 @@ doctor_scan() {
                 *) _ds_t=$_ds_r; _ds_r="" ;;
             esac
             [ -n "$_ds_t" ] || continue
+            if [ "$_ds_t" = "*" ]; then
+                _ds_note "WARN" "pid_guard 不接受裸 *（要么写具体进程名，要么写成前缀）"
+                _ds_bad=$((_ds_bad + 1))
+                continue
+            fi
+            # 合法形式只有「尾部一个 *」或「不含 *」；先用 % 去掉尾部星号，再看是否仍含 *
+            # 注意 case 的模式天然锚定末尾：*'*' 只表示「以 * 结尾」，要判「含 *」得写 *'*'*
             case "$_ds_t" in
-                *'*')
-                    _ds_star=${_ds_t%'*'}
-                    case "$_ds_star" in
-                        *'*') _ds_note "WARN" "pid_guard 的 * 只能作后缀: $_ds_t"; _ds_bad=$((_ds_bad + 1)) ;;
-                    esac
-                    ;;
+                *'*') _ds_head=${_ds_t%'*'} ;;
+                *)    _ds_head=$_ds_t ;;
+            esac
+            case "$_ds_head" in
+                *'*'*) _ds_note "WARN" "pid_guard 的 * 只能作后缀（前缀匹配）: $_ds_t"; _ds_bad=$((_ds_bad + 1)) ;;
             esac
         done
     fi

@@ -34,6 +34,15 @@ printf '. "$REPO/common.sh" >/dev/null 2>&1\nBIN=""\nsusfs_path_add /tmp/aimod_e
 rc=$(SUSFS_PATH_NODE="$D/nodedir" sh "$T/add.sh" 2>&1 | tail -1)
 chk "节点不可写必须判失败" "$rc" "FAIL"
 
+# 变异 V1：节点写入「成功但读不回」（/dev/null）时，susfs_path_add 必须判失败
+cat > "$T/add2.sh" <<EOS
+. "$REPO/common.sh" >/dev/null 2>&1
+BIN=""
+susfs_path_add /tmp/aimod_exists && echo OK || echo FAIL
+EOS
+rc2=$(SUSFS_PATH_NODE=/dev/null sh "$T/add2.sh" 2>&1 | tail -1)
+chk "写成功但读不回必须判失败" "$rc2" "FAIL"
+
 rm -rf "$T" "$C" "$D" /tmp/aimod_exists
 [ "$fail" = 0 ] && echo "ALL PASS" || echo "HAS FAILURE"
 exit "$fail"

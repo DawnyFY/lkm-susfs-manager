@@ -3,10 +3,10 @@
 import sys
 from pathlib import Path
 
-SUFFIXES = {".sh", ".prop", ".js", ".css", ".html", ".json", ".txt", ".md"}
+SUFFIXES = {".sh", ".prop", ".js", ".css", ".html", ".json", ".txt", ".md", ".symbols"}
 SKIP_DIRS = {".git", "dist", "__pycache__", ".github", "node_modules", ".vite"}
 
-base = Path(__file__).resolve().parent.parent
+base = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent
 bad = []
 for p in base.rglob("*"):
     if not p.is_file() or p.suffix not in SUFFIXES:

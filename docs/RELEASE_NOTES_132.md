@@ -7,7 +7,7 @@
 ### 符号级预检
 打包 8 份 `module/lib/symbols/<KMI>.symbols`（由 `tools/gen_lkm_symbols.py` 从 .ko 的 ELF 未定义符号生成，113~124 条）。
 `load.sh` 在 insmod 之前用 `/proc/kallsyms` 逐字段精确比对，缺符号时直接列出前 5 个名字，
-而不是等 errono 14/22 再猜。
+而不是等 errno 14/22 再猜。
 
 ### KMI 建议器
 `ctl.sh suggest_kmi` 按主版本 + 内核串里的 `androidNN` 选出最接近的打包 KMI，并给出可直接复制的 `force_kmi=` 行；
@@ -25,12 +25,13 @@ hide_modules 当前不存在、pid_guard 空规则与 `*` 位置、挂载前缀�
 `NODE_ONLY=1` 且路径已存在时，`sus_path_loop` 条目按普通 `sus_path` 下发，不再整条判失败。
 
 ### PID 隐藏统计修复
-`count_matched` 旧实现恒返回 0（读 status 的方式有 bug）；改为 `stat -c %u` + 60 秒缓存，
+`count_matched` 旧实现恒返回 0（读 status 的方式有 bug）；改为 `stat -c %u` + 30 秒缓存，
 卸载/改参数时清缓存；PID 页面新增「命中进程」与 0 命中提示。
 
 ### 锁归属二次确认
-`lock_acquire` 写完 pid 后回读确认等于 `$$` 才算抢到，堵住并发双持有；
-活锁不再按 age 被抢（只有拿不到 pid 时才按年龄回收）。
+`lock_acquire` 写完 pid 后回读确认等于 `$$` 才算抢到，堵住并发双持有。
+TTL 语义是「持有者承诺的最长持锁时间」，超过即回收；三处调用已统一（apply 180s /
+set_config 180s / set_bundle 300s），双持有风险由 pid 归属回读兜住。
 ## 为什么做这个
 
 服务器失败日志里 `[!] LKM 加载失败，请查看日志 (rc=N)` 是最常见的一条，
@@ -87,7 +88,7 @@ susfs_insmod: init_module failed: errno 61
 - 真机（6.6.77 / KernelSU）：诊断链路实测通过；
   本机 `CONFIG_MODULE_SIG=y` 但无 `FORCE`，所以加载正常 —— 正好验证了判定条件
 
-产物 13,237,173 B / `e1bd2fea16da1e4ab52a86943b72ab34221212ec5db1b16d870abe7e1dd493aa` / manifest `b091b009…`（60 文件）
+产物 13,237,363 B / `fc9f3f88c181417543e4da246ac1e9c2dd3cf685197abc1d65b71770d79b0df4` / manifest `6b7c1e90…`（60 文件）
 
 ## 附带：sus_path 里「不存在的路径」不再计入规则失败
 
@@ -100,4 +101,4 @@ sus_path，路径本来就不存在，于是每次 apply 都记一次失败、�
 
 apply 结果不再因此降级为 partial；真有内核拒绝时仍会照常报失败。
 
-产物 13,237,173 B / `e1bd2fea16da1e4ab52a86943b72ab34221212ec5db1b16d870abe7e1dd493aa` / manifest `b091b009…`（60 文件）
+产物 13,237,363 B / `fc9f3f88c181417543e4da246ac1e9c2dd3cf685197abc1d65b71770d79b0df4` / manifest `6b7c1e90…`（60 文件）
