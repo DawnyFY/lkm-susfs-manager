@@ -263,6 +263,8 @@ else
     FEATURES=$("$BIN" show enabled_features 2>/dev/null)
 fi
 has_feature() { printf "%s\n" "$FEATURES" | grep -qx "$1"; }
+
+harden_susfs_nodes
 # 用真实内核选 KMI：osrelease 可能被本模块的 uname 伪装改写
 REL=$(real_kernel_release 2>/dev/null)
 [ -n "$REL" ] || REL=$(cat /proc/sys/kernel/osrelease 2>/dev/null)

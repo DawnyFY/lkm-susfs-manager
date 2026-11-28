@@ -2404,3 +2404,30 @@ doctor_scan() {
     fi
     return 0
 }
+
+# ---- 收紧 /proc/susfs_* 节点权限 ----
+# 上游这些节点默认 0777：任何 App 都能读到 "names: susfs_guard_lkm kernelsu"
+# 和 "1 (su_sid=… priv_app_sid=…)"，等于把隐藏模块与 AVC 伪装直接告诉检测器。
+# 这些节点只有 root（本模块脚本/WebUI）需要读写，统一收成 0600；
+# 模块重载/重启后节点会重建，所以每次 apply/load 都要重做一次。
+harden_susfs_nodes() {
+    _hs_n=0
+    _hs_fail=0
+    for _hs_f in /proc/susfs_path /proc/susfs_hide_modules /proc/susfs_hide_mounts \
+                 /proc/susfs_kstat /proc/susfs_map /proc/susfs_opath \
+                 /proc/susfs_open_redirect /proc/susfs_avc_spoof /proc/susfs_enable_log; do
+        [ -e "$_hs_f" ] || continue
+        _hs_m=$(stat -c %a "$_hs_f" 2>/dev/null)
+        [ "$_hs_m" = "600" ] && continue
+        if chmod 600 "$_hs_f" 2>/dev/null; then
+            _hs_n=$((_hs_n + 1))
+        else
+            _hs_fail=$((_hs_fail + 1))
+        fi
+    done
+    if [ "$_hs_n" -gt 0 ]; then
+        echo "[i] 已收紧 $_hs_n 个 /proc/susfs_* 节点权限（0600，普通应用读不到）"
+    fi
+    [ "$_hs_fail" -gt 0 ] && echo "[!] 有 $_hs_fail 个节点权限收紧失败（内核拒绝 chmod）"
+    return 0
+}

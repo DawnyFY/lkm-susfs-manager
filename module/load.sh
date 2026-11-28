@@ -166,7 +166,8 @@ if susfs_kernel_ready; then
     if [ "$NODE_ONLY" != "1" ] && [ -z "$VERSION" ]; then
         echo "[!] ksu_susfs 无法通信（可能与内核 ABI 不匹配），规则由 apply 用备份尝试"
         set_description "⚠️ LKM 已加载，但 $(susfs_hint comm)"
-        echo 0 > "$STATE/fail_count"
+        harden_susfs_nodes
+echo 0 > "$STATE/fail_count"
         echo "=== load skip-tooling ==="
         exit 0
     fi

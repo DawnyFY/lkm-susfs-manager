@@ -182,6 +182,35 @@ pid_guard_comms=probe-*,canProbe*,ivecheck*
 `policyvers=33`、`policy` 可读、`Enforcing`，本模块的 sus_path 里没有任何 `/sys` 或 selinux 路径），
 而是 **AVC 记录里的域与触发进程对不上** 被抓到的。
 
+
+### 为什么 avc_spoof=1 会被「SELinux 侧信道」检测到（真机定位）
+
+不是伪装逻辑本身暴露，而是**上游节点的权限**：
+
+```
+-rwxrwxrwx /proc/susfs_avc_spoof     → "1 (su_sid=2928 priv_app_sid=2606)"
+-rwxrwxrwx /proc/susfs_hide_modules  → "names: susfs_guard_lkm kernelsu"
+-rwxrwxrwx /proc/susfs_path /kstat /map /opath /open_redirect …
+```
+
+这些节点默认 0777，普通应用直接可读：一个 App 只要 `open("/proc/susfs_avc_spoof")`
+就能看到 AVC 伪装处于开启状态，甚至从 `/proc/susfs_hide_modules` 读到 `susfs_guard_lkm`。
+
+### 修法：每次 apply/load 把它们收成 0600
+
+`apply.sh` 与 `load.sh` 在 LKM 就绪后调用 `harden_susfs_nodes`，把上述 9 个节点 `chmod 600`；
+模块重载或重启后节点会重建，所以每次都重做一次。
+
+真机验证（`adb shell` 在该设备是 root，所以用 `su 10123` 降成应用 uid 复测）：
+
+```
+之前  uid 10123 读 /proc/susfs_avc_spoof → "1 (su_sid=2928 …)"
+      读 /proc/susfs_hide_modules        → "names: susfs_guard_lkm kernelsu"
+现在  uid 10123 读 /proc/susfs_avc_spoof → Permission denied
+      节点权限                        → -rw------- root root
+```
+
+因此 `avc_spoof=1` 可以继续开着：AVC 记录照样伪装，但普通应用读不到这个开关的状态。
 ### 怎么选
 
 | 你更在意 | 建议 |
