@@ -33,4 +33,4 @@ shell 侧 `susfs_path_loop_node_add()` 已接入 apply：loop 规则按「ksu_su
 - loop 规则在旧内核（未打补丁的 LKM）上仍然退化成普通 sus_path，不会报失败
 - 1.3.2 的 AVC 默认值、节点权限、上游 LKM 同步等行为保持不变
 
-产物 18,678,821 B / `30b39df1dd9c364cb9e93a9d004ad94a562290909e88e081dc72cd4fbf0ac51f` / manifest `d352087b…`（60 文件）
+产物 18,679,592 B / `e828fd711cda147fba6b1ab9f4eb4538d0ce5a09e82d96ad83fdc4975791a072` / manifest `14e73691…`（60 文件）

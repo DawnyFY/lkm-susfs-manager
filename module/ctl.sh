@@ -220,6 +220,11 @@ status() {
     RULES=0
     if [ -r /proc/susfs_path ]; then
         _seen_rules=" "
+        # 1.3.3：必须先整体快照再逐行解析。seq_file 节点用「一行一次 read()」的方式读取时
+        # 会在第一条 path 之后提前 EOF（POSIX sh 的 read 按字节读），导致规则数被算成 1。
+        _snap="$STATE/.node_snapshot"
+        mkdir -p "$STATE" 2>/dev/null
+        cat /proc/susfs_path > "$_snap" 2>/dev/null
         while read -r _line; do
             case "$_line" in path=*) ;; *) continue ;; esac
             case "$_line" in *"[ours:"*) continue ;; esac
@@ -228,7 +233,8 @@ status() {
             case "$_seen_rules" in *" $_p "*) continue ;; esac
             _seen_rules="$_seen_rules$_p "
             RULES=$((RULES + 1))
-        done < /proc/susfs_path
+        done < "$_snap"
+        rm -f "$_snap" 2>/dev/null
     fi
     HIDE=0
     hide_list_has kernelsu && HIDE=1
@@ -455,6 +461,12 @@ case "$1" in
         ;;
     resume_autoload)
         resume_autoload
+        ;;
+    enable)
+        # 1.3.3：解除加载失败自愈守卫留下的禁用状态
+        rm -f "$MODDIR/disable" "$STATE/load_attempts" 2>/dev/null
+        echo "已解除禁用（disable 与加载计数已清除），执行 ctl.sh load 重新加载"
+        exit 0
         ;;
     compat)
         compat_check

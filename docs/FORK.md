@@ -106,3 +106,42 @@ module/lib/<kmi>.ko           上游原版（保留，作为回退）
 | 1 | P1 补丁（`/proc/susfs_path` 增加 `add_loop`）+ shell 侧接线 + 离线测试 | ✅ 已实现（补丁 +54/-39，WSL 编译通过，`git apply` 干净）|
 | 2 | DDK CI 产出 8 个 KMI，进 `module/lib/fork/`，带回退 | 待做 |
 | 3 | 真机验证（6.6 + 一台 5.15/6.1）后默认启用 | 待做 |
+
+## 真机结论（2026-11-28，设备 8e483448 / 6.6.77）
+
+### 前四次崩溃的真正原因：不是模块，是实验方法
+
+之前是「`rmmod` 掉正在运行的官方 SUSFS → 立刻 `insmod` 我们的」：`rmmod` 虽然返回 0，
+但 KernelSU 侧的 hook 状态没有完整撤销，紧接着装载另一个同结构模块必然把内核打崩。
+
+改成**换文件 + 重启、让 KSU 在开机时加载**后，同一个 .ko 一次加载成功：
+
+```
+susfs_insmod: init_module(4555032 bytes, 124 symbols absolutized, params "expose_proc=1")
+susfs_insmod: OK: /sys/module/susfs_guard_lkm exists
+[i] variant: GKI-LKM · version: v2.3.0
+```
+
+### 能加载的关键：`__versions` 节大小清零
+
+CRC 是按「编译时内核」算的，跨内核必然不匹配（实测 6.6.66 与 6.6.77 的 `module_layout` CRC 就不同：
+`0x4e276f37` vs `0x6500052f`）。上游官方 .ko 的做法是**保留 `__versions` 节但把大小设成 0**，
+让内核遍历 0 次直接放行（只 taint）。照这个做之后加载正常。
+
+### add_loop 真机验证（全部通过）
+
+| 用例 | 结果 |
+|---|---|
+| `add_loop` 指向不存在的路径 | 立即建规则 `dev=0 ino=0 (pending)` |
+| 创建目录后 | 4 秒内解析：`pending=0`、`passes=2 walks=1 last-rc=0` |
+| 普通应用可见性（uid 10123） | 目录列表不可见 + `stat` ENOENT |
+| root / shell（uid 0 / 2000） | 可见（`hide_from_apps=1` 符合设计） |
+| `del` 删除 | rc=0，条目消失，应用恢复可见 |
+| 普通 `add` 合法路径 | rc=0，隐藏立即生效 |
+| 普通 `add` 不存在路径 | rc=1（**不会**变 pending，与 loop 语义严格区分） |
+
+### 仍未解决
+
+- 本次构建的目标是 `android15-6.6` 这一台设备；其它 KMI 仍需各自按同法构建（或继续用官方 .ko）
+- `[ours: clear/del refuse it]` 标记：本构建下节点里所有规则都被标为「本模块所有」，
+  导致 `ctl.sh status` 的 rules 计数为 0（计数故意排除 ours 项）。待查是 CLI 与节点两条下发路径的 `self_protect` 差异。

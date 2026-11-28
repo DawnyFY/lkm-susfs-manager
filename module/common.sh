@@ -2530,3 +2530,27 @@ susfs_path_loop_node_add() {
     # 回读确认：内核渲染成 path=<p> ...（pending 条目也会出现在列表里）
     grep -F -q "path=$_sln_p " "$_sln_node" 2>/dev/null
 }
+
+# ---- 1.3.3：加载自愈守卫 ----
+# 在真正 insmod 之前先把「本次尝试」写盘；加载成功才清零。
+# 如果 .ko 会让内核直接崩（panic 无从写日志），这条计数就是唯一的证据来源：
+# 连续 load_retry_max 次没走到清零 → 下次启动自动 disable，避免无限 bootloop。
+load_guard_begin() {
+    _lg_max=${load_retry_max:-2}
+    case "$_lg_max" in ''|*[!0-9]*) _lg_max=2 ;; esac
+    _lg_n=$(cat "$STATE/load_attempts" 2>/dev/null)
+    case "$_lg_n" in ''|*[!0-9]*) _lg_n=0 ;; esac
+    if [ "$_lg_n" -ge "$_lg_max" ]; then
+        : > "$MODDIR/disable" 2>/dev/null
+        echo "[!] 已连续 $_lg_n 次加载未成功，自动禁用模块避免循环重启"
+        echo "[i] 排查后执行 ctl.sh enable 恢复（会清空计数并删除 disable）"
+        return 1
+    fi
+    printf '%s\n' $((_lg_n + 1)) > "$STATE/load_attempts" 2>/dev/null
+    sync 2>/dev/null || true
+    return 0
+}
+
+load_guard_ok() {
+    rm -f "$STATE/load_attempts" 2>/dev/null
+}

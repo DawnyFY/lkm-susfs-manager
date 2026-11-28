@@ -19,6 +19,9 @@ echo "[i] root: $(root_family)"
 # 加载前校验：文件被改过就不注入内核
 _cf_gate || { echo "[!] 模块文件与发布包不一致，拒绝加载"; exit 1; }
 
+# 1.3.3：崩溃自愈守卫 —— 加载前先计数并落盘；成功才清零，连续失败自动禁用
+load_guard_begin || exit 0
+
 # 尽早记录真实内核：此处一定还没被本模块伪装过
 save_real_uname
 
@@ -179,6 +182,7 @@ echo 0 > "$STATE/fail_count"
         set_description "✅ LKM 已加载 | ${VERSION} | 等待应用规则"
     fi
     _cf_run 2>&1 || true
+    load_guard_ok
     echo "=== load ok ==="
     exit 0
 fi
@@ -372,5 +376,6 @@ if command -v timeout >/dev/null 2>&1; then
 else
     sh "$MODDIR/pid_guard.sh" "$KMI" 2>/dev/null || true
 fi
+load_guard_ok
 echo "=== load ok ==="
 exit 0
