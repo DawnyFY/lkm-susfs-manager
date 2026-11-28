@@ -2213,31 +2213,36 @@ lkm_symbols_check() {
     _lsc_file="$LKM_SYMBOLS_DIR/$_lsc_kmi.symbols"
     [ -r "$_lsc_file" ] || return 0
     [ -r "$KALLSYMS_FILE" ] || return 0
-    command -v grep >/dev/null 2>&1 || return 0
-    _lsc_tmp=${TMPDIR:-/tmp}
-    _lsc_present="$_lsc_tmp/.lkm_sym_present.$$"
+    command -v awk >/dev/null 2>&1 || return 0
+    _lsc_tmp=${TMPDIR:-$STATE}
+    mkdir -p "$_lsc_tmp" 2>/dev/null
+    _lsc_syms="$_lsc_tmp/.lkm_sym_want.$$"
     _lsc_missing="$_lsc_tmp/.lkm_sym_missing.$$"
-    # kallsyms 每行是「地址 类型 符号名」：只比第 3 字段，避免子串误判（kmalloc 被 kmalloc_caches 满足）
-    awk '{print $3}' "$KALLSYMS_FILE" 2>/dev/null | sort -u > "$_lsc_present"
-    if [ ! -s "$_lsc_present" ]; then
-        rm -f "$_lsc_present" "$_lsc_missing" 2>/dev/null
-        # 完全读不到符号（kallsyms 被裁成 0 行等）：不阻断，交给实际加载
-        return 0
+    # tr -d CR：清单万一带 CRLF 也照样比对（生成脚本已改 LF，这里兜底）
+    tr -d '\r' < "$_lsc_file" 2>/dev/null | grep -v '^$' > "$_lsc_syms"
+    _lsc_total=$(grep -c . "$_lsc_syms" 2>/dev/null)
+    _lsc_ks=$(grep -c . "$KALLSYMS_FILE" 2>/dev/null)
+    if [ "${_lsc_total:-0}" -eq 0 ] || [ "${_lsc_ks:-0}" -eq 0 ]; then
+        rm -f "$_lsc_syms" "$_lsc_missing" 2>/dev/null
+        return 0   # 读不到清单或读不到 kallsyms：不阻断，交给实际加载
     fi
-    grep -F -x -v -f "$_lsc_present" "$_lsc_file" 2>/dev/null > "$_lsc_missing"
+    # 只比 kallsyms 的第 3 字段（精确匹配），避免 kmalloc 被 kmalloc_caches 满足
+    awk 'NR==FNR { want[$0] = 1; next } { delete want[$3] } END { for (k in want) print k }' \
+        "$_lsc_syms" "$KALLSYMS_FILE" > "$_lsc_missing" 2>/dev/null
     _lsc_n=$(grep -c . "$_lsc_missing" 2>/dev/null)
-    _lsc_ok=$(grep -c . "$_lsc_present" 2>/dev/null)
+    _lsc_ok=$(( ${_lsc_total:-0} - ${_lsc_n:-0} ))
     if [ "${_lsc_n:-0}" = "0" ]; then
-        echo "[i] 符号预检：$_lsc_ok/$(grep -c . "$_lsc_file") 全部可解析"
-        rm -f "$_lsc_present" "$_lsc_missing" 2>/dev/null
+        echo "[i] 符号预检：$_lsc_ok/$_lsc_total 全部可解析"
+        rm -f "$_lsc_syms" "$_lsc_missing" 2>/dev/null
         return 0
     fi
     echo "[!] 符号预检：$_lsc_kmi 有 $_lsc_n 个符号本机内核没有（很可能加载失败）"
-    echo "    缺失示例: $(head -n 5 "$_lsc_missing" | tr "\n" " ")"
+    echo "    缺失示例: $(head -n 5 "$_lsc_missing" | tr '\n' ' ')"
     echo "    建议: 换 KMI（ctl.sh suggest_kmi 会给建议）或等该内核适配"
-    rm -f "$_lsc_present" "$_lsc_missing" 2>/dev/null
+    rm -f "$_lsc_syms" "$_lsc_missing" 2>/dev/null
     return 1
 }
+
 
 # ---- KMI 建议器：未匹配内核串 → 最接近的打包 KMI ----
 # 依据：主版本（5.10/5.15/6.1/6.6/6.12/6.18）+ 内核串里的 androidNN 提示。
@@ -2355,9 +2360,23 @@ doctor_scan() {
             _ds_note "WARN" "pid_guard 已启用但 UID 与进程名都为空（不会命中任何进程）"
             _ds_bad=$((_ds_bad + 1))
         fi
-        case "$_ds_c" in
-            *"*,"*|*",*"*) _ds_note "WARN" "pid_guard 的 * 只能作后缀（前缀匹配）: $_ds_c"; _ds_bad=$((_ds_bad + 1)) ;;
-        esac
+        # * 只能出现在每一项末尾（前缀匹配）：逐项检查，而不是拿 "," 猜
+        _ds_r=$_ds_c
+        while [ -n "$_ds_r" ]; do
+            case "$_ds_r" in
+                *,*) _ds_t=${_ds_r%%,*}; _ds_r=${_ds_r#*,} ;;
+                *) _ds_t=$_ds_r; _ds_r="" ;;
+            esac
+            [ -n "$_ds_t" ] || continue
+            case "$_ds_t" in
+                *'*')
+                    _ds_star=${_ds_t%'*'}
+                    case "$_ds_star" in
+                        *'*') _ds_note "WARN" "pid_guard 的 * 只能作后缀: $_ds_t"; _ds_bad=$((_ds_bad + 1)) ;;
+                    esac
+                    ;;
+            esac
+        done
     fi
 
     _ds_fmo="$_ds_dir/sus_mount.txt"

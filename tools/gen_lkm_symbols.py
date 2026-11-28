@@ -45,7 +45,10 @@ def main():
         kmi = ko.stem.replace("susfs_guard_lkm-", "")
         syms = [s for s in read_elf_undef(ko)
                 if s not in skip and not s.startswith("__gnu_mcount")]
-        (out_dir / (kmi + ".symbols")).write_text("\n".join(syms) + "\n", encoding="utf-8")
+        # 必须显式 newline="\n"：write_text 在 Windows 上会把 \n 翻成 \r\n，
+        # 生成的清单在设备上 grep -x 永远匹配不上（真机踩过：116 个符号全报缺失）
+        with open(out_dir / (kmi + ".symbols"), "w", encoding="utf-8", newline="\n") as f:
+            f.write("\n".join(syms) + "\n")
         print("%-16s %3d symbols" % (kmi, len(syms)))
         total += 1
     print("KMI 清单: %d 份 -> %s" % (total, out_dir))
