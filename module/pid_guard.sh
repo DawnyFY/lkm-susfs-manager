@@ -162,7 +162,11 @@ unload() {
 # 配置只按固定键读取，**绝不 source**：
 # 历史实现 `. "$CONF"` 会把 $(...)/; 当 shell 执行（root），且值里一个空格就按 POSIX
 # 赋值规则把整个字段截断成空——insmod 仍成功、状态仍 ok，功能静默消失。
-conf_get() { grep -m1 "^$1=" "$CONF" 2>/dev/null | cut -d= -f2-; }
+# conf_get 已上移到 common.sh；本脚本刻意不 source common.sh（保持独立可测），
+# 所以这里留一个本地实现兜底，只有在独立运行时才生效。
+command -v conf_get >/dev/null 2>&1 || conf_get() {
+    grep -m1 "^$1=" "$CONF" 2>/dev/null | cut -d= -f2-
+}
 
 PG_BAD=""
 pg_reject() { PG_BAD=$1; }

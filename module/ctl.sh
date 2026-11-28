@@ -870,7 +870,7 @@ case "$1" in
         ;;
     set_bundle)
         # 和 apply 共用一把锁，避免写规则文件时被另一次 apply 读到半截
-        lock_acquire "$STATE/apply.lock" 900 400 || { echo "apply busy"; exit 1; }
+        lock_acquire "$STATE/apply.lock" 300 400 || { echo "apply busy"; exit 1; }
         trap 'lock_release "$STATE/apply.lock"' EXIT
         # 一次写入 config + 7 个规则文件（WebUI 保存从 8 次调用降到 1 次）。
         #
@@ -1067,92 +1067,7 @@ case "$1" in
         ;;
 
     doctor)
-        # 规则健康度自检：把「apply 之后才发现失败」提前成「改配置时就能看到」
-        _dr_bad=0
-        _dr_note() { printf '%-8s %s\n' "$1" "$2"; }
-        echo "== 规则健康度自检 =="
-
-        # 1) sus_path：不存在 / 非绝对路径 / 检测类目录 / 重复
-        _dr_f="$CONFIG/sus_path.txt"
-        if [ -f "$_dr_f" ]; then
-            _dr_seen=""
-            while IFS= read -r _dr_l || [ -n "$_dr_l" ]; do
-                _dr_p=$(clean_entry "$_dr_l")
-                [ -n "$_dr_p" ] || continue
-                case "$_dr_p" in
-                    /*) ;;
-                    *) _dr_note "WARN" "sus_path 非绝对路径: $_dr_p"; _dr_bad=$((_dr_bad + 1)); continue ;;
-                esac
-                case ",$_dr_seen," in
-                    *",$_dr_p,"*) _dr_note "WARN" "sus_path 重复条目: $_dr_p"; _dr_bad=$((_dr_bad + 1)); continue ;;
-                esac
-                _dr_seen="$_dr_seen,$_dr_p"
-                if [ ! -e "$_dr_p" ]; then
-                    _dr_note "MISS" "sus_path 路径不存在: $_dr_p（临时路径请用 sus_path_loop.txt）"
-                    _dr_bad=$((_dr_bad + 1))
-                elif is_detection_app_path "$_dr_p" 2>/dev/null; then
-                    _dr_note "WARN" "sus_path 落在检测类应用目录（会被 apply 跳过）: $_dr_p"
-                    _dr_bad=$((_dr_bad + 1))
-                fi
-            done < "$_dr_f"
-        fi
-
-        # 2) sus_path_loop：路径已存在就该放 sus_path（loop 只对迟到路径有意义）
-        _dr_fl="$CONFIG/sus_path_loop.txt"
-        if [ -f "$_dr_fl" ]; then
-            while IFS= read -r _dr_l || [ -n "$_dr_l" ]; do
-                _dr_p=$(clean_entry "$_dr_l")
-                [ -n "$_dr_p" ] || continue
-                if [ -e "$_dr_p" ]; then
-                    _dr_note "NOTE" "sus_path_loop 里的路径已存在，可移到 sus_path: $_dr_p"
-                fi
-            done < "$_dr_fl"
-        fi
-
-        # 3) hide_modules：条目不存在时内核会拒绝
-        _dr_fm="$CONFIG/hide_modules.txt"
-        if [ -f "$_dr_fm" ]; then
-            while IFS= read -r _dr_m || [ -n "$_dr_m" ]; do
-                _dr_m=$(clean_entry "$_dr_m")
-                [ -n "$_dr_m" ] || continue
-                if [ ! -d "/sys/module/$_dr_m" ] && [ ! -f "/sys/module/$_dr_m" ]; then
-                    _dr_note "NOTE" "hide_modules 里的模块当前不存在（重启后可能才有）: $_dr_m"
-                fi
-            done < "$_dr_fm"
-        fi
-
-        # 4) pid_guard 规则
-        _dr_fp="$CONFIG/pid_guard.conf"
-        if [ -f "$_dr_fp" ]; then
-            _dr_en=$(conf_get enabled 2>/dev/null)
-            _dr_u=$(conf_get target_uids 2>/dev/null)
-            _dr_c=$(conf_get target_comms 2>/dev/null)
-            if [ "$_dr_en" = "1" ] && [ -z "$_dr_u" ] && [ -z "$_dr_c" ]; then
-                _dr_note "WARN" "pid_guard 已启用但 UID 与进程名都为空（不会命中任何进程）"; _dr_bad=$((_dr_bad + 1))
-            fi
-            case "$_dr_c" in
-                *"*,"*|*",*"*) _dr_note "WARN" "pid_guard 的 * 只能作后缀（前缀匹配）: $_dr_c"; _dr_bad=$((_dr_bad + 1)) ;;
-            esac
-        fi
-
-        # 5) 挂载前缀：必须以 / 开头
-        _dr_fmo="$CONFIG/sus_mount.txt"
-        if [ -f "$_dr_fmo" ]; then
-            while IFS= read -r _dr_p || [ -n "$_dr_p" ]; do
-                _dr_p=$(clean_entry "$_dr_p")
-                [ -n "$_dr_p" ] || continue
-                case "$_dr_p" in
-                    /*) ;;
-                    *) _dr_note "WARN" "挂载前缀未以 / 开头: $_dr_p"; _dr_bad=$((_dr_bad + 1)) ;;
-                esac
-            done < "$_dr_fmo"
-        fi
-
-        if [ "$_dr_bad" = "0" ]; then
-            echo "结果: 未发现明显问题"
-        else
-            echo "结果: $_dr_bad 处需要注意（上面 WARN/MISS 行）"
-        fi
+        doctor_scan "$CONFIG"
         ;;
 
     suggest_kmi)

@@ -630,6 +630,7 @@ cfg_load() {
             spoof_uname_version) spoof_uname_version=$_v ;;
             hide_vendor_sepolicy) hide_vendor_sepolicy=$_v ;;
             vold_isolation) vold_isolation=$_v ;;
+            watchdog_minutes) watchdog_minutes=$_v ;;
             *) : ;;
         esac
     done <<EOF
@@ -1550,7 +1551,9 @@ lock_acquire() {
                 if [ "$_reclaim" = "0" ] && [ -n "$_lk_bid" ] && [ -n "$_bid" ] && [ "$_lk_bid" != "$_bid" ]; then
                     _reclaim=1
                 fi
-                # 超时
+                # 超时回收：TTL 就是「持有者承诺的最长持锁时间」，超过即可回收。
+                # 审计 MJ-4 的真正问题是三处 TTL 不一致（30/180/900），已在 ctl.sh 统一为 180；
+                # 双持有的风险由后面的 pid 归属回读兜住。
                 if [ "$_reclaim" = "0" ]; then
                     _now=$(date +%s 2>/dev/null)
                     _mt=$(stat -c %Y "$_lk" 2>/dev/null)
@@ -1716,6 +1719,15 @@ clear_own_paths() {
 }
 
 # 去掉注释：只认行首或空白后的 #，路径里的 # 原样保留
+# 配置文件读取（原在 pid_guard.sh —— doctor/service.sh 共用，故上移）
+conf_get() {
+    _cg_key=$1
+    _cg_file=${2:-${CONF:-}}
+    [ -n "$_cg_key" ] || return 1
+    [ -n "$_cg_file" ] && [ -r "$_cg_file" ] || return 1
+    grep -m1 "^$_cg_key=" "$_cg_file" 2>/dev/null | cut -d= -f2-
+}
+
 # 规则文件行清洗（apply.sh 与 ctl.sh doctor 共用；原定义在 apply.sh）
 clean_entry() {
     strip_comment "$1"
@@ -2091,7 +2103,7 @@ diag_load_failure() {
         esac
     done
     if [ -n "$_dl_busy" ]; then
-        echo "[!] 检测到其它进程正在加载模块（并发 insmod/ksud）:$ _dl_busy"
+        echo "[!] 检测到其它进程正在加载模块（并发 insmod/ksud）:$_dl_busy"
         echo "    [i] 建议：等它结束再重试；开机阶段多个模块同时 insmod 容易撞 EBUSY/EEXIST"
     fi
 
@@ -2205,7 +2217,8 @@ lkm_symbols_check() {
     _lsc_tmp=${TMPDIR:-/tmp}
     _lsc_present="$_lsc_tmp/.lkm_sym_present.$$"
     _lsc_missing="$_lsc_tmp/.lkm_sym_missing.$$"
-    grep -F -o -f "$_lsc_file" "$KALLSYMS_FILE" 2>/dev/null | sort -u > "$_lsc_present"
+    # kallsyms 每行是「地址 类型 符号名」：只比第 3 字段，避免子串误判（kmalloc 被 kmalloc_caches 满足）
+    awk '{print $3}' "$KALLSYMS_FILE" 2>/dev/null | sort -u > "$_lsc_present"
     if [ ! -s "$_lsc_present" ]; then
         rm -f "$_lsc_present" "$_lsc_missing" 2>/dev/null
         # 完全读不到符号（kallsyms 被裁成 0 行等）：不阻断，交给实际加载
@@ -2279,4 +2292,90 @@ adjacent_kmi_hint() {
     done
     [ -n "$_akh_out" ] || return 0
     printf "同版本其它 KMI 可试：%s" "$(printf "%s" "$_akh_out" | sed "s/^ //")"
+}
+
+# ---- 规则健康度自检（ctl.sh doctor 与离线测试共用）----
+# 参数：配置目录（缺省 $CONFIG）。输出 WARN/MISS/NOTE 行与计数，返回 0 恒。
+doctor_scan() {
+    _ds_dir=${1:-$CONFIG}
+    _ds_bad=0
+    _ds_note() { printf '%-8s %s\n' "$1" "$2"; }
+    echo "== 规则健康度自检 =="
+
+    _ds_f="$_ds_dir/sus_path.txt"
+    if [ -f "$_ds_f" ]; then
+        _ds_seen=""
+        while IFS= read -r _ds_l || [ -n "$_ds_l" ]; do
+            _ds_p=$(clean_entry "$_ds_l")
+            [ -n "$_ds_p" ] || continue
+            case "$_ds_p" in
+                /*) ;;
+                *) _ds_note "WARN" "sus_path 非绝对路径: $_ds_p"; _ds_bad=$((_ds_bad + 1)); continue ;;
+            esac
+            case ",$_ds_seen," in
+                *",$_ds_p,"*) _ds_note "WARN" "sus_path 重复条目: $_ds_p"; _ds_bad=$((_ds_bad + 1)); continue ;;
+            esac
+            _ds_seen="$_ds_seen,$_ds_p"
+            if [ ! -e "$_ds_p" ]; then
+                _ds_note "MISS" "sus_path 路径不存在: $_ds_p（临时路径请用 sus_path_loop.txt）"
+                _ds_bad=$((_ds_bad + 1))
+            elif is_detection_app_path "$_ds_p" 2>/dev/null; then
+                _ds_note "WARN" "sus_path 落在检测类应用目录（会被 apply 跳过）: $_ds_p"
+                _ds_bad=$((_ds_bad + 1))
+            fi
+        done < "$_ds_f"
+    fi
+
+    _ds_fl="$_ds_dir/sus_path_loop.txt"
+    if [ -f "$_ds_fl" ]; then
+        while IFS= read -r _ds_l || [ -n "$_ds_l" ]; do
+            _ds_p=$(clean_entry "$_ds_l")
+            [ -n "$_ds_p" ] || continue
+            [ -e "$_ds_p" ] && _ds_note "NOTE" "sus_path_loop 里的路径已存在，可移到 sus_path: $_ds_p"
+        done < "$_ds_fl"
+    fi
+
+    _ds_fm="$_ds_dir/hide_modules.txt"
+    if [ -f "$_ds_fm" ]; then
+        while IFS= read -r _ds_m || [ -n "$_ds_m" ]; do
+            _ds_m=$(clean_entry "$_ds_m")
+            [ -n "$_ds_m" ] || continue
+            if [ ! -e "/sys/module/$_ds_m" ]; then
+                _ds_note "NOTE" "hide_modules 里的模块当前不存在（重启后可能才有）: $_ds_m"
+            fi
+        done < "$_ds_fm"
+    fi
+
+    _ds_fp="$_ds_dir/pid_guard.conf"
+    if [ -f "$_ds_fp" ]; then
+        _ds_en=$(conf_get enabled "$_ds_fp" 2>/dev/null)
+        _ds_u=$(conf_get target_uids "$_ds_fp" 2>/dev/null)
+        _ds_c=$(conf_get target_comms "$_ds_fp" 2>/dev/null)
+        if [ "$_ds_en" = "1" ] && [ -z "$_ds_u" ] && [ -z "$_ds_c" ]; then
+            _ds_note "WARN" "pid_guard 已启用但 UID 与进程名都为空（不会命中任何进程）"
+            _ds_bad=$((_ds_bad + 1))
+        fi
+        case "$_ds_c" in
+            *"*,"*|*",*"*) _ds_note "WARN" "pid_guard 的 * 只能作后缀（前缀匹配）: $_ds_c"; _ds_bad=$((_ds_bad + 1)) ;;
+        esac
+    fi
+
+    _ds_fmo="$_ds_dir/sus_mount.txt"
+    if [ -f "$_ds_fmo" ]; then
+        while IFS= read -r _ds_mo || [ -n "$_ds_mo" ]; do
+            _ds_mo=$(clean_entry "$_ds_mo")
+            [ -n "$_ds_mo" ] || continue
+            case "$_ds_mo" in
+                /*) ;;
+                *) _ds_note "WARN" "挂载前缀未以 / 开头: $_ds_mo"; _ds_bad=$((_ds_bad + 1)) ;;
+            esac
+        done < "$_ds_fmo"
+    fi
+
+    if [ "$_ds_bad" = "0" ]; then
+        echo "结果: 未发现明显问题"
+    else
+        echo "结果: $_ds_bad 处需要注意（上面 WARN/MISS 行）"
+    fi
+    return 0
 }

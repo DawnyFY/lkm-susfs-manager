@@ -30,13 +30,9 @@ esac
 case "$rc" in
     0|5) printf '%s %s\n' "$(date '+%F %T' 2>/dev/null)" "$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)" > "$STATE/boot_stage_completed" 2>/dev/null ;;
 esac
-
-exit "$rc"
-
-
 # LKM 掉线看护：系统 OOM 或别的工具 rmmod 后，按上次配置重载。
 # 频率由 config.ini 的 watchdog_minutes 控制（0=关闭，默认 0，避免无谓唤醒）。
-WD=$(conf_get watchdog_minutes 2>/dev/null)
+WD=$(conf_get watchdog_minutes "$CONFIG/config.ini" 2>/dev/null)
 case "$WD" in ''|*[!0-9]*) WD=0 ;; esac
 if [ "$WD" -gt 0 ] 2>/dev/null; then
     (
@@ -51,3 +47,5 @@ if [ "$WD" -gt 0 ] 2>/dev/null; then
         done
     ) &
 fi
+
+exit "$rc"

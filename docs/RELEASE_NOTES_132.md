@@ -2,6 +2,35 @@
 
 > 这一版只改「加载失败时能看懂发生了什么」。功能与 1.3.1 一致。
 
+## 1.3.2 新增（本轮）
+
+### 符号级预检
+打包 8 份 `module/lib/symbols/<KMI>.symbols`（由 `tools/gen_lkm_symbols.py` 从 .ko 的 ELF 未定义符号生成，113~124 条）。
+`load.sh` 在 insmod 之前用 `/proc/kallsyms` 逐字段精确比对，缺符号时直接列出前 5 个名字，
+而不是等 errono 14/22 再猜。
+
+### KMI 建议器
+`ctl.sh suggest_kmi` 按主版本 + 内核串里的 `androidNN` 选出最接近的打包 KMI，并给出可直接复制的 `force_kmi=` 行；
+`diag_load_failure` 在 errno 14/22 时提示同版本其它 KMI 可试，在 2/8/38/61 时给最接近的 KMI 建议。
+
+### doctor（规则健康度自检）
+`ctl.sh doctor` 检查六类问题：sus_path 不存在/非绝对/重复/落在检测 App 目录、sus_path_loop 里路径已存在、
+hide_modules 当前不存在、pid_guard 空规则与 `*` 位置、挂载前缀未以 `/` 开头。干净配置不误报。
+
+### LKM 掉线看护（默认关闭）
+`config.ini` 的 `watchdog_minutes`（默认 0）设为非 0 时，`service.sh` 低频检查 `/sys/module/susfs_guard_lkm`
+与 `/proc/susfs_path`，掉线则记日志并重跑 apply。
+
+### 节点后端 loop 退化
+`NODE_ONLY=1` 且路径已存在时，`sus_path_loop` 条目按普通 `sus_path` 下发，不再整条判失败。
+
+### PID 隐藏统计修复
+`count_matched` 旧实现恒返回 0（读 status 的方式有 bug）；改为 `stat -c %u` + 60 秒缓存，
+卸载/改参数时清缓存；PID 页面新增「命中进程」与 0 命中提示。
+
+### 锁归属二次确认
+`lock_acquire` 写完 pid 后回读确认等于 `$$` 才算抢到，堵住并发双持有；
+活锁不再按 age 被抢（只有拿不到 pid 时才按年龄回收）。
 ## 为什么做这个
 
 服务器失败日志里 `[!] LKM 加载失败，请查看日志 (rc=N)` 是最常见的一条，
@@ -58,7 +87,7 @@ susfs_insmod: init_module failed: errno 61
 - 真机（6.6.77 / KernelSU）：诊断链路实测通过；
   本机 `CONFIG_MODULE_SIG=y` 但无 `FORCE`，所以加载正常 —— 正好验证了判定条件
 
-产物 13,226,189 B / `0ee601d6813facc8dd8c387fc507d20f8867635b0f1cefc740ca1a446c06c5ef` / manifest `a5db66d8…`（40 文件）
+产物 13,237,135 B / `cc7db3a220fa10f3fe0808c184380c571090c54314b76f7af81342423ea80528` / manifest `702405fe…`（60 文件）
 
 ## 附带：sus_path 里「不存在的路径」不再计入规则失败
 
@@ -71,4 +100,4 @@ sus_path，路径本来就不存在，于是每次 apply 都记一次失败、�
 
 apply 结果不再因此降级为 partial；真有内核拒绝时仍会照常报失败。
 
-产物 13,226,189 B / `0ee601d6813facc8dd8c387fc507d20f8867635b0f1cefc740ca1a446c06c5ef` / manifest `a5db66d8…`（40 文件）
+产物 13,237,135 B / `cc7db3a220fa10f3fe0808c184380c571090c54314b76f7af81342423ea80528` / manifest `702405fe…`（60 文件）

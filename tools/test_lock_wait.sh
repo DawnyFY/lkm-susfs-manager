@@ -48,7 +48,7 @@ chk "接管耗时可忽略（<5s）" "$([ $((t1 - t0)) -lt 5 ] && echo ok || ech
 
 # 4) 结构断言
 C="$REPO/ctl.sh"
-chk "set_bundle 等 20s（400 刻度）" "$(grep -c 'lock_acquire "\$STATE/apply.lock" 900 400' "$C")" "1"
+chk "set_bundle 等 20s（400 刻度）" "$(grep -c 'lock_acquire "\$STATE/apply.lock" 300 400' "$C")" "1"
 chk "set_config 等 10s（200 刻度，TTL 180）" "$(grep -c 'lock_acquire "\$STATE/apply.lock" 180 200' "$C")" "1"
 chk "lock_acquire 支持第 3 个参数" "$(grep -c '_waits=\${3:-40}' "$REPO/common.sh")" "1"
 chk "主锁也在重试循环里" "$(grep -c 'if \[ ! -e "\$_lk" \] && mkdir "\$_lk"' "$REPO/common.sh")" "1"
