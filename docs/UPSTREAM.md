@@ -19,7 +19,7 @@ SUSFS 部分仍然完全来自上游。
 
 | 上游 | 仓库 | 版本 | 本项目使用方式 |
 |---|---|---|---|
-| inforcqb / susfs4ksu-lkm | https://github.com/inforcqb/susfs4ksu-for-lkm | `v2.3.0-r18.9-1` | `lib/susfs_guard_lkm-*.ko`（8）、`bin/susfs_insmod`，原样使用 |
+| inforcqb / susfs4ksu-lkm | https://github.com/inforcqb/susfs4ksu-for-lkm | `ver2.3.0` | `lib/susfs_guard_lkm-*.ko`（8）、`bin/susfs_insmod`，原样使用 |
 | sidex15 / ksu_module_susfs | https://github.com/sidex15/susfs4ksu-module | `v1.5.2+_R28` | `bin/ksu_susfs_good`（回退用），原样使用 |
 | simonpunk / susfs4ksu | 原始 SUSFS 项目 | — | 经 inforcqb 移植，本项目不直接引用 |
 
@@ -40,7 +40,7 @@ SUSFS 部分仍然完全来自上游。
 - 自研内核模块（1.2.7+）：
   - `lib/pid_guard/<kmi>/generic_pid_guard.ko` — 本项目作者，GPL-2.0，源码在 `source/generic_pid_guard/`；
 - 第三方二进制：
-  - `lib/susfs_guard_lkm-*.ko`、`bin/susfs_insmod` — inforcqb / `susfs4ksu-for-lkm` `v2.3.0-r18.9-1`，GPL-2.0，未修改；
+  - `lib/susfs_guard_lkm-*.ko`、`bin/susfs_insmod` — inforcqb / `susfs4ksu-for-lkm` `ver2.3.0`，GPL-2.0，未修改；
   - `bin/ksu_susfs_good` — sidex15 & simonpunk / `susfs4ksu-module` `v1.5.2+_R28`，AGPL-3.0，未修改；
 - 本仓库为上述组件的聚合分发，版权与许可证归原作者所有；
 - 详见 `NOTICE`、`provenance.json`。

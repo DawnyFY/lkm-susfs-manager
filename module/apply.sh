@@ -265,6 +265,7 @@ else
 fi
 has_feature() { printf "%s\n" "$FEATURES" | grep -qx "$1"; }
 
+susfs_log_apply "${susfs_log:-0}" 2>/dev/null || true
 harden_susfs_nodes
 # 用真实内核选 KMI：osrelease 可能被本模块的 uname 伪装改写
 REL=$(real_kernel_release 2>/dev/null)

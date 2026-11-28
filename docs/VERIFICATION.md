@@ -148,3 +148,4 @@ manifest `8d93ac3c…`；同源码重建字节一致。离线 35/35、门禁 5/5
 - **默认隐藏 /data/adb**：`config/sus_path.txt` 默认包含 `/data/adb`；NeoZygisk v2.4 + r18.8 有外部反馈的 zygote 循环重启风险，使用 NeoZygisk 时必须删除该行；模块/SUSFS 不支持从已隐藏父目录排除子目录（本环境未复现）。
 - **用户态取 LKM 状态**依赖管理器 `ksu_susfs` 或模块回退二进制；都不可用时只能看日志。
 - 临时 root 每次重启都要重新注入，不是模块能修复的。
+| 1.3.2 换上游 ver2.3.0 的 .ko | android15-6.6 加载 4,533,936 B / 124 symbols；rules=16、integrity=ok（真机） |

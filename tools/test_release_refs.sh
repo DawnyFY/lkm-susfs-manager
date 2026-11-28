@@ -7,14 +7,14 @@ cd "$ROOT"
 fail=0
 chk() { if ! eval "$1"; then echo "FAIL: $2"; fail=1; else echo "PASS  $2"; fi; }
 
-chk "grep -q 'v2.3.0-r18.9-1' NOTICE" "NOTICE LKM tag r18.9-1"
+chk "grep -q 'ver2.3.0' NOTICE" "NOTICE LKM tag r18.9-1"
 chk "! grep -q 'v2.3.0-r18.8' NOTICE" "NOTICE no r18.8"
 chk "grep -q 'susfs4ksu-for-lkm' NOTICE" "NOTICE canonical repo"
 chk "grep -q 'v1.5.2+_R28' NOTICE" "NOTICE AGPL tag"
-chk "grep -q 'v2.3.0-r18.9-1' docs/UPSTREAM.md" "UPSTREAM LKM tag"
+chk "grep -q 'ver2.3.0' docs/UPSTREAM.md" "UPSTREAM LKM tag"
 chk "grep -q 'v1.5.2+_R28' docs/UPSTREAM.md" "UPSTREAM AGPL tag"
 chk "! grep -rq 'v1.5.2-R28' docs/UPSTREAM.md NOTICE" "no old AGPL tag"
-chk "grep -q 'v2.3.0-r18.9-1' provenance.json" "provenance LKM tag"
+chk "grep -q 'ver2.3.0' provenance.json" "provenance LKM tag"
 
 for f in README.md docs/FAQ.md docs/VERIFICATION.md; do
     chk "! grep -q '或至少排除' \"$f\"" "$f no invalid subdir-exclusion advice"

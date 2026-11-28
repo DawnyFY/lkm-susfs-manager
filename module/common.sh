@@ -631,6 +631,7 @@ cfg_load() {
             hide_vendor_sepolicy) hide_vendor_sepolicy=$_v ;;
             vold_isolation) vold_isolation=$_v ;;
             watchdog_minutes) watchdog_minutes=$_v ;;
+            susfs_log) susfs_log=$_v ;;
             *) : ;;
         esac
     done <<EOF
@@ -2454,4 +2455,22 @@ migrate_avc_spoof_132() {
     fi
     : > "$_ma_sentinel" 2>/dev/null
     return 0
+}
+
+# ---- SUSFS 内核日志开关 ----
+# 上游 ver2.3.0 的新 .ko 比旧版多打很多日志（真机实测 dmesg 里 936 行带 susfs_guard_lkm，
+# 含 lsm_hook 偏移、list head 地址等）。这些行本身是检测面，默认关掉。
+susfs_log_apply() {
+    _sl_v=${1:-0}
+    _sl_node=/proc/susfs_enable_log
+    _sl_param=/sys/module/susfs_guard_lkm/parameters/enable_log
+    _sl_done=0
+    if [ -w "$_sl_node" ]; then
+        printf '%s\n' "$_sl_v" > "$_sl_node" 2>/dev/null && _sl_done=1
+    fi
+    if [ "$_sl_done" = "0" ] && [ -w "$_sl_param" ]; then
+        printf '%s\n' "$_sl_v" > "$_sl_param" 2>/dev/null && _sl_done=1
+    fi
+    [ "$_sl_done" = "1" ] && return 0
+    return 1
 }

@@ -12,6 +12,7 @@ __kvmalloc_node_noprof
 __list_add_valid_or_report
 __list_del_entry_valid_or_report
 __msecs_to_jiffies
+__mutex_init
 __num_online_cpus
 __put_cred
 __rcu_read_lock
@@ -35,6 +36,9 @@ cancel_delayed_work_sync
 cancel_work_sync
 copy_from_kernel_nofault
 copy_to_kernel_nofault
+cpus_read_lock
+cpus_read_unlock
+crc32_le
 current_umask
 delayed_work_timer_fn
 down_read
@@ -48,6 +52,7 @@ init_mm
 init_wait_entry
 inode_permission
 iput
+is_vmalloc_addr
 jiffies
 kern_path
 kfree
@@ -57,6 +62,7 @@ kstrtoll
 kvfree
 mas_find
 mem_alloc_profiling_key
+mem_section
 memchr
 memcpy
 memmove
@@ -76,6 +82,7 @@ param_ops_int
 param_ops_string
 param_ops_ulong
 path_put
+preempt_schedule
 prepare_to_wait_event
 proc_create
 proc_remove
@@ -121,4 +128,5 @@ unregister_kretprobe
 up_read
 up_write
 validate_usercopy_range
+vfree
 vsnprintf

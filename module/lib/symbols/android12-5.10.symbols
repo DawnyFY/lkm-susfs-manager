@@ -9,6 +9,7 @@ __kmalloc
 __list_add_valid
 __list_del_entry_valid
 __msecs_to_jiffies
+__mutex_init
 __num_online_cpus
 __put_cred
 __rcu_read_lock
@@ -27,6 +28,9 @@ copy_from_kernel_nofault
 copy_to_kernel_nofault
 cpu_hwcap_keys
 cpu_hwcaps
+cpus_read_lock
+cpus_read_unlock
+crc32_le
 current_umask
 delayed_work_timer_fn
 down_write
@@ -40,9 +44,11 @@ init_mm
 init_wait_entry
 inode_permission
 iput
+is_vmalloc_addr
 jiffies
 kern_path
 kfree
+kimage_voffset
 kmalloc_caches
 kmalloc_order_trace
 kmem_cache_alloc_trace
@@ -68,6 +74,7 @@ param_ops_int
 param_ops_string
 param_ops_ulong
 path_put
+pfn_valid
 prepare_to_wait_event
 printk
 proc_create
@@ -110,4 +117,6 @@ try_module_get
 unregister_kprobe
 unregister_kretprobe
 up_write
+vabits_actual
+vfree
 vsnprintf

@@ -29,10 +29,10 @@ SPDX 标识：GPL-3.0-only
 文件   : lib/susfs_guard_lkm-<kmi>.ko（8 个）、bin/susfs_insmod
 作者   : inforcqb（SUSFS 原始项目 susfs4ksu 作者：simonpunk）
 仓库   : https://github.com/inforcqb/susfs4ksu-for-lkm
-Tag    : v2.3.0-r18.9-1
+Tag    : ver2.3.0
 许可证 : GNU General Public License v2.0（全文见本目录 LICENSE-GPL-2.0）
 修改   : 无。与上游 Release 资产 sha256 完全一致（见 provenance.json）
-源码   : https://github.com/inforcqb/susfs4ksu-for-lkm/tree/v2.3.0-r18.9-1
+源码   : https://github.com/inforcqb/susfs4ksu-for-lkm/tree/ver2.3.0
 
 **为什么不能跟随本项目改为 GPLv3**：这是内核模块，属于 Linux 内核（GPL-2.0-only）
 的衍生作品，必须与内核许可证兼容。GPLv2-only 与 GPLv3 不兼容（FSF 立场），
