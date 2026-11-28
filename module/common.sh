@@ -1716,6 +1716,11 @@ clear_own_paths() {
 }
 
 # 去掉注释：只认行首或空白后的 #，路径里的 # 原样保留
+# 规则文件行清洗（apply.sh 与 ctl.sh doctor 共用；原定义在 apply.sh）
+clean_entry() {
+    strip_comment "$1"
+}
+
 strip_comment() {
     _sk_v=$(printf '%s' "$1" | tr -d '\r')
     _sk_v=$(printf '%s' "$_sk_v" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
@@ -2033,6 +2038,16 @@ diag_load_failure() {
     _dl_errno=${1:-}
     echo "[i] ---- 加载失败诊断 ----"
     _dl_mean=$(errno_meaning "$_dl_errno")
+    case "$_dl_errno" in
+        14|22)
+            # EFAULT/EINVAL：ABI 相近但结构/符号对不上，值得试同版本的其它 KMI
+            _dl_adj=$(adjacent_kmi_hint "$KMI" 2>/dev/null)
+            [ -n "$_dl_adj" ] && echo "[i] $_dl_adj"
+            ;;
+        2|8|38|61)
+            echo "[i] $(suggest_kmi_hint "$(uname -r)")"
+            ;;
+    esac
     [ -n "$_dl_mean" ] && echo "[i] errno $_dl_errno = $_dl_mean"
 
     # 1) 内核里已经有的相关模块（EEXIST/EBUSY 的头号原因）
@@ -2172,4 +2187,96 @@ susfs_avc_node_set() {
     _san_now=$(cat "$_san_node" 2>/dev/null)
     _san_now=${_san_now%% *}
     [ "$_san_now" = "$_san_v" ]
+}
+
+# ---- 加载前符号预检（audit 建议：失败前就知道缺什么）----
+# 符号清单由 tools/gen_lkm_symbols.py 从 .ko 的 ELF 未定义符号生成，
+# 运行时在 /proc/kallsyms 里核对（kptr_restrict=2 会隐藏地址，但符号名仍可见）。
+LKM_SYMBOLS_DIR=${LKM_SYMBOLS_DIR:-$MODDIR/lib/symbols}
+KALLSYMS_FILE=${KALLSYMS_FILE:-/proc/kallsyms}
+
+lkm_symbols_check() {
+    # $1 = KMI（如 android15-6.6）；返回 0 表示全部可解析
+    _lsc_kmi=$1
+    _lsc_file="$LKM_SYMBOLS_DIR/$_lsc_kmi.symbols"
+    [ -r "$_lsc_file" ] || return 0
+    [ -r "$KALLSYMS_FILE" ] || return 0
+    command -v grep >/dev/null 2>&1 || return 0
+    _lsc_tmp=${TMPDIR:-/tmp}
+    _lsc_present="$_lsc_tmp/.lkm_sym_present.$$"
+    _lsc_missing="$_lsc_tmp/.lkm_sym_missing.$$"
+    grep -F -o -f "$_lsc_file" "$KALLSYMS_FILE" 2>/dev/null | sort -u > "$_lsc_present"
+    if [ ! -s "$_lsc_present" ]; then
+        rm -f "$_lsc_present" "$_lsc_missing" 2>/dev/null
+        # 完全读不到符号（kallsyms 被裁成 0 行等）：不阻断，交给实际加载
+        return 0
+    fi
+    grep -F -x -v -f "$_lsc_present" "$_lsc_file" 2>/dev/null > "$_lsc_missing"
+    _lsc_n=$(grep -c . "$_lsc_missing" 2>/dev/null)
+    _lsc_ok=$(grep -c . "$_lsc_present" 2>/dev/null)
+    if [ "${_lsc_n:-0}" = "0" ]; then
+        echo "[i] 符号预检：$_lsc_ok/$(grep -c . "$_lsc_file") 全部可解析"
+        rm -f "$_lsc_present" "$_lsc_missing" 2>/dev/null
+        return 0
+    fi
+    echo "[!] 符号预检：$_lsc_kmi 有 $_lsc_n 个符号本机内核没有（很可能加载失败）"
+    echo "    缺失示例: $(head -n 5 "$_lsc_missing" | tr "\n" " ")"
+    echo "    建议: 换 KMI（ctl.sh suggest_kmi 会给建议）或等该内核适配"
+    rm -f "$_lsc_present" "$_lsc_missing" 2>/dev/null
+    return 1
+}
+
+# ---- KMI 建议器：未匹配内核串 → 最接近的打包 KMI ----
+# 依据：主版本（5.10/5.15/6.1/6.6/6.12/6.18）+ 内核串里的 androidNN 提示。
+suggest_kmi() {
+    _sk_rel=${1:-$(uname -r)}
+    _sk_major=$(printf "%s" "$_sk_rel" | sed -n "s/^\([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p")
+    _sk_android=$(printf "%s" "$_sk_rel" | sed -n "s/.*android\([0-9][0-9]*\).*/\1/p")
+    [ -n "$_sk_major" ] || { printf "%s" ""; return 1; }
+    _sk_cands=""
+    for _sk_f in "$MODDIR"/lib/susfs_guard_lkm-*.ko; do
+        [ -e "$_sk_f" ] || continue
+        _sk_kmi=${_sk_f##*/susfs_guard_lkm-}
+        _sk_kmi=${_sk_kmi%.ko}
+        _sk_ver=${_sk_kmi#*-}
+        [ "$_sk_ver" = "$_sk_major" ] || continue
+        _sk_cands="$_sk_cands $_sk_kmi"
+    done
+    for _sk_c in $_sk_cands; do
+        case "$_sk_c" in
+            *"android$_sk_android-"*) printf "%s" "$_sk_c"; return 0 ;;
+        esac
+    done
+    # 没对上 androidNN：同版本只打包了一个就直接给，多个则给第一个并说明
+    set -- $_sk_cands
+    [ -n "${1:-}" ] || return 1
+    printf "%s" "$1"
+    return 0
+}
+
+suggest_kmi_hint() {
+    # 供人读的一行建议；参数是内核串
+    _skh_rel=${1:-$(uname -r)}
+    _skh_kmi=$(suggest_kmi "$_skh_rel" 2>/dev/null)
+    if [ -n "$_skh_kmi" ]; then
+        printf "最接近的可选 KMI：%s（配置里设 force_kmi=%s 后重试）" "$_skh_kmi" "$_skh_kmi"
+    else
+        printf "本模块未打包与 %s 同版本的 LKM；可试相邻版本 KMI，或改用内置 SUSFS 的内核" "$_skh_rel"
+    fi
+}
+
+# errno 14/22：ABI 相近但符号/结构不一致，值得试相邻 KMI
+adjacent_kmi_hint() {
+    _akh_kmi=${1:-}
+    [ -n "$_akh_kmi" ] || return 0
+    _akh_ver=${_akh_kmi#*-}
+    _akh_out=""
+    for _akh_f in "$MODDIR"/lib/susfs_guard_lkm-*.ko; do
+        [ -e "$_akh_f" ] || continue
+        _akh_c=${_akh_f##*/susfs_guard_lkm-}; _akh_c=${_akh_c%.ko}
+        [ "$_akh_c" = "$_akh_kmi" ] && continue
+        [ "${_akh_c#*-}" = "$_akh_ver" ] && _akh_out="$_akh_out $_akh_c"
+    done
+    [ -n "$_akh_out" ] || return 0
+    printf "同版本其它 KMI 可试：%s" "$(printf "%s" "$_akh_out" | sed "s/^ //")"
 }

@@ -64,7 +64,7 @@ chk "AVC 节点写入成功" "$out5" "AVC_OK"
 chk "AVC 节点值已变" "$(cat "$AVC")" "1"
 
 # 6) 结构断言：apply.sh / load.sh 都接了节点后端
-chk "apply.sh 用 susfs_path_add" "$(grep -c 'susfs_path_add "' "$REPO/apply.sh")" "2"
+chk "apply.sh 用 susfs_path_add" "$(grep -c 'susfs_path_add "' "$REPO/apply.sh")" "3"
 chk "apply.sh 有 NODE_ONLY 分支" "$(grep -c 'NODE_ONLY=1' "$REPO/apply.sh")" "1"
 chk "load.sh 有节点后端分支" "$(grep -c 'susfs_node_ready' "$REPO/load.sh")" "3"
 

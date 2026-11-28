@@ -32,3 +32,22 @@ case "$rc" in
 esac
 
 exit "$rc"
+
+
+# LKM 掉线看护：系统 OOM 或别的工具 rmmod 后，按上次配置重载。
+# 频率由 config.ini 的 watchdog_minutes 控制（0=关闭，默认 0，避免无谓唤醒）。
+WD=$(conf_get watchdog_minutes 2>/dev/null)
+case "$WD" in ''|*[!0-9]*) WD=0 ;; esac
+if [ "$WD" -gt 0 ] 2>/dev/null; then
+    (
+        _wd_n=0
+        while :; do
+            sleep $((WD * 60)) 2>/dev/null || exit 0
+            _wd_n=$((_wd_n + 1))
+            if [ ! -d /sys/module/susfs_guard_lkm ] && [ ! -e /proc/susfs_path ]; then
+                echo "[!] $(date '+%F %T' 2>/dev/null) LKM 不在（第 $_wd_n 次检查），尝试重载" >> "$MODDIR/apply.log" 2>/dev/null
+                AUTOLOAD=1 sh "$MODDIR/apply.sh" >> "$MODDIR/apply.log" 2>&1 || true
+            fi
+        done
+    ) &
+fi

@@ -252,6 +252,9 @@ echo "[i] 内核: $REL"
 echo "[i] 匹配: $KMI"
 echo "[i] 加载: $KO"
 : > "$STATE/loading"
+# 加载前符号预检：本机内核缺符号时先说出来，而不是只给 errno
+lkm_symbols_check "$KMI" || true
+
 # 捕获加载输出：内核拒绝时需要给出可执行的诊断提示
 if command -v timeout >/dev/null 2>&1; then
     # -k 3：超时后 3 秒强杀，避免 load.sh 被外层 timeout 直接砍掉后留下 loading/boot_guard 残留

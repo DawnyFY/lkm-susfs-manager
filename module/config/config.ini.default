@@ -41,3 +41,5 @@ spoof_uname=0
 spoof_uname_release=
 spoof_uname_version=
 force_bl_unlocked=0
+# LKM 掉线看护间隔（分钟，0=关闭）
+watchdog_minutes=0

@@ -377,9 +377,6 @@ else
 fi
 # 读取配置文件的第一个字段，忽略注释和空行
 # 清洗单行：去 \r、去注释、去首尾空白
-clean_entry() {
-    strip_comment "$1"
-}
 
 # 被守卫跳过的路径：如果内核里还留着旧规则，撤掉它，避免升级后仍然出现同样的问题
 _skip_revert() {
@@ -592,8 +589,14 @@ if [ -f "$CONFIG/sus_path_loop.txt" ]; then
                 *) echo "[+] sus_path_loop $path" ;;
             esac
         else
-            echo "[!] sus_path_loop $path 失败（内核/ksu_susfs 可能不支持 add_sus_path_loop）"
-            _rule_fails=$((_rule_fails + 1))
+            # 节点后端（或 CLI 不支持 loop）时：路径已存在就退化成普通 sus_path，
+            # 有限退让，不是常驻循环 —— 至少不会让整条规则白配
+            if [ "$NODE_ONLY" = "1" ] && [ -e "$path" ] && susfs_path_add "$path"; then
+                echo "[i] sus_path_loop $path（节点后端无 loop 接口，已按普通 sus_path 下发）"
+            else
+                echo "[!] sus_path_loop $path 失败（内核/ksu_susfs 可能不支持 add_sus_path_loop）"
+                _rule_fails=$((_rule_fails + 1))
+            fi
         fi
     done < "$CONFIG/sus_path_loop.txt"
     # 配置里删掉的 loop 行：用 /proc 的 del 逐条撤销，不能等重启
