@@ -162,3 +162,31 @@ pid_guard_comms=probe-*,canProbe*,ivecheck*
 
 - 仅用于安装期匿名标识/粗粒度限流
 - 不是鉴权 token，不能防重放、不能作为封禁依据；root/备份可读取或克隆
+## avc_spoof 与「SELinux 侧信道」检测（真机实测，1.3.2）
+
+`avc_spoof=1` 会把 su 域触发的 AVC 拒绝记录伪装成 `u:r:priv_app:s0:c512,c768`。
+它**不修改 SELinux 策略本身**（不加载 .te、不改 policy 字节、不改进程域）。
+
+### 代价：会被侧信道类检测器看见
+
+真机对照实验（同一台设备、同一份检测器 341 项）：
+
+| 配置 | 结果 |
+|---|---|
+| `avc_spoof=1` | 危险 0 / **可疑 2** —— 「检测到 Selinux 修改（侧信道）· 可疑 · 第三方环境」，
+|  | 依据写着「SELinux 策略查询服务异常」 |
+| `avc_spoof=0` | 危险 0 / **可疑 1** —— SELinux 项消失，检测器新增的
+|  | 「KernelSU 内核与 SELinux 标记」变为**通过** |
+
+也就是说：那条「策略查询服务异常」不是策略被改（实测 `/sys/fs/selinux` 完好、
+`policyvers=33`、`policy` 可读、`Enforcing`，本模块的 sus_path 里没有任何 `/sys` 或 selinux 路径），
+而是 **AVC 记录里的域与触发进程对不上** 被抓到的。
+
+### 怎么选
+
+| 你更在意 | 建议 |
+|---|---|
+| 过检测器 / 让扫描全绿 | `avc_spoof=0` |
+| 少留 su 域的审计痕迹 | `avc_spoof=1`，接受那条可疑项 |
+
+切换：改 `config/config.ini` 的 `avc_spoof=` 后 `sh ctl.sh apply`（会立即写回 `/proc/susfs_avc_spoof`）。

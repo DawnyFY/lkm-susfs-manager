@@ -1,6 +1,7 @@
 # LKM SUSFS管理器 v1.3.2
 
-> 这一版只改「加载失败时能看懂发生了什么」。功能与 1.3.1 一致。
+> 这一版以「加载失败时能看懂发生了什么」为主，另外修了 PID 命中统计、锁归属与若干门禁，
+> 并新增符号预检 / suggest_kmi / doctor / 掉线看护（默认关）。功能集合与 1.3.1 **不同**。
 
 ## 1.3.2 新增（本轮）
 
@@ -30,7 +31,7 @@ hide_modules 当前不存在、pid_guard 空规则与 `*` 位置、挂载前缀�
 
 ### 锁归属二次确认
 `lock_acquire` 写完 pid 后回读确认等于 `$$` 才算抢到，堵住并发双持有。
-TTL 语义是「持有者承诺的最长持锁时间」，超过即回收；三处调用已统一（apply 180s /
+TTL 语义是「持有者承诺的最长持锁时间」，超过即回收；三处取值按各自最长持锁时间设定（apply 180s /
 set_config 180s / set_bundle 300s），双持有风险由 pid 归属回读兜住。
 ## 为什么做这个
 
@@ -88,7 +89,7 @@ susfs_insmod: init_module failed: errno 61
 - 真机（6.6.77 / KernelSU）：诊断链路实测通过；
   本机 `CONFIG_MODULE_SIG=y` 但无 `FORCE`，所以加载正常 —— 正好验证了判定条件
 
-产物 13,237,363 B / `fc9f3f88c181417543e4da246ac1e9c2dd3cf685197abc1d65b71770d79b0df4` / manifest `6b7c1e90…`（60 文件）
+产物 13,237,550 B / `765c26777312caef0eb34d56e90df17f1810cc712c867fc81256dd3546be498a` / manifest `6d6ecae4…`（60 文件）
 
 ## 附带：sus_path 里「不存在的路径」不再计入规则失败
 
@@ -101,4 +102,4 @@ sus_path，路径本来就不存在，于是每次 apply 都记一次失败、�
 
 apply 结果不再因此降级为 partial；真有内核拒绝时仍会照常报失败。
 
-产物 13,237,363 B / `fc9f3f88c181417543e4da246ac1e9c2dd3cf685197abc1d65b71770d79b0df4` / manifest `6b7c1e90…`（60 文件）
+产物 13,237,550 B / `765c26777312caef0eb34d56e90df17f1810cc712c867fc81256dd3546be498a` / manifest `6d6ecae4…`（60 文件）

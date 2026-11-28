@@ -255,8 +255,13 @@ if [ "$USING_BACKUP_BIN" = "1" ]; then
     echo "[!] 正在使用模块备份的 ksu_susfs（管理器自带的无法通信）"
     echo "[i] 备份二进制可能较旧：下面若出现「不支持 / 设置失败」，先重装模块或更新管理器，再判断是否内核问题"
 fi
-VERSION=$("$BIN" show version 2>/dev/null)
-FEATURES=$("$BIN" show enabled_features 2>/dev/null)
+if [ "$NODE_ONLY" = "1" ]; then
+    VERSION="node-only"
+    FEATURES=""
+else
+    VERSION=$("$BIN" show version 2>/dev/null)
+    FEATURES=$("$BIN" show enabled_features 2>/dev/null)
+fi
 has_feature() { printf "%s\n" "$FEATURES" | grep -qx "$1"; }
 # 用真实内核选 KMI：osrelease 可能被本模块的 uname 伪装改写
 REL=$(real_kernel_release 2>/dev/null)
@@ -342,6 +347,7 @@ if has_feature CONFIG_KSU_SUSFS_AVC_LOG_SPOOFING || [ -e /proc/susfs_avc_spoof ]
             fi
         elif susfs_avc_node_set 1; then
             echo "[i] avc_log_spoofing=1（经 /proc/susfs_avc_spoof 节点）"
+            echo "[i] 提示：avc_spoof 会被侧信道类检测器识别（真机实测可疑项 +1）；过检测优先置 0"
         else
             echo "[!] avc_log_spoofing 不可用：CLI 无该命令，LKM 未暴露 avc_su_ctx，节点也不可用"
             : > "$STATE/avc_unsupported" 2>/dev/null

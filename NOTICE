@@ -90,3 +90,8 @@ If the source cannot be obtained at the URLs above, the distributor offers to pr
 corresponding source for three years from the date of distribution.
 
 本声明不是法律意见；如需分发到商业渠道，请自行完成法务核对。
+
+## module/lib/symbols/*.symbols
+
+由 tools/gen_lkm_symbols.py 从同名 .ko 的 ELF 未定义符号表生成（纯符号名，无代码），
+与 .ko 同许可（GPL-2.0-only），随模块一起分发。
