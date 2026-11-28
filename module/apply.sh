@@ -364,7 +364,9 @@ if has_feature CONFIG_KSU_SUSFS_AVC_LOG_SPOOFING || [ -e /proc/susfs_avc_spoof ]
     fi
 else
     echo "[i] 内核未提供 avc_log_spoofing 接口（无特性位、无 /proc/susfs_avc_spoof），跳过"
-fi# 读取配置文件的第一个字段，忽略注释和空行
+fi
+
+# 读取配置文件的第一个字段，忽略注释和空行
 # 清洗单行：去 \r、去注释、去首尾空白
 
 # 被守卫跳过的路径：如果内核里还留着旧规则，撤掉它，避免升级后仍然出现同样的问题
