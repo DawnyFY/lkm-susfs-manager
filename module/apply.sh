@@ -349,7 +349,7 @@ if has_feature CONFIG_KSU_SUSFS_AVC_LOG_SPOOFING || [ -e /proc/susfs_avc_spoof ]
             fi
         elif susfs_avc_node_set 1; then
             echo "[i] avc_log_spoofing=1（经 /proc/susfs_avc_spoof 节点）"
-            echo "[i] 提示：avc_spoof 会被侧信道类检测器识别（真机实测可疑项 +1）；过检测优先置 0"
+            echo "[i] 提示：avc_spoof 会把 su 的审计记录改写成伪装域；能读 dmesg 的检测器会判「审计被改写」"
         else
             echo "[!] avc_log_spoofing 不可用：CLI 无该命令，LKM 未暴露 avc_su_ctx，节点也不可用"
             : > "$STATE/avc_unsupported" 2>/dev/null
